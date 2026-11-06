@@ -197,7 +197,7 @@ pegavam. Todos foram corrigidos com teste ou com texto de skill revisado:
 
 | Critério | Evidência |
 | --- | --- |
-| CI verde em 3 SO | `.github/workflows/ci.yml` (matriz Windows/macOS/Linux). Executado localmente no Windows; o CI remoto roda quando o repositório for publicado. |
+| CI verde em 3 SO | `.github/workflows/ci.yml`: GitHub Actions run 42220543579 (2026-11-06, commit `20d59e8`, repositório privado `Reprograme/redevkit`) com `success` em `windows-latest`, `macos-latest` e `ubuntu-latest`: testes Node, validação do kit, auditorias Python, markdownlint e allowlist do pacote. |
 | E2E 4/4 | [e2e/RESULTS.md](../e2e/RESULTS.md). |
 | Orçamento de catálogo | `validate-kit` e `test/kit.test.js` (abaixo de 12.000 e do fallback de 8.000 nos dois alvos). |
 | `npm pack --dry-run` | `test/pack-check.mjs`. |
