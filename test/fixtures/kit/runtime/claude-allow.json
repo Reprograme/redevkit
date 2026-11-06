@@ -1,0 +1,26 @@
+{
+  "$comment": "REDEVKIT managed entries for .claude/settings.json permissions.allow (D51). Read-only git, test runners and the optional audits only. Never write, network, package install or deploy commands.",
+  "allow": [
+    "Bash(git status *)",
+    "Bash(git diff *)",
+    "Bash(git log *)",
+    "Bash(git show *)",
+    "Bash(git rev-parse *)",
+    "Bash(git branch --show-current)",
+    "Bash(npm test *)",
+    "Bash(npm run test *)",
+    "Bash(pnpm test *)",
+    "Bash(yarn test *)",
+    "Bash(npx vitest run *)",
+    "Bash(npx jest *)",
+    "Bash(npx playwright test *)",
+    "Bash(pytest *)",
+    "Bash(python -m pytest *)",
+    "Bash(go test *)",
+    "Bash(cargo test *)",
+    "Bash(dotnet test *)",
+    "Bash(python .redevkit/audits/*)",
+    "Bash(python3 .redevkit/audits/*)",
+    "Bash(py -3 .redevkit/audits/*)"
+  ]
+}

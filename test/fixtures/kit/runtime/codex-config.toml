@@ -1,0 +1,8 @@
+# REDEVKIT managed entries for .codex/config.toml (D51).
+# Each line the CLI writes is marked "# redevkit:managed"; a value the user already set wins.
+
+[features]
+default_mode_request_user_input = true
+
+[skills]
+max_context_tokens = 10000

@@ -1,1 +1,6 @@
 * text=auto eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.js text eol=lf
+# Fixture that must keep CRLF line endings (tests lesson H5)
+test/fixtures/kit/commands/redevkit-demo/SKILL.md -text

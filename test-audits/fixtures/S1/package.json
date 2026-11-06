@@ -1,0 +1,7 @@
+{
+  "name": "s1-fixture",
+  "private": true,
+  "scripts": {
+    "test": "echo s1-tests-ok"
+  }
+}

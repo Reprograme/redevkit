@@ -1,0 +1,179 @@
+---
+type: plan
+feature: "[###-feature-name]"
+status: draft
+created: "[DATE]"
+updated: "[DATE]"
+---
+
+# Implementation Plan: [FEATURE]
+
+**Feature directory**: `specs/[###-feature-name]/` | **Date**: [DATE]
+
+**Spec**: `specs/[###-feature-name]/spec.md` | **Branch**: `[###-feature-name]` (optional)
+
+## Summary
+
+[Primary requirement from the spec + technical approach from research, in 2-4 sentences]
+
+## Technical Context
+
+<!--
+  Replace with the project's real values. Use NEEDS CLARIFICATION only for values that block
+  the design; resolve them in Phase 0.
+-->
+
+**Language/Version**: [e.g. TypeScript 5.6, Python 3.12, Rust 1.82 or NEEDS CLARIFICATION]
+
+**Primary Dependencies**: [e.g. FastAPI, React, Phaser or NEEDS CLARIFICATION]
+
+**Storage**: [e.g. PostgreSQL, SQLite, local files, or N/A]
+
+**Testing**: [e.g. vitest, pytest, cargo test, Playwright or NEEDS CLARIFICATION]
+
+**Target Platform**: [e.g. modern browsers, Linux server, iOS 17+ or NEEDS CLARIFICATION]
+
+**Project Type**: [web | fullstack | api | mobile | game | cli | library | desktop | other]
+
+**Performance Goals**: [domain-specific, e.g. 60 fps, 1,000 req/s, p95 < 200 ms]
+
+**Constraints**: [domain-specific, e.g. offline-capable, < 100 MB memory, bundle < 300 KB]
+
+**Scale/Scope**: [e.g. 10k users, 30 screens, 5 levels]
+
+## Domain Routing
+
+<!--
+  Filled from the route phase: who builds each part and which knowledge skills (and
+  references) apply. Tasks take their @persona from this table.
+-->
+
+| Area | Persona | Skills (references) | Why |
+| --- | --- | --- | --- |
+| [e.g. game loop and rendering] | @[persona] | [skill (reference, reference)] | [trigger found in the spec] |
+| [e.g. tests] | @test-engineer | [testing-patterns, tdd-workflow] | [Test-First principle] |
+
+## Constitution Check
+
+*GATE: must pass before Phase 0 research; re-check after Phase 1 design.*
+
+**Source**: `.redevkit/memory/constitution.md`, version [CONSTITUTION VERSION]
+
+| Principle | What it requires here | Status | Evidence or justification |
+| --- | --- | --- | --- |
+| [I. Test-First] | [Failing tests first in every user story] | [PASS / VIOLATION / N/A] | [Where the plan satisfies it] |
+| [Principle] | [Requirement] | [Status] | [Evidence] |
+
+<!--
+  A VIOLATION stops the plan (gate G3) unless it is justified in Complexity Tracking and the
+  user accepts it. Never weaken a principle here: amending it is a separate step.
+-->
+
+## Project Structure
+
+### Documentation (this feature)
+
+```text
+specs/[###-feature-name]/
+├── spec.md              # specify phase
+├── plan.md              # this file
+├── research.md          # Phase 0
+├── data-model.md        # Phase 1
+├── quickstart.md        # Phase 1
+├── contracts/           # Phase 1
+├── checklists/          # requirements.md (specify) + <domain>.md (checklist phase)
+└── tasks.md             # Phase 2 (tasks phase, not written by this step)
+```
+
+### Source Code (repository root)
+
+<!--
+  Replace with the concrete layout for this feature, using real paths. Delete the options
+  that do not apply; the final plan keeps no option labels.
+-->
+
+```text
+# [REMOVE IF UNUSED] Option 1: single project (default)
+src/
+├── models/
+├── services/
+└── lib/
+tests/
+├── contract/
+├── integration/
+└── unit/
+
+# [REMOVE IF UNUSED] Option 2: web application (frontend + backend)
+backend/
+├── src/
+└── tests/
+frontend/
+├── src/
+└── tests/
+
+# [REMOVE IF UNUSED] Option 3: mobile + API
+api/
+└── [same as backend above]
+[ios/ or android/ or app/]
+└── [platform structure]
+```
+
+**Structure Decision**: [The chosen structure and the real directories above]
+
+## Design Source-of-Truth
+
+<!--
+  Required when the feature has UI. DESIGN.md at the project root is the single source of
+  truth (one per project). Record here only this feature's deltas. Without UI, write
+  "N/A - no user interface" and delete the tables.
+-->
+
+**DESIGN.md status**: [created | updated | unchanged | N/A - no user interface]
+
+**Tokens used**: [e.g. colors.primary, colors.surface, typography.body-md, spacing.md]
+
+| Delta | Token or component | Change | Reason |
+| --- | --- | --- | --- |
+| [added / changed / removed] | [e.g. components.score-badge] | [what changes in DESIGN.md] | [which story needs it] |
+
+**Accessibility targets for this feature**: [e.g. WCAG 2.2 AA contrast, keyboard path for every action]
+
+**Color note**: Purple Ban is on by default; purple or violet only when DESIGN.md or the
+brand says so.
+
+## Execution Phases
+
+### Phase 0: Research
+
+- [ ] Resolve every NEEDS CLARIFICATION in Technical Context
+- [ ] Record decisions, rationale and rejected alternatives in `research.md`
+
+### Phase 1: Design and Contracts
+
+- [ ] Entities, fields, validation rules and states in `data-model.md`
+- [ ] Interfaces (API, CLI, events, file formats) in `contracts/`
+- [ ] Runnable validation scenarios in `quickstart.md`
+- [ ] DESIGN.md gate when the feature has UI (section above)
+- [ ] Constitution Check re-run after design
+
+### Phase 2: Task Planning
+
+- [ ] `tasks.md` generated by the tasks phase (Setup, Foundational, US1..n, Polish; failing tests first)
+- [ ] Analysis with no CRITICAL findings
+
+## Complexity Tracking
+
+> Fill ONLY when the Constitution Check has a violation that must be justified.
+
+| Violation | Why needed | Simpler alternative rejected because |
+| --- | --- | --- |
+| [e.g. a 4th project] | [current need] | [why 3 projects are not enough] |
+
+## Plan Report
+
+<!-- Written last, after the phases above. -->
+
+- **Artifacts**: [research.md, data-model.md, contracts/, quickstart.md, DESIGN.md changes]
+- **Constitution Check**: [initial result] → [post-design result]
+- **Analysis**: [CRITICAL / HIGH / MEDIUM / LOW counts]
+- **Approval (gate G2)**: [pending | approved on DATE]

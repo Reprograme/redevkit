@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - name: Unit tests (node --test)
+        run: npm test
+      - name: Kit validation (placeholders, forbidden terms, links, catalog budget)
+        run: node bin/redevkit.js validate-kit
+      - name: Audit tests (python unittest)
+        run: python -m unittest discover -s test-audits -v
+      - name: Markdown lint
+        run: npx markdownlint-cli2
+      - name: Package allowlist
+        run: node test/pack-check.mjs

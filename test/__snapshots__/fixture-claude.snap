@@ -1,0 +1,100 @@
+=== .claude/agents/helper.md
+---
+name: helper
+description: A helper persona.
+tools: Read, Grep
+model: inherit
+skills:
+  - know
+---
+# Helper
+
+Body with ''' triple quotes and "double" quotes and a /redevkit-demo reference.
+
+=== .claude/skills/helper/SKILL.md
+---
+name: helper
+description: "Persona pointer: delegate to the helper subagent."
+---
+
+# helper (persona)
+
+This skill is a pointer to the `helper` specialist.
+
+- To delegate work to it, use the Agent tool with `subagent_type: "helper"`.
+- Its full instructions are in `.claude/agents/helper.md`. If you cannot delegate, read
+  that file and apply it inline.
+- Subagents never ask the user directly; they return open questions to the caller.
+
+=== .claude/skills/know/SKILL.md
+---
+name: know
+description: Knowledge skill.
+paths:
+  - "**/*.ts"
+  - "**/*.tsx"
+---
+
+# Know
+
+Read [deep](references/deep.md). JSX: `style={{ a: 1 }}`.
+
+=== .claude/skills/know/references/deep.md
+# Deep
+
+Details.
+
+=== .claude/skills/redevkit-demo/SKILL.md
+---
+name: redevkit-demo
+description: "Demo command: does things."
+argument-hint: "[--auto] <x>"
+---
+
+# Demo
+
+**Input:** $ARGUMENTS
+
+Follow `.claude/skills/redevkit-step/SKILL.md`, then delegate to the `helper` subagent with the Agent tool (`subagent_type: "helper"`).
+
+**Asking the user:** use the AskUserQuestion tool. One question at a time, at most 3 options,
+the recommended option first and labeled "(Recommended)", at most 5 questions in this command.
+Ask only what changes scope or architecture and record every assumption. In `--auto` or
+non-interactive runs (`claude -p`), do not ask: adopt the recommendation and record it as an
+assumption. Gates G1-G7 always stop for the user.
+
+Claude only.
+Next: `/redevkit-deploy` in en v1.2.3.
+
+=== .claude/skills/redevkit-deploy/SKILL.md
+---
+name: redevkit-deploy
+description: Deploy only when the user asks.
+argument-hint: "[env]"
+disable-model-invocation: true
+---
+
+# Deploy
+
+**Input:** $ARGUMENTS
+
+=== .claude/skills/redevkit-memanager/SKILL.md
+---
+name: redevkit-memanager
+description: Memory.
+---
+
+# Memory
+
+**Input:** $ARGUMENTS
+
+=== .claude/skills/redevkit-step/SKILL.md
+---
+name: redevkit-step
+description: Internal step.
+user-invocable: false
+---
+
+# Step
+
+See `.claude/skills/know/references/deep.md` and `.claude/agents/helper.md`.

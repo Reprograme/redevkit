@@ -1,10 +1,37 @@
 {
   "name": "redevkit",
   "version": "1.0.0",
-  "description": "Markdown-first kit for Claude Code and OpenAI Codex (Spec Kit + AG Kit).",
+  "description": "Markdown-first kit for Claude Code and OpenAI Codex: spec-driven process (Spec Kit) + specialists, quality and memory (AG Kit).",
   "type": "module",
   "license": "MIT",
-  "bin": { "redevkit": "bin/redevkit.js" },
-  "engines": { "node": ">=20" },
-  "files": ["bin/", "src/", "kit/", "LICENSE", "NOTICE", "README.md", "CHANGELOG.md"]
+  "author": "Ricardo Candido <reprograme@cars.org.br>",
+  "keywords": ["claude-code", "codex", "agents", "skills", "spec-driven-development", "sdd"],
+  "bin": {
+    "redevkit": "bin/redevkit.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "kit/",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "node test/run-all.mjs",
+    "test:audits": "python -m unittest discover -s test-audits -v",
+    "validate": "node bin/redevkit.js validate-kit",
+    "lint:md": "markdownlint-cli2"
+  },
+  "dependencies": {
+    "commander": "^14.0.0",
+    "smol-toml": "^1.4.0"
+  },
+  "devDependencies": {
+    "markdownlint-cli2": "^0.24.0"
+  }
 }

@@ -1,0 +1,81 @@
+=== .agents/skills/know/SKILL.md
+---
+name: know
+description: Knowledge skill.
+---
+
+# Know
+
+Read [deep](references/deep.md). JSX: `style={{ a: 1 }}`.
+
+=== .agents/skills/know/references/deep.md
+# Deep
+
+Details.
+
+=== .agents/skills/redevkit-demo/SKILL.md
+---
+name: redevkit-demo
+description: "Demo command: does things."
+metadata:
+  short-description: Demo
+---
+
+# Demo
+
+**Input:** the request the user wrote alongside this skill invocation
+
+Follow `.agents/skills/redevkit-step/SKILL.md`, then spawn the `helper` agent with `spawn_agent` (`agent_type: "helper"`); if custom agents are unavailable (for example in an untrusted project), read `.codex/agents/helper.toml` and apply its `developer_instructions` inline.
+
+**Asking the user:** if the `request_user_input` tool is available (Plan mode, or Default mode
+with `features.default_mode_request_user_input`), use it: one question, at most 3 options, the
+recommended option first and labeled "(Recommended)". Otherwise ask ONE plain-text question that
+states your recommendation and why, with the alternatives in prose (no numbered multiple choice).
+At most 5 questions in this command; ask only what changes scope or architecture and record every
+assumption. In `codex exec`, `--auto` or other non-interactive runs, do not ask: adopt the
+recommendation and record it as an assumption. Gates G1-G7 always stop and report to the user.
+
+Codex only.
+Next: `$redevkit-deploy` in en v1.2.3.
+
+=== .agents/skills/redevkit-deploy/SKILL.md
+---
+name: redevkit-deploy
+description: Deploy only when the user asks.
+metadata:
+  short-description: Deploy
+---
+
+# Deploy
+
+**Input:** the request the user wrote alongside this skill invocation
+
+=== .agents/skills/redevkit-deploy/agents/openai.yaml
+policy:
+  allow_implicit_invocation: false
+
+=== .agents/skills/redevkit-memanager/SKILL.md
+---
+name: redevkit-memanager
+description: Memory.
+---
+
+# Memory
+
+**Input:** the request the user wrote alongside this skill invocation
+
+=== .agents/skills/redevkit-step/SKILL.md
+---
+name: redevkit-step
+description: "[internal] Internal step."
+---
+
+# Step
+
+See `.agents/skills/know/references/deep.md` and `.codex/agents/helper.toml`.
+
+=== .codex/agents/helper.toml
+name = "helper"
+description = "A helper persona."
+developer_instructions = "# Helper\n\nBody with ''' triple quotes and \"double\" quotes and a $redevkit-demo reference.\n"
+

@@ -1,0 +1,617 @@
+#!/usr/bin/env python3
+"""REDEVKIT security scanner.
+
+Performs lightweight, local checks for dependency hygiene, hard-coded secrets,
+dangerous code patterns, and common security misconfiguration.
+
+The scanner is intentionally dependency-free. It is a guardrail, not a
+replacement for a full SAST/SCA product.
+
+External tools (``npm audit``) are resolved with ``shutil.which`` (``npm.cmd``
+on Windows) and run without a shell. When a sub-tool cannot run, the report
+says ``SKIPPED (<reason>)`` for it; a failure is never silently swallowed.
+"""
+from __future__ import annotations
+
+import argparse
+import io
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tokenize
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+
+EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
+NPM_AUDIT_TIMEOUT = 90
+
+
+def utf8_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
+SECRET_PATTERNS: Tuple[Tuple[str, str, str], ...] = (
+    (r"api[_-]?key\s*[=:]\s*[\"'][^\"']{10,}[\"']", "API Key", "high"),
+    (r"token\s*[=:]\s*[\"'][^\"']{10,}[\"']", "Token", "high"),
+    (r"bearer\s+[a-zA-Z0-9\-_.]{16,}", "Bearer Token", "critical"),
+    (r"AKIA[0-9A-Z]{16}", "AWS Access Key", "critical"),
+    (r"aws[_-]?secret[_-]?access[_-]?key\s*[=:]\s*[\"'][^\"']+[\"']", "AWS Secret", "critical"),
+    (r"AZURE[_-]?[A-Z_]+\s*[=:]\s*[\"'][^\"']+[\"']", "Azure Credential", "critical"),
+    (r"GOOGLE[_-]?[A-Z_]+\s*[=:]\s*[\"'][^\"']+[\"']", "GCP Credential", "critical"),
+    (r"password\s*[=:]\s*[\"'][^\"']{6,}[\"']", "Password", "high"),
+    (r"(?:mongodb|postgres(?:ql)?|mysql|redis):\/\/[^\s\"']+", "Database Connection String", "critical"),
+    (r"-----BEGIN\s+(?:RSA|PRIVATE|EC|OPENSSH)\s+KEY-----", "Private Key", "critical"),
+    (r"ssh-rsa\s+[A-Za-z0-9+/]{80,}", "SSH Key", "critical"),
+    (r"eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", "JWT Token", "high"),
+)
+
+# Applied to code with strings AND comments removed, so text inside string
+# literals (documentation, error messages) never triggers them.
+DANGEROUS_PATTERNS: Tuple[Tuple[str, str, str, str], ...] = (
+    (r"\beval\s*\(", "eval() usage", "critical", "Code injection risk"),
+    (r"\bexec\s*\(", "exec() usage", "critical", "Code injection risk"),
+    (r"new\s+Function\s*\(", "Function constructor", "high", "Code injection risk"),
+    (r"child_process\.exec\s*\(", "child_process.exec", "high", "Command injection risk"),
+    (r"subprocess\.(?:call|run|Popen)\s*\([^\n]*shell\s*=\s*True", "subprocess shell=True", "high", "Command injection risk"),
+    (r"dangerouslySetInnerHTML", "dangerouslySetInnerHTML", "high", "XSS risk"),
+    (r"\.innerHTML\s*=", "innerHTML assignment", "medium", "XSS risk"),
+    (r"document\.write\s*\(", "document.write", "medium", "XSS risk"),
+    (r"verify\s*=\s*False", "SSL verification disabled", "high", "MITM risk"),
+    (r"--insecure\b", "Insecure flag", "medium", "Security disabled"),
+    (r"disable[_-]?ssl", "SSL disabled", "high", "MITM risk"),
+    (r"pickle\.loads?\s*\(", "pickle usage", "high", "Unsafe deserialization risk"),
+    (r"yaml\.load\s*\(", "yaml.load usage", "high", "Unsafe deserialization risk"),
+)
+
+# SQL-building rules (S3). SQL lives inside string literals, so these rules run
+# on the comment-free source BEFORE strings are stripped. They do not require
+# the concatenated operand to be quoted: ``"SELECT ... " + userId`` matches.
+_SQL_KEYWORD = (
+    r"(?:\bSELECT\b"
+    r"|(?i:\binsert\s+into\b|\bupdate\s+[\w.\"`\[\]]+\s+set\b|\bdelete\s+from\b"
+    r"|\bselect\s+(?:\*|[\w.]+(?:\s*,\s*[\w.]+)*)\s+from\b))"
+)
+_OPERAND = r"[A-Za-z_$][\w$.\[\]()]*"
+SQL_PATTERNS: Tuple[Tuple["re.Pattern[str]", str, str, str], ...] = (
+    (
+        re.compile(_SQL_KEYWORD + r"[^\n]*?\+\s*" + _OPERAND + "|" + _OPERAND + r"\s*\+[^\n]*?" + _SQL_KEYWORD),
+        "SQL string concatenation", "critical", "SQL injection risk",
+    ),
+    (
+        re.compile(r"\b(?:[fF][rR]?|[rR][fF])[\"'][^\n]*?" + _SQL_KEYWORD + r"[^\n]*?\{"),
+        "SQL f-string", "critical", "SQL injection risk",
+    ),
+    (
+        re.compile(r"`[^`]*?" + _SQL_KEYWORD + r"[^`]*?\$\{"),
+        "SQL template literal interpolation", "critical", "SQL injection risk",
+    ),
+    (
+        re.compile(_SQL_KEYWORD + r"[^\n]*?[\"']\s*(?:%\s*[A-Za-z_(]|\.format\s*\()"),
+        "SQL string formatting", "critical", "SQL injection risk",
+    ),
+)
+
+SEVERITY_RANK = {"none": 99, "low": 1, "medium": 2, "high": 3, "critical": 4}
+SKIP_DIRS = {
+    "node_modules", ".git", "dist", "build", "__pycache__", ".venv", "venv",
+    ".next", ".agents", ".claude", ".codex", ".redevkit", ".tox", ".mypy_cache",
+    ".pytest_cache", "coverage", ".coverage", "vendor",
+}
+CODE_EXTENSIONS = {".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".py", ".go", ".java", ".rb", ".php"}
+CONFIG_EXTENSIONS = {".json", ".yaml", ".yml", ".toml", ".env", ".ini", ".conf"}
+PLACEHOLDER_MARKERS = (
+    "YOUR_", "EXAMPLE", "CHANGEME", "CHANGE_ME", "REPLACE_ME", "PLACEHOLDER",
+    "DUMMY", "SAMPLE", "FAKE_", "TEST_TOKEN", "TEST_KEY",
+)
+ALLOW_MARKERS = ("redevkit: allow-secret", "# nosec")
+SELF_PATH = Path(__file__).resolve()
+
+
+def which(name: str) -> Optional[str]:
+    return shutil.which(name)
+
+
+def _new_result(tool: str, status: str) -> Dict[str, Any]:
+    return {"tool": tool, "findings": [], "status": status, "scanned_files": 0, "skipped": []}
+
+
+def _iter_files(project: Path, extensions: set):
+    for root, dirs, files in os.walk(project):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for filename in files:
+            path = Path(root) / filename
+            if path.resolve() == SELF_PATH:
+                continue
+            if path.suffix.lower() in extensions or filename.startswith(".env"):
+                yield path
+
+
+def _relative(path: Path, project: Path) -> str:
+    try:
+        return path.relative_to(project).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _is_placeholder(value: str) -> bool:
+    upper = value.upper()
+    return any(marker in upper for marker in PLACEHOLDER_MARKERS)
+
+
+def _redact(value: str) -> str:
+    value = value.strip().replace("\n", " ")
+    if len(value) <= 12:
+        return "<redacted>"
+    return f"{value[:4]}…{value[-4:]}"
+
+
+def _blank(chunk: str) -> str:
+    return re.sub(r"[^\r\n]", " ", chunk)
+
+
+_PY_STRING_TYPES = {tokenize.STRING}
+for _name in ("FSTRING_START", "FSTRING_MIDDLE", "FSTRING_END", "TSTRING_START", "TSTRING_MIDDLE", "TSTRING_END"):
+    if hasattr(tokenize, _name):
+        _PY_STRING_TYPES.add(getattr(tokenize, _name))
+
+
+def _python_views(text: str) -> Tuple[str, str]:
+    """Return (code without comments, code without comments and strings)."""
+    split = text.splitlines(keepends=True)
+    no_comments = [list(line) for line in split]
+    no_strings = [list(line) for line in split]
+
+    def blank(target: List[List[str]], start: Tuple[int, int], end: Tuple[int, int]) -> None:
+        (srow, scol), (erow, ecol) = start, end
+        for row in range(srow, erow + 1):
+            if not (1 <= row <= len(target)):
+                continue
+            line = target[row - 1]
+            begin = scol if row == srow else 0
+            finish = ecol if row == erow else len(line)
+            for col in range(begin, min(finish, len(line))):
+                if line[col] not in "\r\n":
+                    line[col] = " "
+
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type == tokenize.COMMENT:
+                blank(no_comments, tok.start, tok.end)
+                blank(no_strings, tok.start, tok.end)
+            elif tok.type in _PY_STRING_TYPES:
+                blank(no_strings, tok.start, tok.end)
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        pass
+    return "".join("".join(line) for line in no_comments), "".join("".join(line) for line in no_strings)
+
+
+def _generic_views(text: str) -> Tuple[str, str]:
+    """C-family sources: return (without comments, without comments and strings)."""
+    no_comments: List[str] = []
+    no_strings: List[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        two = text[i:i + 2]
+        char = text[i]
+        if two == "//":
+            end = text.find("\n", i)
+            end = n if end == -1 else end
+            chunk = _blank(text[i:end])
+            no_comments.append(chunk)
+            no_strings.append(chunk)
+            i = end
+        elif two == "/*":
+            end = text.find("*/", i + 2)
+            end = n if end == -1 else end + 2
+            chunk = _blank(text[i:end])
+            no_comments.append(chunk)
+            no_strings.append(chunk)
+            i = end
+        elif char in "\"'`":
+            end = i + 1
+            while end < n:
+                if text[end] == "\\":
+                    end += 2
+                    continue
+                if text[end] == char:
+                    end += 1
+                    break
+                if text[end] == "\n" and char != "`":
+                    break
+                end += 1
+            end = min(end, n)
+            chunk = text[i:end]
+            no_comments.append(chunk)
+            no_strings.append(_blank(chunk))
+            i = end
+        else:
+            no_comments.append(char)
+            no_strings.append(char)
+            i += 1
+    return "".join(no_comments), "".join(no_strings)
+
+
+def code_views(text: str, suffix: str) -> Tuple[str, str]:
+    if suffix.lower() == ".py":
+        return _python_views(text)
+    return _generic_views(text)
+
+
+def find_sql_injection(text_without_comments: str) -> List[Tuple[int, str, str, str]]:
+    """Return (line, name, severity, category) for SQL built from variables."""
+    found: List[Tuple[int, str, str, str]] = []
+    seen = set()
+    for pattern, name, severity, category in SQL_PATTERNS:
+        for match in pattern.finditer(text_without_comments):
+            line = text_without_comments.count("\n", 0, match.start()) + 1
+            if (line, name) in seen:
+                continue
+            seen.add((line, name))
+            found.append((line, name, severity, category))
+    return found
+
+
+def _skip(result: Dict[str, Any], reason: str) -> None:
+    result["skipped"].append(reason)
+
+
+def _npm_audit(project: Path, result: Dict[str, Any]) -> None:
+    npm = which("npm")
+    if not npm:
+        _skip(result, "npm audit: npm not found on PATH")
+        return
+    try:
+        proc = subprocess.run(
+            [npm, "audit", "--json"], cwd=str(project), capture_output=True,
+            text=True, encoding="utf-8", errors="replace", timeout=NPM_AUDIT_TIMEOUT, check=False,
+        )
+    except subprocess.TimeoutExpired:
+        _skip(result, f"npm audit: timed out after {NPM_AUDIT_TIMEOUT}s")
+        return
+    except OSError as exc:
+        _skip(result, f"npm audit: could not start npm ({exc})")
+        return
+
+    raw = (proc.stdout or "").strip() or (proc.stderr or "").strip()
+    if not raw:
+        _skip(result, f"npm audit: no output (exit {proc.returncode})")
+        return
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        _skip(result, f"npm audit: output is not JSON (exit {proc.returncode})")
+        return
+    if not isinstance(data, dict):
+        _skip(result, "npm audit: unexpected output format")
+        return
+    if data.get("error"):
+        error = data["error"]
+        detail = error.get("summary") or error.get("code") if isinstance(error, dict) else str(error)
+        _skip(result, f"npm audit: {str(detail).splitlines()[0] if detail else 'failed'}")
+        return
+    metadata = data.get("metadata", {}).get("vulnerabilities") if isinstance(data.get("metadata"), dict) else None
+    if not isinstance(metadata, dict):
+        _skip(result, "npm audit: no vulnerability metadata in output")
+        return
+    counts = {key: int(metadata.get(key, 0) or 0) for key in ("critical", "high", "moderate", "low")}
+    result["npm_audit"] = counts
+    for severity in ("critical", "high"):
+        if counts[severity]:
+            result["findings"].append({
+                "type": "npm audit", "severity": severity,
+                "message": f"{counts[severity]} {severity} dependency vulnerabilities.",
+            })
+
+
+def scan_dependencies(project_path: str) -> Dict[str, Any]:
+    project = Path(project_path)
+    result = _new_result("dependency_scanner", "[OK] Supply chain checks passed")
+
+    ecosystems = {
+        "node": (["package.json"], ["package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb"]),
+        "python": (["pyproject.toml", "setup.py", "setup.cfg", "requirements.in"], ["poetry.lock", "Pipfile.lock", "uv.lock", "requirements.txt"]),
+        "ruby": (["Gemfile"], ["Gemfile.lock"]),
+        "rust": (["Cargo.toml"], ["Cargo.lock"]),
+        "go": (["go.mod"], ["go.sum"]),
+    }
+    for name, (manifests, locks) in ecosystems.items():
+        if name == "node" and not _node_has_dependencies(project):
+            continue  # nothing to lock: a package.json without dependencies needs no lock file
+        if any((project / f).exists() for f in manifests) and not any((project / f).exists() for f in locks):
+            result["findings"].append({
+                "type": "Missing lock file",
+                "severity": "high",
+                "ecosystem": name,
+                "message": f"{name}: manifest found but no supported lock file is present.",
+            })
+
+    if (project / "package.json").exists():
+        if _node_has_dependencies(project):
+            _npm_audit(project, result)
+        else:
+            result["npm_audit"] = "not_applicable (no dependencies)"
+
+    if result["findings"]:
+        result["status"] = "[!] Dependency risks found"
+    return result
+
+
+def scan_secrets(project_path: str) -> Dict[str, Any]:
+    project = Path(project_path).resolve()
+    result = _new_result("secret_scanner", "[OK] No secrets detected")
+    counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+
+    for path in _iter_files(project, CODE_EXTENSIONS | CONFIG_EXTENSIONS):
+        result["scanned_files"] += 1
+        try:
+            content = path.read_text("utf-8", errors="ignore")
+        except OSError:
+            continue
+        lines = content.splitlines()
+        for pattern, secret_type, severity in SECRET_PATTERNS:
+            for match in re.finditer(pattern, content, re.IGNORECASE):
+                matched = match.group(0)
+                line = content.count("\n", 0, match.start()) + 1
+                source_line = lines[line - 1].lower() if line <= len(lines) else ""
+                if _is_placeholder(matched) or any(marker in source_line for marker in ALLOW_MARKERS):
+                    continue
+                result["findings"].append({
+                    "file": _relative(path, project), "line": line, "type": secret_type,
+                    "severity": severity, "preview": _redact(matched),
+                })
+                counts[severity] += 1
+
+    result["by_severity"] = counts
+    if counts["critical"]:
+        result["status"] = "[!!] CRITICAL: Potential secrets exposed"
+    elif counts["high"]:
+        result["status"] = "[!] HIGH: Potential secrets found"
+    elif sum(counts.values()):
+        result["status"] = "[?] Potential secrets need review"
+    return result
+
+
+def scan_code_patterns(project_path: str) -> Dict[str, Any]:
+    project = Path(project_path).resolve()
+    result = _new_result("pattern_scanner", "[OK] No dangerous patterns")
+    by_category: Dict[str, int] = {}
+
+    def record(path: Path, line_number: int, name: str, severity: str, category: str, original: List[str]) -> None:
+        snippet = original[line_number - 1].strip()[:120] if line_number <= len(original) else ""
+        result["findings"].append({
+            "file": _relative(path, project), "line": line_number,
+            "pattern": name, "severity": severity, "category": category,
+            "snippet": snippet,
+        })
+        by_category[category] = by_category.get(category, 0) + 1
+
+    for path in _iter_files(project, CODE_EXTENSIONS):
+        result["scanned_files"] += 1
+        try:
+            text = path.read_text("utf-8", errors="ignore")
+        except OSError:
+            continue
+        original = text.splitlines()
+        without_comments, without_strings = code_views(text, path.suffix)
+
+        # 1. SQL rules first, while string literals are still present.
+        for line_number, name, severity, category in find_sql_injection(without_comments):
+            record(path, line_number, name, severity, category, original)
+
+        # 2. Everything else on code without strings or comments.
+        for line_number, code_line in enumerate(without_strings.splitlines(), 1):
+            for pattern, name, severity, category in DANGEROUS_PATTERNS:
+                if re.search(pattern, code_line, re.IGNORECASE):
+                    record(path, line_number, name, severity, category, original)
+
+    result["by_category"] = by_category
+    critical = sum(f["severity"] == "critical" for f in result["findings"])
+    high = sum(f["severity"] == "high" for f in result["findings"])
+    if critical:
+        result["status"] = f"[!!] CRITICAL: {critical} dangerous pattern(s)"
+    elif high:
+        result["status"] = f"[!] HIGH: {high} risky pattern(s)"
+    elif result["findings"]:
+        result["status"] = "[?] Patterns need review"
+    return result
+
+
+def _node_has_dependencies(project: Path) -> bool:
+    """True when package.json declares any dependency (or cannot be read: stay conservative)."""
+    manifest = project / "package.json"
+    if not manifest.exists():
+        return False
+    try:
+        data = json.loads(manifest.read_text("utf-8"))
+    except (OSError, ValueError):
+        return True
+    keys = ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies")
+    return any(isinstance(data.get(k), dict) and data.get(k) for k in keys)
+
+
+WEB_FRAMEWORKS = {"next", "nuxt", "vite", "@angular/core", "react-dom", "vue", "svelte", "astro", "express", "fastify", "koa", "hono", "@nestjs/core"}
+
+
+def _looks_like_web_project(project: Path) -> bool:
+    """A project that serves pages or uses a web framework (security headers apply).
+
+    A bare package.json (CLI, library, plain JSON API on node:http) is not enough.
+    """
+    indicators = (
+        "next.config.js", "next.config.mjs", "next.config.ts", "vite.config.ts", "vite.config.js",
+        "nuxt.config.ts", "angular.json", "nginx.conf", "index.html", "public/index.html", "src/index.html",
+    )
+    if any((project / name).exists() for name in indicators):
+        return True
+    manifest = project / "package.json"
+    if manifest.exists():
+        try:
+            data = json.loads(manifest.read_text("utf-8"))
+        except (OSError, ValueError):
+            return False
+        deps = {}
+        for key in ("dependencies", "devDependencies"):
+            if isinstance(data.get(key), dict):
+                deps.update(data[key])
+        return any(name in deps for name in WEB_FRAMEWORKS)
+    return False
+
+
+def scan_configuration(project_path: str) -> Dict[str, Any]:
+    project = Path(project_path).resolve()
+    result = _new_result("config_scanner", "[OK] Configuration checks passed")
+    checks: Dict[str, Any] = {}
+    patterns = (
+        (r'"DEBUG"\s*:\s*true', "Debug mode enabled", "high"),
+        (r"\bdebug\s*=\s*True", "Debug mode enabled", "high"),
+        (r'"CORS_ALLOW_ALL"\s*:\s*true', "CORS allows every origin", "high"),
+        (r'Access-Control-Allow-Origin[^\n]*[\"\']\*[\"\']', "CORS wildcard", "high"),
+        (r"allowCredentials[^\n]*true[^\n]*origin[^\n]*\*", "Credentials with wildcard CORS", "critical"),
+    )
+
+    extra_names = {"next.config.js", "next.config.mjs", "next.config.ts", "webpack.config.js", ".eslintrc.js", "nginx.conf"}
+    header_files = {"next.config.js", "next.config.mjs", "next.config.ts", "middleware.ts", "middleware.js", "nginx.conf", "vercel.json"}
+    header_pattern = re.compile(
+        r"Content-Security-Policy|Strict-Transport-Security|X-Frame-Options|frame-ancestors|Referrer-Policy",
+        re.IGNORECASE,
+    )
+    has_security_headers = False
+    for root, dirs, files in os.walk(project):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for filename in files:
+            path = Path(root) / filename
+            if path.resolve() == SELF_PATH:
+                continue
+            if path.suffix.lower() not in CONFIG_EXTENSIONS and filename not in extra_names and not filename.startswith(".env"):
+                continue
+            result["scanned_files"] += 1
+            try:
+                content = path.read_text("utf-8", errors="ignore")
+            except OSError:
+                continue
+            if filename in header_files and header_pattern.search(content):
+                has_security_headers = True
+            for pattern, issue, severity in patterns:
+                if re.search(pattern, content, re.IGNORECASE):
+                    result["findings"].append({"file": _relative(path, project), "issue": issue, "severity": severity})
+
+    if _looks_like_web_project(project):
+        checks["security_headers_config"] = has_security_headers
+        if not checks["security_headers_config"]:
+            result["findings"].append({
+                "issue": "No obvious security-header configuration found",
+                "severity": "medium",
+                "recommendation": "Configure CSP, HSTS, frame-ancestors/X-Frame-Options, and Referrer-Policy as appropriate.",
+            })
+    else:
+        checks["security_headers_config"] = "not_applicable"
+    result["checks"] = checks
+
+    if any(f["severity"] == "critical" for f in result["findings"]):
+        result["status"] = "[!!] CRITICAL: Configuration issues"
+    elif any(f["severity"] == "high" for f in result["findings"]):
+        result["status"] = "[!] HIGH: Configuration review needed"
+    elif result["findings"]:
+        result["status"] = "[?] Configuration review recommended"
+    return result
+
+
+def run_full_scan(project_path: str, scan_type: str = "all") -> Dict[str, Any]:
+    project = str(Path(project_path).resolve())
+    report: Dict[str, Any] = {
+        "project": project,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "scan_type": scan_type,
+        "scans": {},
+        "summary": {
+            "total_findings": 0, "critical": 0, "high": 0, "medium": 0, "low": 0,
+            "skipped": [], "overall_status": "[OK] SECURE",
+        },
+    }
+    scanners: Dict[str, Tuple[str, Callable[[str], Dict[str, Any]]]] = {
+        "deps": ("dependencies", scan_dependencies),
+        "secrets": ("secrets", scan_secrets),
+        "patterns": ("code_patterns", scan_code_patterns),
+        "config": ("configuration", scan_configuration),
+    }
+    for key, (name, scanner) in scanners.items():
+        if scan_type not in {"all", key}:
+            continue
+        scan_result = scanner(project)
+        report["scans"][name] = scan_result
+        report["summary"]["skipped"].extend(scan_result.get("skipped", []))
+        findings = scan_result.get("findings", [])
+        report["summary"]["total_findings"] += len(findings)
+        for finding in findings:
+            severity = finding.get("severity", "low")
+            if severity in {"critical", "high", "medium", "low"}:
+                report["summary"][severity] += 1
+
+    summary = report["summary"]
+    if summary["critical"]:
+        summary["overall_status"] = "[!!] CRITICAL ISSUES FOUND"
+    elif summary["high"]:
+        summary["overall_status"] = "[!] HIGH RISK ISSUES"
+    elif summary["total_findings"]:
+        summary["overall_status"] = "[?] REVIEW RECOMMENDED"
+    return report
+
+
+def _should_fail(report: Dict[str, Any], threshold: str) -> bool:
+    if threshold == "none":
+        return False
+    required_rank = SEVERITY_RANK[threshold]
+    return any(
+        report["summary"].get(severity, 0) > 0 and rank >= required_rank
+        for severity, rank in SEVERITY_RANK.items()
+        if severity != "none"
+    )
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    utf8_stdio()
+    parser = argparse.ArgumentParser(description="Run lightweight local security checks")
+    parser.add_argument("project_path", nargs="?", default=".", help="Project directory to scan")
+    parser.add_argument("--scan-type", choices=["all", "deps", "secrets", "patterns", "config"], default="all")
+    parser.add_argument("--output", choices=["json", "summary"], default="json")
+    parser.add_argument(
+        "--fail-on", choices=["none", "low", "medium", "high", "critical"], default="high",
+        help="Return exit code 1 when a finding at or above this severity exists (default: high)",
+    )
+    args = parser.parse_args(argv)
+    project = Path(args.project_path).resolve()
+    if not project.is_dir():
+        print(json.dumps({"error": f"Directory not found: {project}"}))
+        return EXIT_USAGE
+
+    report = run_full_scan(str(project), args.scan_type)
+    if args.output == "summary":
+        summary = report["summary"]
+        print(f"\n{'=' * 60}\nSecurity Scan: {report['project']}\n{'=' * 60}")
+        print(f"Status: {summary['overall_status']}")
+        print(f"Total Findings: {summary['total_findings']}")
+        print(f"  Critical: {summary['critical']}\n  High: {summary['high']}\n  Medium: {summary['medium']}\n  Low: {summary['low']}")
+        for reason in summary["skipped"]:
+            print(f"  SKIPPED ({reason})")
+        print("=" * 60)
+        for name, scan in report["scans"].items():
+            print(f"\n{name.upper()}: {scan['status']}")
+            for reason in scan.get("skipped", []):
+                print(f"  SKIPPED ({reason})")
+            for finding in scan.get("findings", [])[:10]:
+                print(f"  - {finding}")
+    else:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+    return EXIT_FAIL if _should_fail(report, args.fail_on) else EXIT_PASS
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

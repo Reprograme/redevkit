@@ -1,0 +1,7 @@
+{
+  "name": "s5-fixture",
+  "private": true,
+  "dependencies": {
+    "react": "18.3.1"
+  }
+}

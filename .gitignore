@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 .redevkit/backups/
 .redevkit/tmp/
+*.tgz
+coverage/
+e2e/runs/
