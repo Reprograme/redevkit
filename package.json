@@ -1,0 +1,10 @@
+{
+  "name": "redevkit",
+  "version": "1.0.0",
+  "description": "Markdown-first kit for Claude Code and OpenAI Codex (Spec Kit + AG Kit).",
+  "type": "module",
+  "license": "MIT",
+  "bin": { "redevkit": "bin/redevkit.js" },
+  "engines": { "node": ">=20" },
+  "files": ["bin/", "src/", "kit/", "LICENSE", "NOTICE", "README.md", "CHANGELOG.md"]
+}
