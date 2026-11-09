@@ -33,7 +33,7 @@ CRITICAL sections (1-2), then move to HIGH and MEDIUM.
 
 ```text
 Slow page loads / long Time to Interactive  → sections 1, 2
-Large bundle (> 200 KB)                      → section 2 (dynamic imports, barrel imports)
+Bundle over budget (see checklist)           → section 2 (dynamic imports, barrel imports)
 Slow server-side rendering                   → section 3 (parallel fetching, streaming)
 Too many re-renders / UI lag                 → section 5 (memo, useMemo, useCallback)
 Rendering bottlenecks                        → section 6 (virtualization, layout thrashing)
@@ -52,7 +52,7 @@ Next.js 16+ caching and PPR                  → section 9
 
 ## Automated Check
 
-Run `.redevkit/audits/react_performance_checker.py <project_path>` with the Python interpreter
+In the test and verify commands (not during implementation), run `.redevkit/audits/react_performance_checker.py <project_path>` with the Python interpreter
 detected per `.redevkit/audits/README.md` (`--fail-on-warnings` makes advisory warnings
 blocking). Without Python, record `SKIPPED (no Python)` and review sections 1-2 by hand plus
 the framework's build output (`next build` prints route sizes). Bundle and Lighthouse audits
@@ -63,7 +63,9 @@ are in `{{SKILL:performance-profiling}}`.
 **Critical (must fix):**
 
 - [ ] No sequential data fetching for independent requests
-- [ ] Main bundle under ~200 KB
+- [ ] Bundle within budget: the one in `plan.md` or `DESIGN.md` when set; otherwise the
+  `bundle_analyzer.py` defaults (per file: warn above 250 KiB, fail above 750 KiB; total
+  JavaScript: fail above 2048 KiB)
 - [ ] No barrel imports in app code
 - [ ] Dynamic imports for large components
 - [ ] Parallel data fetching where possible

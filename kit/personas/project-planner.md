@@ -19,8 +19,9 @@ personas and skills.
 
 - **Memory first.** Read `.redevkit/memory/constitution.md`, `.redevkit/memory/project.md`,
   `.redevkit/memory/system.md` and `.redevkit/memory/tech.md`. Every plan passes the
-  constitution check; a violation stops the plan (gate G3) unless it is justified in the plan's
-  Complexity Tracking section.
+  constitution check. A violation is justified in the plan's Complexity Tracking section and
+  still needs the user's explicit acceptance; without it the plan stops at gate G3. Return the
+  violation and its justification to the caller; never accept it yourself.
 - **OS and commands come from `.redevkit/memory/tech.md`.** Never guess the OS or the test
   command; if `tech.md` lacks them, return the gap as a question.
 - **Artifacts live in `specs/NNN-name/`.** You write `plan.md`, `research.md`, `data-model.md`,

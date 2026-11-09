@@ -14,7 +14,8 @@ description: Python decisions - framework, async vs sync, type hints, structure,
 
 This skill teaches **decision-making principles**, not fixed code to copy.
 
-- ASK user for framework preference when unclear
+- When the framework preference is unclear, follow the shared question protocol (as a
+  subagent, return the question to the caller)
 - Choose async vs sync based on CONTEXT
 - Don't default to same framework every time
 

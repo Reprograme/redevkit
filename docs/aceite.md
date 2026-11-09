@@ -202,3 +202,33 @@ pegavam. Todos foram corrigidos com teste ou com texto de skill revisado:
 | Orçamento de catálogo | `validate-kit` e `test/kit.test.js` (abaixo de 12.000 e do fallback de 8.000 nos dois alvos). |
 | `npm pack --dry-run` | `test/pack-check.mjs`. |
 | Documentação sem links quebrados | `test/docs.test.js` + markdownlint. |
+
+## 5. Mudança do pipeline e revisão do kit (2026-11-08)
+
+Pedido do solicitante: o verify passa a rodar o test quando vem depois de um debug, e o test
+verde segue para o deploy sugerindo o verify. Decisões tomadas com o solicitante:
+
+| Decisão | Onde está |
+| --- | --- |
+| O verify decide pelo estado do código: reaproveita a última execução do `test-report.md` sobre o mesmo código (`PASS` segue, `FAIL` dá `failed`); senão executa o procedimento do test | `kit/commands/redevkit-verify/SKILL.md` passo 1 |
+| Com o test verde, o verify continua (convergência, execução sem rodar a suíte de novo, auditorias); com o test vermelho, para e vai ao debug | Passos 1–4 do verify |
+| Ciclo de correção: 2 `failed` após debug (qualquer causa) ou 3 verify sem `converged+verified` disparam o G5; execuções de testes não zeram o contador | Passo 6 do verify (definição única) |
+| Deploy: com debug pendente, `BLOCKED` até o verify; senão, a última execução do `test-report.md` precisa ser `PASS` sobre o código atual | `kit/commands/redevkit-test/references/code-state.md` § Compare |
+| Checklists de domínio são informativos (um aviso no implement, "Não verificado" no verify) | `phases/redevkit-implement`, `phases/redevkit-checklist` |
+| `init --force` faz backup de todo arquivo que sobrescreve | `src/core/install.js`; `test/cli.test.js` |
+
+Revisão do kit inteiro por quatro revisores independentes (comandos, fases e templates,
+personas e skills, documentação), cerca de 60 achados conferidos e corrigidos. Os principais:
+loop sem limite dentro do debug (bug-test `failed`), status mandando de volta ao plan depois do
+create (marcador `- Plan approved:`), spec leve sem caminho no verify e no create, resync do
+`redevkit-new` apagando a feature ativa, bug "aberto" sem definição, regra de referência do
+deploy circular, rótulos de `active.md` diferentes entre en e pt-BR, skills que mandavam
+corrigir bug sem teste de regressão ou reiniciar produção sem confirmação, escrita PowerShell
+sem UTF-8, auditorias que davam `PASS` sem checar nada (Drizzle, tudo `SKIPPED`) e
+`git hash-object --stdin` fora da allowlist. O harness E2E ganhou duas verificações no cenário
+B: a última execução do `test-report.md` é `PASS` feita pelo verify, e o ciclo de correção está
+no `active.md`.
+
+Evidência de execução: E2E real do cenário B (`e2e/runs/r6`, 2026-11-08) aprovado com 16/16
+checagens no Claude Code e no Codex, inclusive as duas novas; ver [e2e/RESULTS.md](../e2e/RESULTS.md).
+Testes: 46 Node e 63 Python; `validate-kit` e markdownlint sem achados.

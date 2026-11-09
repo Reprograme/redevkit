@@ -5,7 +5,7 @@ type: verification
 # Verificação: [NOME DA FEATURE]
 
 - **Feature**: `specs/[NNN-nome-curto]/`
-- **Entradas**: `spec.md`, `plan.md`, `tasks.md`, `test-report.md` (mesmo diretório)
+- **Entradas**: `spec.md`, `plan.md` (quando existe), `tasks.md`, `test-report.md` (mesmo diretório)
 
 <!--
 Somente acréscimo (append-only). Adicione uma seção "Execução" no fim deste arquivo a cada
@@ -27,17 +27,26 @@ inglês: converged+verified, gaps, failed, PASS, FAIL, SKIPPED, clean, dirty.
 | Impressão digital do diff | `[HASH]` |
 
 <!--
-Mesmos comandos do relatório de testes:
-  git rev-parse HEAD
-  git status --porcelain -- . ':(exclude).redevkit' ':(exclude)specs'
-  git status --porcelain -- . ':(exclude).redevkit' ':(exclude)specs' | git hash-object --stdin   (impressão digital do status)
-  git diff HEAD -- . ':(exclude).redevkit' ':(exclude)specs' | git hash-object --stdin            (impressão digital do diff)
+Mesmos comandos do relatório de testes: redevkit-test/references/code-state.md.
+-->
+
+### Evidência de testes
+
+| Campo | Valor |
+| --- | --- |
+| Execução de testes | `test-report.md`, execução [AAAA-MM-DD HH:MM] — [PASS \| FAIL] |
+| Origem | [executada no passo 1 \| reaproveitada: mesmo estado do código atual] |
+| Debug desde o verify anterior | [slug do bug, AAAA-MM-DD HH:MM \| nenhum] |
+
+<!--
+Uma execução de testes FAIL encerra a verificação aqui: veredito failed, e as seções
+Convergência, Evidência de execução e Auditorias ficam SKIPPED (test run FAIL).
 -->
 
 ### Convergência
 
 - **Resultado**: convergente / lacunas encontradas
-- **Tarefas anexadas**: `Phase [N]: Convergence` no `tasks.md`, [T0NN–T0NN], ou nenhuma
+- **Tarefas anexadas**: `Fase [N]: Convergência` no `tasks.md`, [T0NN–T0NN], ou nenhuma
 
 | Lacuna | Origem (spec, plan ou tarefa) | Tarefa anexada |
 | --- | --- | --- |
@@ -48,7 +57,6 @@ Mesmos comandos do relatório de testes:
 | Etapa | Comando | Código de saída | Resultado observado |
 | --- | --- | --- | --- |
 | Build | `[COMANDO]` | [CÓDIGO DE SAÍDA] | [compilou sem erros, ou o erro] |
-| Suíte de testes completa | `[COMANDO]` | [CÓDIGO DE SAÍDA] | [N aprovados, N falharam, N ignorados] |
 | Subida da aplicação | `[COMANDO]` | [CÓDIGO DE SAÍDA] | [ouvindo em URL, ou o erro], ou SKIPPED ([MOTIVO]) |
 
 #### Fluxos críticos
@@ -74,15 +82,22 @@ Mesmos comandos do relatório de testes:
 
 - [O que não pôde ser exercitado e por quê, ou nada]
 
+### Suposições
+
+- [Suposição adotada nesta execução e o motivo, ou nenhuma]
+
 ### Veredito
 
 **[converged+verified | gaps | failed]** — [uma ou duas frases com a evidência decisiva].
 
 <!--
-converged+verified: nenhuma lacuna de convergência; build, suíte completa e fluxos críticos
-passam; nenhuma auditoria com FAIL.
-gaps: a execução passa, mas a convergência encontrou lacunas (tarefas foram anexadas).
-failed: build, suíte, um fluxo crítico ou uma auditoria bloqueante falha.
+converged+verified: execução de testes PASS; nenhuma lacuna de convergência; build e fluxos
+críticos passam; nenhuma auditoria com FAIL.
+gaps: execução de testes PASS e a execução passa, mas a convergência ou auditorias não
+críticas anexaram tarefas.
+failed: a execução de testes é FAIL, ou o build, um fluxo crítico ou uma auditoria
+bloqueante falha.
 -->
 
-- **Próximo passo**: [redevkit-deploy | redevkit-create ou redevkit-enhance (gaps) | redevkit-debug (failed, ciclo [1 | 2] de 2)]
+- **Ciclo de correção** (depois desta execução): failed após debug [N]/2 · rodadas sem convergir [N]/3
+- **Próximo passo**: [redevkit-deploy | redevkit-create ou redevkit-enhance (gaps) | redevkit-debug (failed) | G5 atingido: aguardando o usuário]

@@ -49,5 +49,6 @@ failed: o sintoma ainda se reproduz, ou a correção quebra a suíte.
 
 ## Recomendação
 
-[Encerrar o bug e seguir para o redevkit-verify / aguardar: reprodução inconclusiva /
-reabrir: o sintoma ainda se reproduz, avaliar de novo com esta evidência.]
+[verified: seguir para o redevkit-verify, que encerra o bug quando confirmar a correção /
+partial: seguir para o redevkit-verify; dizer o que ainda não foi provado /
+failed: seguir para o redevkit-verify; o próximo debug abre um bug novo ligado a este.]

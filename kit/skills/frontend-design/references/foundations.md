@@ -24,7 +24,7 @@ Once you have the design read (Section 0) and dials (Section 1), pick the right 
 | Modern SaaS where you own the components | shadcn/ui (`npx shadcn@latest add ...`) | You own the code, easy to customise; never ship default state |
 | Tailwind-based modern SaaS / AI marketing | Tailwind v4 utilities + `dark:` variant | Default for indie + small team builds |
 
-**Honesty rule:** if the brief reads as one of the systems above, install and use the **official** package. Do not recreate its CSS by hand. Do not import a system's tokens but then override 90% of them.
+**Honesty rule:** if the brief reads as one of the systems above, the **official** package is the right choice: record it in `DESIGN.md` and the plan, and install it only when `plan.md` or `tasks.md` lists it (otherwise return it to the caller as a recommendation). Do not recreate its CSS by hand. Do not import a system's tokens but then override 90% of them.
 
 **One system per project.** Do not mix Fluent React with Carbon in the same tree. Do not import shadcn/ui components into a Material 3 app.
 
@@ -67,7 +67,7 @@ Unless the design read picks a real design system (Section 2.A), these are the d
 
 - **Allowed libraries (priority order):** `@phosphor-icons/react`, `hugeicons-react`, `@radix-ui/react-icons`, `@tabler/icons-react`.
 - **Discouraged:** `lucide-react`. Acceptable only when the user explicitly asks for it or the project already depends on it.
-- **NEVER hand-roll SVG icons.** If a glyph is missing, install a second library or compose from primitives - do not draw icon paths from scratch.
+- **NEVER hand-roll SVG icons.** If a glyph is missing, compose from primitives of the installed library or return the gap (a second library is installed only when `plan.md` or `tasks.md` lists it) - do not draw icon paths from scratch.
 - **One family per project.** Do not mix Phosphor with Lucide in the same component tree.
 - **Standardize `strokeWidth` globally** (e.g. `1.5` or `2.0`).
 
@@ -84,7 +84,7 @@ Discouraged by default in code, markup, and visible text. Replace symbols with i
 
 ### 3.F Dependency Verification (mandatory)
 
-Before importing ANY 3rd-party library, check `package.json`. If the package is missing, output the install command first. **Never** assume a library exists.
+Before importing ANY 3rd-party library, check `package.json`. If the package is missing, install it only when `plan.md` or `tasks.md` lists it; otherwise return the gap with the install command as a recommendation. **Never** assume a library exists.
 
 ## 7. DIAL DEFINITIONS (Technical Reference)
 

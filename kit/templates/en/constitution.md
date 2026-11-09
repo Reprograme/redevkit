@@ -84,9 +84,8 @@ explicit confirmation. -->
   convergence check MUST principles; a violation stops the work (gate G3) until it is fixed
   or justified in the plan's Complexity Tracking and accepted by the user.
 - **Amendments**: proposed explicitly, shown to the user and applied only after confirmation
-  (gate G1). Each amendment updates the version line below and appends a Sync Impact Report
-  to `.redevkit/memory/changelog.md` (version change, principles and sections changed,
-  templates and artifacts to review, deferred items).
+  (gate G1). Each amendment updates the version line below and adds a Sync Impact Report
+  to `.redevkit/memory/changelog.md` (format defined by the `redevkit-constitution` phase).
 - **Versioning** (semver): MAJOR for removing or redefining a principle incompatibly
   (including a TDD waiver); MINOR for a new principle or section, or materially expanded
   guidance; PATCH for wording and clarifications.

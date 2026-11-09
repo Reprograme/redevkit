@@ -82,13 +82,9 @@ simpler for the case.
 | Rapid prototyping | Hono | FastAPI |
 | Enterprise or CMS | NestJS | Django |
 
-| Data scenario | Recommendation |
-| --- | --- |
-| Full PostgreSQL features | Neon (serverless PostgreSQL) |
-| Edge, low latency | Turso (edge SQLite) |
-| AI, embeddings, vector search | PostgreSQL + pgvector |
-| Simple or local | SQLite |
-| Complex relationships | PostgreSQL |
+Database and ORM choice: `{{SKILLDIR:database-design}}/references/database-selection.md` and
+`{{SKILLDIR:database-design}}/references/orm-selection.md` (schema work belongs to
+`database-architect`).
 
 | API scenario | Recommendation |
 | --- | --- |

@@ -6,7 +6,7 @@ All notable changes to REDEVKIT are documented in this file. The format follows
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-11-06
+## [1.0.0] - 2026-11-08
 
 First release. REDEVKIT merges the spec-driven process of Spec Kit with the personas,
 quality rules, design gate, execution-based verification and memory of AG Kit, for Claude
@@ -20,14 +20,18 @@ Code and OpenAI Codex.
   `redevkit-deploy`, `redevkit-status`. Every command ends with a handoff.
 - `--auto` chain new → plan → create/enhance → test (debug → verify on red) that always
   stops at gates G1–G7; deploy is user-triggered only.
+- `redevkit-verify` starts with a test run on the current code: it reuses the latest
+  `test-report.md` run when the code state is the same, otherwise it runs the test procedure
+  and appends the run. A correction cycle in `active.md` (defined in `redevkit-verify` step 6)
+  stops the debug → verify and gaps → create → verify loops at gate G5.
 - 18 internal phase skills (constitution, specify, clarify, tasks, analyze, checklist,
   implement, converge, orchestrate, route, bug and assess phases), hidden from the Claude
   Code menu and marked `[internal]` in Codex.
 - 19 personas as native subagents (`.claude/agents/*.md`, `.codex/agents/*.toml`) with
   domain routing; `product-manager` merged into `product-owner`.
 - 39 knowledge skills normalized from AG Kit, with former sub-skills as references.
-- Project memory in `.redevkit/memory/` with the `redevkit-memanager` skill (recall, save,
-  sync, search, prune, import, report), readable by any agent through `AGENTS.md`, and
+- Project memory in `.redevkit/memory/` with the `redevkit-memanager` skill (bootstrap, recall,
+  save, sync, search, prune, import, report), readable by any agent through `AGENTS.md`, and
   import of legacy memory from `memory-bank/`, AG Kit and Spec Kit.
 - Constitution inside the memory with Test-First by default (`**TDD**: required`), semver
   amendments and a Sync Impact Report in `changelog.md`.

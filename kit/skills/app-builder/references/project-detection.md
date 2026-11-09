@@ -43,4 +43,4 @@ When a request matches multiple keywords (e.g. "a CLI to manage my e-commerce pr
 |----------|------|---------|
 | 1 | **Platform wins over domain.** A concrete platform (mobile / desktop / cli / extension) outranks a web/business domain (e-commerce, crm, blog). | "CLI to manage e-commerce" → **cli-tool** (e-commerce is the data domain, not the deliverable) |
 | 2 | **Head noun wins.** The keyword describing what is being built (grammatical subject) outranks modifiers. | "a **dashboard** for my Shopify store" → **nextjs-fullstack** (dashboard is the thing; Shopify is context) |
-| 3 | **Still ambiguous → ask.** If no rule breaks the tie, do NOT guess. Ask the user with the shared question protocol (one question, recommended option first) and let them choose. | "an app for my shop" → ask: web, mobile, or desktop? |
+| 3 | **Still ambiguous → ask.** If no rule breaks the tie, do NOT guess. Follow the shared question protocol (one question, recommended option first); as a subagent, return the question to the caller. | "an app for my shop" → ask: web, mobile, or desktop? |

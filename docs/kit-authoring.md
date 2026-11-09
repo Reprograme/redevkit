@@ -196,8 +196,8 @@ Knowledge (39): `api-patterns`, `app-builder`, `architecture`, `bash-linux`,
   recommendation and record it as an assumption, except at gates G1-G7. Put `{{ASK}}`
   where the skill first asks.
 - **Gates** (D29): G1 constitution creation or amendment; G2 plan approval; G3
-  constitution violation; G4 destructive or irreversible action; G5 debug -> verify failing
-  twice in a row; G6 deploy (user-triggered only); G7 legacy memory choice. The chain
+  constitution violation; G4 destructive or irreversible action; G5 correction cycle without
+  convergence (defined only in `redevkit-verify` step 6); G6 deploy (user-triggered only); G7 legacy memory choice. The chain
   always stops at a gate, even with `--auto`.
 - **Memory** (§9 of the plan): every command starts with memory phase 1 (recall) and every
   modifying command ends with phase 3 (save) per `{{SKILL:redevkit-memanager}}`. Canonical

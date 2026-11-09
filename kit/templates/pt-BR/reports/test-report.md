@@ -9,12 +9,16 @@ type: test-report
 
 <!--
 Somente acréscimo (append-only). Adicione uma seção "Execução" no fim deste arquivo a cada
-rodada. Nunca edite nem apague uma execução anterior. A última execução é a referência que o
-redevkit-deploy compara com o código atual (commit e estado da árvore de trabalho).
+rodada. Nunca edite nem apague uma execução anterior. A última execução é a que o redevkit-verify
+(passo 1) pode reaproveitar e a referência que o redevkit-deploy compara com o código atual;
+os dois comparam o estado do código como redevkit-test/references/code-state.md descreve.
 Mantenha estes tokens em inglês: PASS, FAIL, SKIPPED, MISSING, clean, dirty.
 -->
 
 ## Execução [AAAA-MM-DD HH:MM] — [PASS | FAIL]
+
+- **Executado por**: [redevkit-test | redevkit-verify (step 1)]
+- **Escopo**: [feature | arquivo ou cenário: …]
 
 ### Estado do código
 
@@ -28,12 +32,8 @@ Mantenha estes tokens em inglês: PASS, FAIL, SKIPPED, MISSING, clean, dirty.
 | Impressão digital do diff | `[HASH]` |
 
 <!--
-Comandos, executados logo após a suíte e de novo pelo redevkit-deploy, no mesmo shell:
-  git rev-parse HEAD
-  git branch --show-current
-  git status --porcelain -- . ':(exclude).redevkit' ':(exclude)specs'
-  git status --porcelain -- . ':(exclude).redevkit' ':(exclude)specs' | git hash-object --stdin   (impressão digital do status)
-  git diff HEAD -- . ':(exclude).redevkit' ':(exclude)specs' | git hash-object --stdin            (impressão digital do diff)
+Registre estes valores logo após a suíte com os comandos de
+redevkit-test/references/code-state.md (no mesmo tipo de shell que o deploy vai usar).
 -->
 
 ### Comandos executados
@@ -63,6 +63,10 @@ Comandos, executados logo após a suíte e de novo pelo redevkit-deploy, no mesm
 - **Não verificado** (não automatizável aqui; nunca conta como PASS): [cenário — checagem
   manual necessária, ou nenhum]
 
+### Suposições
+
+- [Suposição adotada nesta execução e o motivo, ou nenhuma]
+
 ### Veredito
 
 **[PASS | FAIL]** — [uma frase com a evidência decisiva].
@@ -73,4 +77,4 @@ aceite automatizável tem um teste aprovado. Qualquer outra situação é FAIL. 
 podem ser automatizados aqui vão para Não verificado: não tornam a execução FAIL e nunca são PASS.
 -->
 
-- **Próximo passo**: [redevkit-deploy, sugerindo redevkit-verify antes | redevkit-verify para os itens Não verificados | redevkit-debug]
+- **Próximo passo**: [redevkit-deploy, sugerindo redevkit-verify antes | redevkit-debug | dentro do redevkit-verify: a verificação continua (PASS) ou termina como failed (FAIL)]

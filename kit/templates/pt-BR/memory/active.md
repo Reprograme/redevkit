@@ -9,7 +9,8 @@ updated: "YYYY-MM-DD"
 ## Feature ativa
 
 - Feature: [specs/NNN-nome ou nenhuma]
-- Fase: [etapa atual do pipeline, por exemplo plan, implementação, test, verify]
+- Fase: [specify | plan approved | implementation | test | debug | verify | deploy]
+- Plan approved: [AAAA-MM-DD | no]
 - Branch: [nome da branch ou nenhuma]
 
 ## Onde estamos
@@ -37,14 +38,17 @@ updated: "YYYY-MM-DD"
 
 ## Problemas conhecidos
 
-- [Bug, limitação ou dívida técnica ainda não resolvida.]
+- Bug [slug]: [open | closed (verify AAAA-MM-DD)] — [.redevkit/bugs/slug/]
+- [Limitação ou dívida técnica ainda não resolvida.]
 
 ## Últimos resultados
 
-- Test: [PASS | FAIL | SKIPPED (motivo)] — [AAAA-MM-DD] — [comando] — [caminho do relatório]
-- Verify: [PASS | FAIL | SKIPPED (motivo)] — [AAAA-MM-DD] — [caminho do relatório]
+- Test: [PASS | FAIL] — [AAAA-MM-DD HH:MM] — [executado por redevkit-test | redevkit-verify (step 1)] — [comando] — [caminho do relatório]
+- Verify: [converged+verified | gaps | failed] — [AAAA-MM-DD HH:MM] — [caminho do relatório]
+- Debug: [specs/NNN-nome] — [slug do bug] — [AAAA-MM-DD HH:MM] — [verified | partial | failed] — [.redevkit/bugs/slug/]
+- Correction cycle: [specs/NNN-nome] — failed after debug [N]/2 · rounds without convergence [N]/3 [· G5 reached AAAA-MM-DD HH:MM, waiting for the user]
 
 ## Preferências de fluxo
 
-- Branch por feature: [sim | não | perguntar]
+- Branch por feature: [always | never | ask]
 - [Outra preferência de fluxo, por exemplo commit só quando pedido.]

@@ -47,9 +47,10 @@ Find what the developer forgot. Test behavior, not implementation.
 3. **Refactor:** improve the code with the tests staying green.
 
 During `{{CMD:redevkit-test}}`, map every acceptance scenario in `spec.md` to an existing test,
-write the missing ones, then run the full suite with the command from `tech.md`. When Python is
-available, `.redevkit/audits/test_runner.py` can run it (interpreter detection in
-`.redevkit/audits/README.md`).
+write the missing ones, then run the full suite as that command's step 3 says (the
+`test_runner.py` audit when Python is found, otherwise the `tech.md` test command). Inside an
+implementation task, run only the tests you touched (light verification, see
+`{{SKILL:lint-and-validate}}`).
 
 ## Testing pyramid
 

@@ -14,7 +14,8 @@ description: Node.js backend decisions - framework, layering, errors, async, val
 
 This skill teaches **decision-making principles**, not fixed code to copy.
 
-- ASK user for preferences when unclear
+- When preferences are unclear, follow the shared question protocol (as a subagent, return the
+  question to the caller)
 - Choose framework/pattern based on CONTEXT
 - Don't default to same solution every time
 
@@ -314,7 +315,7 @@ node --test src/**/*.test.ts
 ### ✅ DO
 
 - Choose framework based on context
-- Ask user for preferences when unclear
+- Resolve unclear preferences via the shared question protocol (subagents return the question)
 - Use layered architecture for growing projects
 - Validate all inputs
 - Use environment variables for secrets

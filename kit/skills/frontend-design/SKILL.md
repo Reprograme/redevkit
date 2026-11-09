@@ -17,19 +17,24 @@ paths: "**/*.tsx, **/*.jsx, **/*.vue, **/*.svelte, **/*.astro, **/*.html, **/*.c
 
 `DESIGN.md` at the project root is the design source of truth (`{{SKILL:design-spec}}`).
 
-- If it is missing on a UI task, create it before writing components or pages.
+- If it is missing, the DESIGN.md gate of `{{CMD:redevkit-plan}}` creates it with
+  `{{SKILL:design-spec}}`. As an implementer, do not create it: return the gap to the caller,
+  unless your brief asks you to create it.
 - Build strictly with its tokens (colors, typography, spacing, radii, components). No ad-hoc
-  hex values, font sizes or radii that are not tokens; add a token first if one is missing.
-- When this skill's defaults disagree with `DESIGN.md` or an explicit brand, `DESIGN.md` and the
-  brand win.
+  hex values, font sizes or radii that are not tokens; a missing token is a gap to return (or
+  to add, when your brief covers `DESIGN.md`).
+- Install packages or UI libraries only when `plan.md` or `tasks.md` lists them.
+- Precedence: the user's explicit request or the brand recorded in `DESIGN.md` > `DESIGN.md` >
+  this skill's defaults.
 
 ### Purple Ban (Default, Overridable)
 
-By default, do not reach for the "AI purple / violet / blue glow" look: no automatic purple
-gradients, purple button glows or neon accents. Use neutral bases with one high-contrast accent
-instead. This is a **default, not a law**: when `DESIGN.md` tokens, the brand or the brief
-explicitly use purple, use it with intent (consistent palette, harmonized neutrals, restrained
-gradients). Details: Section 4.2 in [directives](references/directives.md).
+This is the single definition; other skills and personas link here. By default, do not use
+purple or violet as the primary color or the default accent (including purple gradients, purple
+button glows and neon-violet accents). Use neutral bases with one high-contrast accent instead.
+It is a **default, not a law**: when the brand or `DESIGN.md` asks for purple (same precedence
+as above), use it with intent (consistent palette, harmonized neutrals, restrained gradients).
+Applying it to color choices: Section 4.2 in [directives](references/directives.md).
 
 ## Section Map
 
@@ -79,7 +84,7 @@ Example reads:
 
 ### 0.C If the brief is ambiguous, ask one question, do not guess
 
-Ask exactly **one** clarifying question - never a multi-question dump - and only when the design read genuinely diverges. Example: _"Should this feel closer to Linear-clean or Awwwards-experimental?"_
+Only when the design read genuinely diverges, follow the shared question protocol (one question, recommended option first; as a subagent, return the question to the caller). Example: _"Should this feel closer to Linear-clean or Awwwards-experimental?"_
 
 If you can confidently infer from context, **do not ask**. Just declare the design read and proceed.
 
@@ -152,7 +157,7 @@ Before delivering a page, run every box of the [pre-flight check](references/pre
 | `ux_audit.py` | UX and design-psychology heuristics over the built UI |
 | `accessibility_checker.py` | Static accessibility checks for HTML, JSX and TSX |
 
-Run `.redevkit/audits/ux_audit.py <project_path>` and
+In the test and verify commands (not during implementation), run `.redevkit/audits/ux_audit.py <project_path>` and
 `.redevkit/audits/accessibility_checker.py <project_path>` with the Python interpreter detected
 per `.redevkit/audits/README.md`. If no Python is available, both audits are
 `SKIPPED (no Python)`: say so and fall back to the project's own commands (lint with

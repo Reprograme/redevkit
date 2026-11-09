@@ -208,6 +208,14 @@ export const check = ({ scenario, workDir, transcripts, commitsBefore }) => {
     ok("verification.md converged+verified (last run)", vr.at(-1) === "converged+verified", vr.join(" → ") || "missing");
     const tv = runVerdicts(doc("test-report.md"));
     ok("test went red before debug (bug exposed)", tv.includes("FAIL"), tv.join(" → "));
+    // The verify after a debug runs the tests again on the fixed code (step 1) and appends the run.
+    const lastRun = doc("test-report.md").split(/^(?=##\s+(?:Run|Execução)\b)/m).at(-1) ?? "";
+    ok(
+      "verify re-ran the tests after debug (last test run PASS, run by redevkit-verify)",
+      tv.at(-1) === "PASS" && tv.indexOf("FAIL") < tv.length - 1 && /redevkit-verify/.test(lastRun),
+      tv.join(" → "),
+    );
+    ok("correction cycle recorded in active.md", /Correction cycle|Ciclo de correção/i.test(mem("active.md")));
   }
   return res;
 };

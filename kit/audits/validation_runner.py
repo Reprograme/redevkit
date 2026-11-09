@@ -12,6 +12,15 @@ Exit-code contract of every audit script:
 * ``2`` - usage error or missing input path
 * ``3`` - SKIPPED (the audit could not run or does not apply; the script
   prints a ``SKIPPED (<reason>)`` line)
+
+Exit-code contract of the orchestrators (``run_suite``):
+
+* ``0`` - at least one check ran and none failed (skipped checks, required or
+  not, are listed in the summary as not verified)
+* ``1`` - any check failed or errored
+* ``2`` - usage error (argparse, missing project directory)
+* ``3`` - SKIPPED: every check was skipped, nothing was verified; the summary
+  prints ``SKIPPED (<reason>)``
 """
 from __future__ import annotations
 
@@ -253,10 +262,25 @@ def execute_suite(
 
 
 def suite_success(results: Iterable[CheckResult]) -> bool:
+    """True when no check failed or errored (skipped checks do not fail a suite)."""
     return all(result.status not in {"failed", "error"} for result in results)
 
 
-def print_summary(title: str, results: List[CheckResult], started: datetime) -> bool:
+def suite_exit_code(results: Sequence[CheckResult]) -> int:
+    """1 on any failure, 3 when nothing ran (all skipped or no checks), else 0."""
+    if not suite_success(results):
+        return EXIT_FAIL
+    if not any(result.status == "passed" for result in results):
+        return EXIT_SKIPPED
+    return EXIT_PASS
+
+
+def suite_status(results: Sequence[CheckResult]) -> str:
+    return {EXIT_PASS: "passed", EXIT_FAIL: "failed", EXIT_SKIPPED: "skipped"}[suite_exit_code(results)]
+
+
+def print_summary(title: str, results: List[CheckResult], started: datetime) -> int:
+    """Print the summary and return the suite exit code (see ``suite_exit_code``)."""
     CONSOLE.header(title)
     counts = {status: sum(r.status == status for r in results) for status in ("passed", "failed", "error", "skipped")}
     duration = (datetime.now(timezone.utc) - started).total_seconds()
@@ -267,21 +291,27 @@ def print_summary(title: str, results: List[CheckResult], started: datetime) -> 
     )
     for result in results:
         if result.status == "skipped":
-            print(f"[SKIPPED] {result.category} / {result.name} - SKIPPED ({result.reason})")
+            flag = " (required)" if result.required else ""
+            print(f"[SKIPPED]{flag} {result.category} / {result.name} - SKIPPED ({result.reason})")
             continue
         marker = {"passed": "PASS", "failed": "FAIL", "error": "ERROR"}[result.status]
         detail = f" - {result.reason}" if result.reason else ""
         print(f"[{marker}] {result.category} / {result.name}{detail}")
         for note in result.notes:
             print(f"         {note}")
-    ok = suite_success(results)
-    if ok and counts["skipped"]:
-        CONSOLE.passed(f"No blocking failures; {counts['skipped']} check(s) SKIPPED (not verified)")
-    elif ok:
-        CONSOLE.passed("Validation completed successfully")
-    else:
+    required_skipped = [r.name for r in results if r.status == "skipped" and r.required]
+    if required_skipped:
+        CONSOLE.skipped(f"Required check(s) SKIPPED (not verified): {', '.join(required_skipped)}")
+    code = suite_exit_code(results)
+    if code == EXIT_FAIL:
         CONSOLE.failed("Validation found blocking failures")
-    return ok
+    elif code == EXIT_SKIPPED:
+        CONSOLE.skipped(f"SKIPPED (all {len(results)} check(s) skipped; nothing was verified)")
+    elif counts["skipped"]:
+        CONSOLE.passed(f"No blocking failures; {counts['skipped']} check(s) SKIPPED (not verified)")
+    else:
+        CONSOLE.passed("Validation completed successfully")
+    return code
 
 
 def write_report(path: Path, project: Path, audits_dir: Path, results: List[CheckResult], started: datetime) -> None:
@@ -290,7 +320,9 @@ def write_report(path: Path, project: Path, audits_dir: Path, results: List[Chec
         "audits_dir": str(audits_dir),
         "started_at": started.isoformat(),
         "finished_at": datetime.now(timezone.utc).isoformat(),
-        "success": suite_success(results),
+        "status": suite_status(results),
+        "exit_code": suite_exit_code(results),
+        "success": suite_exit_code(results) == EXIT_PASS,
         "results": [asdict(result) for result in results],
     }
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -316,8 +348,8 @@ def run_suite(title: str, summary_title: str, description: str, suite: Sequence[
         print("Runtime checks: disabled (--no-runtime)")
 
     results = execute_suite(specs, AUDITS_DIR, project, args.url, args.stop_on_fail)
-    success = print_summary(summary_title, results, started)
+    code = print_summary(summary_title, results, started)
     if args.report:
         write_report(args.report.resolve(), project, AUDITS_DIR, results, started)
         print(f"Report: {args.report.resolve()}")
-    return EXIT_PASS if success else EXIT_FAIL
+    return code

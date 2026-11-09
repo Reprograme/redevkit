@@ -1,9 +1,10 @@
 # Verification by execution and audits
 
-Steps 2 and 3 of redevkit-verify. Principle: code that exists is not code that works. Verify
+Steps 3 and 4 of redevkit-verify. The test suite is not part of this reference: step 1 of
+redevkit-verify runs it through the test procedure (or reuses a run on the same code). Principle: code that exists is not code that works. Verify
 by running it; never by inspection or assumption.
 
-## Execution (step 2)
+## Execution (step 3)
 
 ### 1. Identify what changed
 
@@ -16,7 +17,7 @@ previous run, `tasks.md` items marked `[X]` since then, the bug folder after a d
 | --- | --- |
 | Bug fix | Reproduce the original scenario from `assessment.md` and confirm it no longer occurs |
 | New feature | Run the `quickstart.md` scenarios and confirm the expected outcomes |
-| Refactor | Run the existing tests and confirm nothing broke |
+| Refactor | Covered by the step 1 test run; walk the affected flows and confirm nothing broke |
 | API change | Call the endpoint and confirm status code and response shape, including error cases |
 | UI change | Render the page in a browser (Playwright via `webapp-testing`) and check the console |
 | Config change | Load the configuration and confirm the values applied |
@@ -25,27 +26,26 @@ previous run, `tasks.md` items marked `[X]` since then, the bug folder after a d
 ### 3. Execute
 
 1. Build (or type check) with the command from `tech.md`.
-2. Full test suite, same command as the test command uses.
-3. When the Project Type has a runtime (`web`, `fullstack`, `api`, `mobile` web preview,
+2. When the Project Type has a runtime (`web`, `fullstack`, `api`, `mobile` web preview,
    `game` for the web): start the application in the background as the preview command's
    start procedure describes, wait for the HTTP health check, walk the critical flows of
    `quickstart.md` (happy path and at least one error path), then stop it.
-4. Anything that cannot be automated goes to **Not verified**, with the reason.
+3. Anything that cannot be automated goes to **Not verified**, with the reason.
 
 ### Checklist by Project Type
 
-- **Web / fullstack:** build, lint, tests, dev server starts, changed pages render, no
+- **Web / fullstack:** build, lint, dev server starts, changed pages render, no
   console errors.
 - **API:** server starts, changed endpoints answer correctly, error cases return the right
   status codes, database queries run.
 - **CLI / library:** the command runs, expected output matches, bad input is handled, help
   text is right; for libraries, the public API is exercised by tests.
 
-## Audits (step 3)
+## Audits (step 4)
 
 1. Detect a Python interpreter as `.redevkit/audits/README.md` describes (`python`, then
    `py -3` on Windows, then `python3`, each validated by running `--version`).
-2. Choose by Project Type:
+2. Choose by Project Type (from `plan.md`, or `tech.md` for a lightweight spec):
 
    | Project Type | Audit | Runtime flag |
    | --- | --- | --- |
@@ -70,15 +70,16 @@ The verify command does not edit application code. Failures become either:
 
 - **gaps** — non-critical audit findings and missing behavior: appended as tasks in
   `## Phase N: Convergence`, same grammar as the other tasks; or
-- **failed** — build failure, failing test, application that does not start, broken critical
-  flow, or a Security or Lint failure of error severity: handed to the debug command.
+- **failed** — a `FAIL` test run (step 1), build failure, application that does not start,
+  broken critical flow, or a Security or Lint failure of error severity: handed to the debug
+  command.
 
 ## Verdict
 
 | Verdict | When |
 | --- | --- |
-| `converged+verified` | No convergence gaps, every executed step passed, no audit `FAIL` |
-| `gaps` | Execution passed, but convergence or non-critical audits appended tasks |
+| `converged+verified` | Test run `PASS`, no convergence gaps, every executed step passed, no audit `FAIL` |
+| `gaps` | Test run `PASS` and execution passed, but convergence or non-critical audits appended tasks |
 | `failed` | Any condition listed under **failed** above |
 
 `SKIPPED` items never upgrade a verdict; they are listed so the user sees what was not

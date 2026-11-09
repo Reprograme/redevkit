@@ -31,10 +31,8 @@ The calling command passes the slug and the mode.
    (confirmed by an existing `.redevkit/assessments/<slug>/`) → the only assessment
    directory with `definition.md` and without `shape.md` (auto) → ask (interactive) or stop
    (auto).
-2. Normalize: lowercase; whitespace and `_` become `-`; keep only `a-z`, `0-9` and `-`;
-   collapse repeated `-`; trim `-`. Reject an empty result.
-3. Path safety: `.redevkit/`, `.redevkit/assessments/` and the slug directory must be real
-   directories (not symlinks) inside the project root. Refuse and report otherwise.
+2. Normalize it and check path safety per the slug rule in
+   `{{SKILL:redevkit-assess-intake}}`.
 
 ## Preconditions
 

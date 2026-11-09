@@ -25,24 +25,27 @@ chain and never triggered by another command's handoff.
 
 1. **Invoked by the user** in this turn. If you reached this file any other way, stop.
 2. Memory initialized. If not, suggest `{{CMD:redevkit-new}}` and stop.
-3. **Green evidence on the current code.** Reference run: the latest `PASS` run in the
-   active feature's `test-report.md`; when a debug happened after it (or the latest test run
-   is `FAIL`), the latest `converged+verified` run in `verification.md` after that debug.
-   Recompute HEAD, working tree and both fingerprints and compare them row by row as
-   `{{SKILLDIR:redevkit-test}}/references/code-state.md` describes.
-   - Every row equal → precondition status `OK`.
-   - No reference run, a reference that is not green, any row different, or `n/a` →
-     `BLOCKED`: refuse and require a new `{{CMD:redevkit-test}}`. The only way past is
-     `OVERRIDDEN`: the user states a reason, recorded in their words in the report; the run
-     still stops at G6.
-4. **Verify suggested.** If no verification run is newer than the test run used as evidence,
-   ask: run `{{CMD:redevkit-verify}}` first (Recommended) or deploy now. Record the choice.
+3. **Green evidence on the current code.** Choose the reference run and compare it with the
+   current code exactly as `{{SKILLDIR:redevkit-test}}/references/code-state.md` § Compare
+   describes (debug pending → `BLOCKED` until the verify runs; otherwise the latest
+   `test-report.md` run, which must be `PASS`).
+   - Same code state and a `PASS` reference → precondition status `OK`.
+   - Anything else → `BLOCKED`: refuse and require `{{CMD:redevkit-verify}}` (debug pending)
+     or `{{CMD:redevkit-test}}`. The only way past is `OVERRIDDEN`: the user states a reason,
+     recorded in their words in the report; the run still stops at G6.
+4. **Verify suggested.** Compare with the latest run of the feature's `verification.md`:
+   - it is newer than the reference test run and `converged+verified` → nothing to ask;
+   - it is newer and `gaps` or `failed` → show it and ask: fix first (Recommended) or deploy
+     anyway;
+   - none is newer → ask: run `{{CMD:redevkit-verify}}` first (Recommended) or deploy now.
+
+   Record the choice in the report.
 5. Templates resolve per T10: `.redevkit/templates/overrides/reports/deploy.md` if it exists,
    otherwise `.redevkit/templates/reports/deploy.md`.
 
 ## Memory phase 1
 
-Recall per `{{SKILL:redevkit-memanager}}`: `MEMORY.md`, `active.md` (latest results), the
+Recall per `{{SKILL:redevkit-memanager}}`: `MEMORY.md`, `active.md` (Last results), the
 invariants in `system.md`, `tech.md` (deploy platform, environments, build command). Read
 `.redevkit/memory/constitution.md`. Print `📖 Memory loaded. Last entry: YYYY-MM-DD.`
 
@@ -136,7 +139,8 @@ or `aborted`. Tokens stay in English in every language.
 ## Memory phase 3
 
 Save per `{{SKILL:redevkit-memanager}}`: `changelog.md` (deployed version, environment,
-date, verdict), `active.md` (latest deploy, next steps), `tech.md` (platform and
+date, verdict), `active.md` (Recent events: the deploy and its outcome; Next steps),
+`tech.md` (platform and
 environments when learned), `MEMORY.md`. Never write secrets, tokens or credentials. Print
 `💾 Memory updated (files).`
 
@@ -151,6 +155,7 @@ and current values side by side. A skipped check is `SKIPPED (reason)`, never `P
 - `succeeded` → `{{CMD:redevkit-status}}` to review, or `{{CMD:redevkit-plan}}` for the next
   feature.
 - `failed` or `rolled-back` → `{{CMD:redevkit-debug}}` with the failing step and its output.
-- `BLOCKED` → `{{CMD:redevkit-test}}` (then `{{CMD:redevkit-verify}}`).
+- `BLOCKED` → `{{CMD:redevkit-verify}}` when a debug is pending, otherwise
+  `{{CMD:redevkit-test}}`.
 - `aborted` → nothing changed; run `{{CMD:redevkit-deploy}}` again when ready.
 - Never chained by `--auto`.

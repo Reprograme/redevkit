@@ -70,7 +70,7 @@ Before designing an API:
 | --- | --- |
 | `api_validator.py` | API endpoint checks: OpenAPI specs, response formats, common issues |
 
-Run `.redevkit/audits/api_validator.py <project_path>` with the Python interpreter detected
+In the test and verify commands (not during implementation), run `.redevkit/audits/api_validator.py <project_path>` with the Python interpreter detected
 per `.redevkit/audits/README.md`. If no Python is available, the audit is
 `SKIPPED (no Python)`: say so and fall back to the project's own commands (contract tests,
 OpenAPI linting, the test suite). Never report a skipped audit as PASS.

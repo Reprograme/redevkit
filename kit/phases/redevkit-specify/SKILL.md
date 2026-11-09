@@ -62,39 +62,49 @@ a feature with the same intent, update that spec instead of creating a new one.
       and no reasonable default. **At most 3 markers**, prioritized scope > security and
       privacy > UX > technical detail.
    6. Fill the Input line with the user's description, quoted. Leave the Clarifications
-      section empty.
+      and Enhancements sections empty (keep them; enhance appends to the latter).
    7. Remove optional sections that do not apply (do not leave "N/A"); keep section order
       and headings; replace every fill-in field (`[FIELD]`, `<FIELD>`).
 8. **Quality loop.** Create `specs/NNN-short-name/checklists/requirements.md` and run the loop
    in [requirements-checklist](references/requirements-checklist.md): up to 3 iterations,
-   fixing the spec after each one.
+   fixing the spec after each one (`light` mode: one iteration, see below).
 9. **Resolve markers now.** If `[NEEDS CLARIFICATION]` markers remain, follow
    `{{SKILL:redevkit-clarify}}` in `markers` mode (only those markers, one question at a
    time). Then re-run the quality loop once. Questions asked here count toward the calling
    command's limit of 5.
 10. **Set the active feature.** Update the Active feature section of
-    `.redevkit/memory/active.md` with the path `specs/NNN-short-name` and the phase
-    `specify`, following `{{SKILL:redevkit-memanager}}`.
+    `.redevkit/memory/active.md` with the path `specs/NNN-short-name`, the phase `specify` and
+    `- Plan approved: no`, following `{{SKILL:redevkit-memanager}}`. A new active feature also
+    resets the Correction cycle line (rule in `{{CMD:redevkit-verify}}` step 6).
 11. **Offer the branch** as described below.
 
 ## Branch offer (D38)
 
 Only inside a git repository (`git rev-parse --is-inside-work-tree` succeeds); otherwise skip
-it and never run `git init`. Read the branch preference in the Workflow preferences section
-of `.redevkit/memory/active.md`: `always` creates `NNN-short-name` without asking, `never`
-skips. Without a saved preference, ask with these options: create the branch and remember
-`always` (Recommended); not for this feature; `never` for this project.
+it and never run `git init`. Read the branch-per-feature line (`Branch per feature` /
+`Branch por feature`) in the Workflow preferences section of `.redevkit/memory/active.md`. Its value is one of three English tokens, written the same
+in every project language: `always` creates `NNN-short-name` without asking, `never` skips,
+`ask` (or no value yet) asks with these options: create the branch and remember `always`
+(Recommended); not for this feature (save `ask`); `never` for this project.
 
 {{ASK}}
 
-Save the answer as the preference, except "not for this feature". Create the branch with
-`git switch -c NNN-short-name`; if it already exists, report it and do not switch. Never
-commit.
+Save the chosen token. Create the branch with `git switch -c NNN-short-name`; if it already
+exists, report it and do not switch. Never commit.
 
 ## Light mode
 
-For `light`, fill only the stories, requirements, success criteria and assumptions the change
-touches, run one quality iteration, and skip the branch offer unless the caller asks for it.
+`light` (D55, used by `{{CMD:redevkit-enhance}}`) changes these steps:
+
+- Step 7: fill only the stories, requirements, success criteria and assumptions the change
+  touches; drop the other optional sections.
+- Step 8: exactly one quality iteration of `checklists/requirements.md` (check every item,
+  fix the spec once, record what stays open); no loop.
+- Step 9: resolve markers as usual, but do not re-run the quality iteration afterwards.
+- Step 11: skip the branch offer unless the caller asks for it.
+
+The other steps run as in `full`. No `plan.md` is written; later phases take the technical
+context from `.redevkit/memory/tech.md` and `system.md`.
 
 ## Writing rules
 

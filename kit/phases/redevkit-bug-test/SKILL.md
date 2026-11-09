@@ -29,7 +29,8 @@ the same session) and the mode.
 1. Resolve in order: slug given by the caller → slug reported earlier in this session
    (confirmed by `.redevkit/bugs/<slug>/fix.md`) → the only bug with `fix.md` and without
    `test.md` → ask (interactive) or stop listing the candidates (auto). Never guess.
-2. Normalize as in `{{SKILL:redevkit-bug-assess}}` and refuse symlinked or escaping paths.
+2. Normalize it and check path safety per the slug rule in
+   `{{SKILL:redevkit-assess-intake}}`.
 
 ## Questions
 
@@ -72,10 +73,13 @@ orchestrator instead of asking.
 Report to the calling command: `Slug: <slug>` on its own line, the path of `test.md` and the
 result. By result:
 
-- `verified` or `partial` → the calling command continues to `{{CMD:redevkit-verify}}`
-  (mandatory after debug); a `partial` names what remains unproven.
-- `failed` → a new `{{SKILL:redevkit-bug-assess}}` with the evidence in `test.md`, in a new
-  directory linked to this one. Two failed debug → verify cycles in a row stop for the user
-  (G5).
+- `verified` → the bug can be closed once the verify confirms it.
+- `partial` → name what remains unproven.
+- `failed` → name the evidence in `test.md`; the next debug opens a new bug directory linked
+  to this one.
+
+Whatever the result, the calling command finishes and continues to `{{CMD:redevkit-verify}}`
+(mandatory after debug). Never start a new assessment inside the same debug run: the loop is
+bounded by the correction cycle of the verify command (G5).
 
 The calling command records open or closed bugs in `.redevkit/memory/active.md`.

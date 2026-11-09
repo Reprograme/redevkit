@@ -9,12 +9,16 @@ type: test-report
 
 <!--
 Append-only. Add one "Run" section at the end of this file for each execution.
-Never edit or delete a past run. The latest run is the reference that redevkit-deploy
-compares with the current code (commit and working-tree state).
+Never edit or delete a past run. The latest run is the one redevkit-verify (step 1) may reuse
+and the reference redevkit-deploy compares with the current code; both compare code states as
+redevkit-test/references/code-state.md describes.
 Keep these tokens in English: PASS, FAIL, SKIPPED, MISSING, clean, dirty.
 -->
 
 ## Run [YYYY-MM-DD HH:MM] — [PASS | FAIL]
+
+- **Run by**: [redevkit-test | redevkit-verify (step 1)]
+- **Scope**: [feature | file or scenario: …]
 
 ### Code state
 
@@ -28,12 +32,8 @@ Keep these tokens in English: PASS, FAIL, SKIPPED, MISSING, clean, dirty.
 | Diff fingerprint | `[HASH]` |
 
 <!--
-Commands, run right after the suite and again by redevkit-deploy with the same shell:
-  git rev-parse HEAD
-  git branch --show-current
-  git status --porcelain -- . ':(exclude).redevkit' ':(exclude)specs'
-  git status --porcelain -- . ':(exclude).redevkit' ':(exclude)specs' | git hash-object --stdin   (status fingerprint)
-  git diff HEAD -- . ':(exclude).redevkit' ':(exclude)specs' | git hash-object --stdin            (diff fingerprint)
+Record these values right after the suite with the commands in
+redevkit-test/references/code-state.md (same shell type as the deploy will use).
 -->
 
 ### Commands executed
@@ -63,6 +63,10 @@ Commands, run right after the suite and again by redevkit-deploy with the same s
 - **Not verified** (cannot be automated here; never counted as PASS): [scenario — manual check
   needed, or none]
 
+### Assumptions
+
+- [Assumption taken in this run and why, or none]
+
 ### Verdict
 
 **[PASS | FAIL]** — [one sentence with the decisive evidence].
@@ -73,4 +77,4 @@ scenario maps to a passing test. Anything else is FAIL. Scenarios that cannot be
 here go to Not verified: they do not make the run FAIL and are never PASS.
 -->
 
-- **Next step**: [redevkit-deploy, suggesting redevkit-verify first | redevkit-verify for the Not verified checks | redevkit-debug]
+- **Next step**: [redevkit-deploy, suggesting redevkit-verify first | redevkit-debug | inside redevkit-verify: the verification continues (PASS) or stops as failed (FAIL)]

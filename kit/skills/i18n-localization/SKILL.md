@@ -150,7 +150,7 @@ Before shipping:
 | --- | --- |
 | `i18n_checker.py` | Locale completeness and likely hardcoded user-facing strings |
 
-Run `.redevkit/audits/i18n_checker.py <project_path>` with the Python interpreter detected per
+In the test and verify commands (not during implementation), run `.redevkit/audits/i18n_checker.py <project_path>` with the Python interpreter detected per
 `.redevkit/audits/README.md`. If no Python is available, the audit is `SKIPPED (no Python)`:
 say so and fall back to the project's own commands (i18n lint rules, missing-key reports of
 the i18n library, the test suite). Never report a skipped audit as PASS.

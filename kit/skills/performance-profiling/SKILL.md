@@ -63,6 +63,10 @@ and field data for INP.
 
 ## 4. Bundle Analysis
 
+Budget: the one set in `plan.md` or `DESIGN.md`. Without one, `bundle_analyzer.py` defaults
+apply: per file, warn above 250 KiB and fail above 750 KiB; total JavaScript, fail above
+2048 KiB.
+
 | Issue | Indicator |
 | --- | --- |
 | Large dependencies | Top of the bundle |

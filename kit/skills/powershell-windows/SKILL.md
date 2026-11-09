@@ -23,7 +23,22 @@ description: PowerShell pitfalls on Windows - operators, quoting, encoding, path
 
 ---
 
-## 2. Unicode/Emoji Restriction
+## 2. Encoding and Unicode
+
+### Encoding: Always UTF-8 When Writing Files
+
+Files are UTF-8. Prefer the file-editing tool over shell writes. When a shell write is
+unavoidable, pass `-Encoding` on every write:
+
+| ❌ Don't | ✅ Do |
+|----------|-------|
+| `Get-Content f` (5.1 reads BOM-less UTF-8 as ANSI) | `Get-Content f -Raw -Encoding UTF8` |
+| `Set-Content f $text` | `Set-Content f $text -NoNewline -Encoding utf8` (PowerShell 7: `utf8NoBOM`) |
+| `cmd > f`, `Out-File f` on Windows PowerShell 5.1 (UTF-16 LE) | `cmd \| Set-Content f -Encoding utf8` or `Out-File f -Encoding utf8` |
+| `Add-Content f $line` | `Add-Content f $line -Encoding utf8` |
+
+In Windows PowerShell 5.1, `-Encoding UTF8` writes a BOM; PowerShell 7 defaults to UTF-8
+without BOM and accepts `utf8NoBOM`. Check accents after a write.
 
 ### CRITICAL: Prefer ASCII in Scripts
 

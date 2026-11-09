@@ -45,8 +45,8 @@ Do not start development until you have read the files relevant to the task.
 ## 2. Ask Before Assuming
 
 If the request is open-ended, do not default to your favorites. When these are not specified
-(in the request, `spec.md`, `DESIGN.md` or `.redevkit/memory/tech.md`), ask, one question at a
-time, with a recommended option:
+(in the request, `spec.md`, `DESIGN.md` or `.redevkit/memory/tech.md`), follow the shared
+question protocol (as a subagent, return the question to the caller):
 
 | Aspect | Ask | Why |
 | --- | --- | --- |
@@ -130,7 +130,7 @@ If you cannot fill the checkpoint, go back and read the reference files.
 
 ## 5. Automated Audit
 
-Run `.redevkit/audits/mobile_audit.py <project_path>` (add `--json` for machine output) with
+In the test and verify commands (not during implementation), run `.redevkit/audits/mobile_audit.py <project_path>` (add `--json` for machine output) with
 the Python interpreter detected per `.redevkit/audits/README.md`. It checks touch targets,
 list performance patterns, animation drivers, cleanup, `console.log` and navigation rules.
 Without Python, record `SKIPPED (no Python)` and walk the checklists below by hand, plus the

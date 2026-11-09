@@ -35,7 +35,8 @@ the same session) and the mode.
    (confirmed by `.redevkit/bugs/<slug>/assessment.md`) → the only bug with
    `assessment.md` and without `fix.md` → ask (interactive) or stop listing the candidates
    (auto). Never guess.
-2. Normalize as in `{{SKILL:redevkit-bug-assess}}` and refuse symlinked or escaping paths.
+2. Normalize it and check path safety per the slug rule in
+   `{{SKILL:redevkit-assess-intake}}`.
 
 ## Questions
 
@@ -64,8 +65,8 @@ subagent, return the question to the orchestrator instead of asking.
 3. **Run it and see it fail** for the reason in the assessment (the assertion or error
    matches the symptom). Keep the command and the failing output.
    - It passes: the test misses the bug. Adjust it. If it still cannot fail, stop editing,
-     record the finding under Deviations, set status `not-applied` and recommend a new
-     assessment.
+     record the finding under Deviations, set status `not-applied` and continue to the
+     bug test (see step 7).
    - The bug cannot be captured by an automated test (environment-only): record why and use
      the scripted reproduction from the assessment as the failing check.
 4. **Fix the root cause.** For a fix in a specialist domain, pick the persona with
@@ -78,8 +79,10 @@ subagent, return the question to the orchestrator instead of asking.
    `.redevkit/memory/tech.md` or the project scripts). Skip destructive or network suites
    without consent and record `SKIPPED (reason)`.
 7. **If the fix does not hold** or the root cause is elsewhere, stop changing code, record
-   it under Deviations, set status `partial` or `not-applied` and recommend a new
-   assessment.
+   it under Deviations, set status `partial` or `not-applied`, write `fix.md` (steps 8–9)
+   and continue to `{{SKILL:redevkit-bug-test}}`: the calling debug continues to the verify
+   command, and the next debug opens a new bug folder linked to this one. Never start a new
+   assessment inside the same debug run.
 8. **Record the code state**: `git rev-parse HEAD` and `git status --porcelain`.
 9. **Write** `.redevkit/bugs/<slug>/fix.md`. Template: use
    `.redevkit/templates/overrides/reports/bug-fix.md` if it exists, otherwise

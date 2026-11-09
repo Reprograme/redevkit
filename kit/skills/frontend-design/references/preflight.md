@@ -69,7 +69,7 @@ Run this matrix before outputting code. This is the last filter.
 - [ ] **Icons** from an allowed library only (Phosphor / HugeIcons / Radix / Tabler), no hand-rolled SVG paths?
 - [ ] **Motion** isolated in client-leaf components with `'use client'` at the top, memoized?
 - [ ] **No AI Tells** from Section 9 (Inter as default, AI-purple, three-equal cards, Jane Doe, Acme, "Quietly in use at")?
-- [ ] **Core Web Vitals** plausibly hit (LCP < 2.5s, INP < 200ms, CLS < 0.1)?
+- [ ] **Core Web Vitals** plausibly hit (targets in `{{SKILL:performance-profiling}}` §2)?
 - [ ] **One design system** per project (no Material + shadcn mixed)?
 
 If a single checkbox cannot be honestly ticked, the page is not done. Fix it before delivering.

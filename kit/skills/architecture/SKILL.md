@@ -40,7 +40,8 @@ Read ONLY the references relevant to the request. Check the content map and open
 
 - Feature-level decisions: `specs/NNN-short-name/research.md`, summarized in `plan.md`.
 - Constraints from the project constitution (`.redevkit/memory/constitution.md`) win; a
-  violation stops the plan or is justified under "Complexity Tracking".
+  violation is justified under "Complexity Tracking" and still needs the user's acceptance;
+  otherwise the plan stops at gate G3.
 - Stable stack facts: `.redevkit/memory/tech.md`; system structure: `.redevkit/memory/system.md`.
 
 ## Validation Checklist

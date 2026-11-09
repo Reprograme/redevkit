@@ -34,16 +34,19 @@ Analyze silently: no "I am analyzing your request" commentary, just the announce
    | Feature or refactor | "build", "create", "implement", "refactor" | Domain owner(s) inside the pipeline (`{{CMD:redevkit-plan}}` first when no tasks exist) |
    | New app | "from scratch", "build me an app", multi-page | `project-planner` with `app-builder`, then `orchestrator`; never a lone specialist |
 
-3. **Detect domains** with the table below. One domain: its persona and skills. Two or more
-   domains in the same task: `orchestrator` with `redevkit-orchestrate`, and each part keeps its
-   own domain persona.
+3. **Detect domains** with the table below. One domain: its persona and skills. A request
+   spanning two or more domains is coordinated per `redevkit-orchestrate`, and each part keeps
+   its own domain persona. In `tasks.md`, `@orchestrator` is never a task owner: a task that
+   spans several domains is split into one task per owner.
 4. **Smallest coherent set.** Pick the fewest personas that cover the work; one owner who can do
    it safely means one persona.
 5. **Conflicting domains: ask, do not assume** (see below).
 6. **Too vague to route** ("make it better"): do not guess; hand the request back to the caller
    for clarification (`{{SKILL:redevkit-clarify}}`).
-7. **Precedence** when instructions collide: user request > `.redevkit/memory/constitution.md` >
-   `AGENTS.md` > command skill > persona > knowledge skill.
+7. **Precedence** when instructions collide (as in `AGENTS.md`): user request >
+   `.redevkit/memory/constitution.md` > `AGENTS.md` > command skill > persona > knowledge
+   skill. The user's request wins, but a request that conflicts with the constitution stops
+   at gate G3, or becomes an amendment through gate G1; it never silently overrides it.
 
 ## Asking about a conflict
 
@@ -82,7 +85,7 @@ Triggers are examples in English and Portuguese, not an exhaustive list.
 | Documentation | docs, README, guide, guia | `documentation-writer` | `documentation-templates` |
 | Rust | Rust, cargo | `backend-specialist` | `rust-pro` |
 | MCP | MCP server, MCP tool, servidor MCP | `backend-specialist` | `mcp-builder` |
-| Multi-domain | 2 or more domains in the same task | `orchestrator` | `redevkit-orchestrate`, `context-compression`, `batch-operations` |
+| Multi-domain | 2 or more domains in the same request | `orchestrator` (coordinates; never a task owner) | `redevkit-orchestrate`, `context-compression`, `batch-operations` |
 
 Load only the skills the work needs: the table lists candidates, not a mandatory bundle. Pick
 shell skills by the OS in `.redevkit/memory/tech.md` (`bash-linux` or `powershell-windows`).
@@ -90,7 +93,8 @@ shell skills by the OS in `.redevkit/memory/tech.md` (`bash-linux` or `powershel
 
 ## Assigning a persona to each task
 
-When the planner writes `tasks.md`, each line gets exactly one `@persona`:
+When the planner writes `tasks.md`, each line gets exactly one `@persona`, never
+`@orchestrator`; split a task that needs several owners into one task per owner:
 
 | Files or work | Owner |
 | --- | --- |

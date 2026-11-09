@@ -125,3 +125,11 @@ updated: "[DATA]"
   - Q: <pergunta> → A: <resposta>
   Deixe esta seção vazia quando a spec for escrita pela primeira vez.
 -->
+
+## Melhorias
+
+<!--
+  Preenchida pelo comando enhance, que anexa uma subseção datada por mudança:
+  ### AAAA-MM-DD — <título>
+  Deixe esta seção vazia quando a spec for escrita pela primeira vez.
+-->

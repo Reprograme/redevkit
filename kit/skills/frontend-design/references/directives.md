@@ -31,9 +31,7 @@ LLMs default to clichés. Override these defaults proactively. Each rule has a c
 ### 4.2 Color Calibration
 
 - Max 1 accent color. Saturation < 80% by default.
-- **PURPLE BAN (default):** The "AI Purple / Blue glow" aesthetic is banned as a default. No automatic purple button glows, no random neon gradients. Use neutral bases (Zinc / Slate / Stone) with high-contrast singular accents (Emerald, Electric Blue, Deep Rose, Burnt Orange, etc.).
-- **Override:** the ban is a default, not a law. If `DESIGN.md` tokens, the brand, or the brief
-  explicitly use purple / violet / lilac, embrace it. But execute with intent: consistent palette, harmonised neutrals, restrained gradients. Not generic AI gradient slop.
+- **Purple Ban:** defined once in the skill's [SKILL.md](../SKILL.md) (section "Purple Ban"), including when it is overridden. In practice: neutral bases (Zinc / Slate / Stone) with high-contrast singular accents (Emerald, Electric Blue, Deep Rose, Burnt Orange, etc.).
 - **One palette per project.** Do not fluctuate between warm and cool grays within the same project.
 - **COLOR CONSISTENCY LOCK (mandatory):** Once an accent color is chosen for a page, it is used on the WHOLE page. A warm-grey site does not suddenly get a blue CTA in section 7. A rose-accented site does not get a teal status badge in the footer. Pick one accent, lock it, audit every component before shipping.
 

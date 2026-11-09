@@ -3,9 +3,9 @@
 Este documento descreve o método que os comandos do REDEVKIT seguem. Ele foi escrito a
 partir dos templates que o kit realmente instala (`kit/templates/pt-BR/` e
 `kit/templates/en/`, copiados para `.redevkit/templates/`) e das skills dos comandos. Todo
-termo de processo citado aqui existe nesses arquivos; um teste automático
-(`test/docs.test.js`) impede que este texto cite etapas, gates ou numerações que os
-templates não têm.
+termo de processo citado aqui existe nesses arquivos. Um teste automático
+(`test/docs.test.js`) confere uma lista de termos que os templates não têm, os gates G1–G7, a
+linha do TDD e a gramática das tarefas.
 
 Os nomes de seção aparecem em português, como nos templates pt-BR, com o equivalente dos
 templates em inglês entre parênteses quando ajuda.
@@ -282,34 +282,76 @@ Nenhum comando declara sucesso sem evidência: o comando que rodou e o resultado
 - **Test** (`redevkit-test`): mapeia cada cenário de aceite da spec (e do `quickstart.md`)
   para um teste, gera os que faltam sem mexer no código da aplicação e roda a suíte completa,
   pelo `test_runner.py` quando há Python ou pelo comando de teste do projeto. O veredito é
-  `PASS` só quando todos os comandos saíram com 0, nenhum teste falhou e todo cenário mapeia
-  para um teste que passa; qualquer outra coisa é `FAIL`.
+  `PASS` só quando todos os comandos saíram com 0, nenhum teste falhou e todo cenário
+  automatizável mapeia para um teste que passa; qualquer outra coisa é `FAIL`. Um cenário
+  que não dá para automatizar no ambiente fica `SKIPPED (motivo)` em **Não verificado**: não
+  reprova a execução e nunca conta como `PASS`.
 - **Debug** (`redevkit-debug`): reproduz o problema, testa hipóteses com evidência, escreve
   primeiro o teste de regressão que falha, aplica a menor correção e confirma. O resultado do
-  bug é `verified`, `partial` ou `failed`. Depois de um debug, o verify é obrigatório.
-- **Verify** (`redevkit-verify`): a fase `redevkit-converge` compara o código com spec, plano
-  e tarefas, e cada lacuna vira uma tarefa anexada na fase de Convergência; depois vêm a
-  execução real (build, suíte, e, quando o Tipo de projeto tem runtime, subir a aplicação e
-  percorrer os fluxos críticos do `quickstart.md`) e as auditorias (`verify_all.py` ou
+  bug é `verified`, `partial` ou `failed`. Qualquer que seja o resultado, o debug termina e
+  segue para o verify, que é obrigatório depois de um debug.
+- **Verify** (`redevkit-verify`): começa pelos testes. Se a última execução do
+  `test-report.md` foi sobre o mesmo estado do código atual, ela é reaproveitada (um `PASS`
+  segue, um `FAIL` encerra com `failed`); senão, o verify executa o procedimento do
+  `redevkit-test` e grava a execução no `test-report.md`. Como o debug normalmente muda o
+  código, depois dele os testes rodam de novo; se a correção não mudou nada, o `FAIL` é
+  reaproveitado e conta como failed após debug (um debug que não reproduz o problema para e
+  não segue para o verify). Com os testes
+  verdes, a fase `redevkit-converge` compara o código com spec, plano e tarefas, e cada lacuna
+  vira uma tarefa anexada na fase de Convergência; depois vêm a execução real (build e, quando
+  o Tipo de projeto tem runtime, subir a aplicação e percorrer os fluxos críticos do
+  `quickstart.md`, sem rodar a suíte de novo) e as auditorias (`verify_all.py` ou
   `checklist.py`, ou `SKIPPED` sem Python). O veredito é `converged+verified`, `gaps` ou
-  `failed`.
+  `failed`. Uma spec leve do enhance (sem `plan.md`) também é verificada: o contexto técnico
+  vem do `tech.md`.
+
+### Ciclo de correção e G5
+
+Esta seção é a referência da documentação para o G5; a regra exata está no passo 6 do
+`redevkit-verify`. O verify mantém dois contadores da feature ativa em
+`.redevkit/memory/active.md` › Últimos resultados, na linha `- Correction cycle:`:
+
+- **failed após debug:** soma 1 quando o veredito é `failed` e houve um debug desta feature
+  desde o verify anterior, seja qual for o teste ou o bug; zera com `converged+verified` ou
+  `gaps`.
+- **rodadas sem convergir:** soma 1 a cada veredito diferente de `converged+verified`; só zera
+  com `converged+verified`. Execuções de testes não mexem nele, então o ciclo
+  gaps → create → test → verify também chega ao limite.
+
+Um `failed` que só reaproveitou um `FAIL` sem debug no meio não altera os contadores. Os dois
+zeram quando a feature ativa muda ou quando você escolhe continuar no G5. O G5 dispara com 2
+failed após debug ou 3 rodadas sem convergir. A cadeia para, mesmo no `--auto`, e pergunta:
+
+1. Revisar o plano (recomendado): zera os contadores e segue para o `redevkit-plan`.
+2. Continuar: zera os contadores e segue o handoff normal.
+3. Parar: o G5 fica pendente; o próximo verify ou debug pergunta de novo.
+
+Assim, nenhum caminho do pipeline fica em loop.
 
 ### Estado do código
 
 Os relatórios de test e verify registram o **estado do código** de cada execução: commit
 (HEAD), branch, árvore de trabalho (clean ou dirty), arquivos alterados e duas impressões
-digitais (do `git status` e do `git diff`, excluindo `.redevkit/` e `specs/`). O deploy
-recalcula esses valores e compara linha a linha: se o código mudou depois do último teste
-verde, o deploy fica `BLOCKED` e exige um novo test. A única saída é um override com o
-motivo registrado no relatório (`OVERRIDDEN`), e mesmo assim a confirmação do gate G6
-continua.
+digitais (do `git status` e do `git diff`, excluindo `.redevkit/` e `specs/`). O verify usa
+esses valores para decidir se reaproveita a última execução de testes (sem git, nunca
+reaproveita). O deploy faz assim:
+
+- **Debug pendente** (um debug desta feature mais novo que o último verify
+  `converged+verified`): `BLOCKED` até rodar o `redevkit-verify`, obrigatório depois de um
+  debug.
+- Senão, a referência é a **última** execução da feature inteira no `test-report.md` (escopo
+  `feature`, avulsa ou feita pelo passo 1 do verify), que precisa ser `PASS` e ter o mesmo
+  estado do código atual. Execuções de um arquivo ou cenário isolado não valem como referência.
+
+Qualquer outra situação deixa o deploy `BLOCKED`. A única saída é um override com o motivo
+registrado no relatório (`OVERRIDDEN`), e mesmo assim a confirmação do gate G6 continua.
 
 ## Relatórios
 
 | Relatório | Onde | Regra |
 | --- | --- | --- |
 | Testes | `specs/NNN-nome/test-report.md` | Somente acréscimo: uma seção datada por execução, com estado do código, comandos, resultados, cobertura dos cenários e veredito `PASS` ou `FAIL` |
-| Verificação | `specs/NNN-nome/verification.md` | Somente acréscimo: estado do código, convergência, evidência de execução, auditorias, lista do que não foi verificado e veredito |
+| Verificação | `specs/NNN-nome/verification.md` | Somente acréscimo: estado do código, evidência de testes (execução usada e se foi reaproveitada), convergência, evidência de execução, auditorias, lista do que não foi verificado e veredito |
 | Bug | `.redevkit/bugs/<slug>/assessment.md`, `fix.md`, `test.md` | Avaliação (reprodução, hipóteses, causa raiz), correção (teste de regressão escrito primeiro) e confirmação |
 | Avaliação de ideia | `.redevkit/assessments/<slug>/intake.md`, `research.md`, `definition.md`, `shape.md`, `decision.md` | Decisão `go`, `needs-clarification` ou `kill` |
 | Deploy | `.redevkit/deploys/AAAA-MM-DD-<ambiente>.md` | Pré-condições, plano de deploy, plano de rollback, confirmação de produção, execução, smoke test e desfecho `succeeded`, `failed`, `rolled-back` ou `aborted` |
@@ -328,7 +370,7 @@ Gate é um ponto onde a cadeia sempre para e espera você, inclusive com `--auto
 | G2 | Aprovação do plano (fim do `redevkit-plan`) |
 | G3 | Violação da constituição detectada em qualquer fase |
 | G4 | Ação destrutiva ou irreversível |
-| G5 | Ciclo debug → verify falhando 2 vezes seguidas |
+| G5 | Ciclo de correção sem convergir (ver [Ciclo de correção e G5](#ciclo-de-correção-e-g5)) |
 | G6 | Deploy (só você dispara) |
 | G7 | Escolha sobre memória legada |
 
@@ -345,10 +387,11 @@ Com ele, a cadeia segue sozinha:
 ```text
 new → plan → create | enhance → test
   test PASS → para e sugere verify e deploy
-  test FAIL → debug → verify
+  test FAIL → debug → verify (que roda os testes de novo)
     verify converged+verified → para antes do deploy
     verify gaps → create (que termina no test)
-    verify failed → debug de novo, até o G5
+    verify failed → debug de novo
+  G5 (ciclo de correção sem convergir) → para e pergunta
 ```
 
 No `--auto`, a descrição dada ao `redevkit-new` vira a primeira feature (MVP) do plan, e as

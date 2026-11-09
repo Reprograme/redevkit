@@ -74,9 +74,10 @@ If `MEMORY.md` and `constitution.md` already exist, do not bootstrap. Ask:
 3. Exit without changes
 
 - **Resync:** run the `sync` operation of `{{SKILL:redevkit-memanager}}`, report what changed,
-  then go to step 9.
+  then regenerate `MEMORY.md` as step 9 describes. Do not touch `active.md` › Active feature.
 - **Amend:** follow `{{SKILL:redevkit-constitution}}` in `amend` mode (semver bump, Sync
-  Impact Report in `changelog.md`). Gate G1. Then go to step 9.
+  Impact Report in `changelog.md`). Gate G1. Then regenerate `MEMORY.md` as step 9 describes.
+  Do not touch `active.md` › Active feature.
 - **Exit:** stop. Nothing is written.
 
 ### 4. Bootstrap the memory
@@ -147,7 +148,9 @@ Follow `{{SKILL:redevkit-constitution}}` to write `.redevkit/memory/constitution
 
 ### 9. Index and state
 
-- `active.md`: `- Feature: none` (pt-BR: `- Feature: nenhuma`); Next steps. In `--auto`,
+- `active.md` (only after a bootstrap in step 4): `- Feature: none` (pt-BR:
+  `- Feature: nenhuma`), `- Plan approved: no`, `- Correction cycle:` with both counters at
+  0; Next steps. In `--auto`,
   record the input description as the first MVP feature (`MVP: <description>`) for the
   plan.
 - `MEMORY.md`: regenerate the index through `{{SKILL:redevkit-memanager}}` (entries

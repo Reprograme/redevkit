@@ -46,11 +46,7 @@ unless they are already loaded. Core Web Vitals work is shared with `performance
 
 ## Core Web Vitals targets
 
-| Metric | Good | Poor |
-| --- | --- | --- |
-| LCP | < 2.5 s | > 4.0 s |
-| INP | < 200 ms | > 500 ms |
-| CLS | < 0.1 | > 0.25 |
+Targets and tools: `{{SKILL:performance-profiling}}` §2.
 
 ## E-E-A-T
 

@@ -328,7 +328,8 @@ Platform: iOS / Android / Both
    └── _______________
 
 🧠 If I can't fill this commitment → I don't understand the project well enough.
-   → Go back, understand context better, ask the user.
+   → Go back, understand context better, then ask (shared question protocol;
+     as a subagent, return the question to the caller).
 ```
 
 ---

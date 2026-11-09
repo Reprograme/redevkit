@@ -63,8 +63,9 @@ the caller which step is missing.
 6. **Assign a persona to every task.** Follow `{{SKILL:redevkit-route}}` with the task's
    domain and the plan's Domain Routing table. Respect project-type rules (a mobile app's
    UI goes to `@mobile-developer`, a web UI to `@frontend-specialist`). Test tasks usually
-   go to `@test-engineer`. Do not ask the user about personas; when the route is ambiguous,
-   pick the plan's primary persona and note it in the report.
+   go to `@test-engineer`. Never `@orchestrator`: split a task that spans several domains
+   into one task per owner. Do not ask the user about personas; when the route is
+   ambiguous, pick the plan's primary persona and note it in the report.
 7. **Mark parallelism.** Add `[P]` only when the task's paths are disjoint from all other
    tasks in the same phase and it has no dependency on an unfinished task of that phase.
 8. **Write the dependency sections**: phase dependencies, story dependencies (most stories

@@ -196,9 +196,11 @@ Use this for: feature lists, testimonial grids, logo walls, anything that just n
 
 ### 6.D Core Web Vitals Targets
 
-- **LCP** < 2.5s. Hero image must be `next/image priority` or preloaded.
-- **INP** < 200ms. Heavy work off main thread.
-- **CLS** < 0.1. Reserve space for images, fonts, embeds.
+Targets: `{{SKILL:performance-profiling}}` §2. For landing pages:
+
+- **LCP:** hero image must be `next/image priority` or preloaded.
+- **INP:** heavy work off the main thread.
+- **CLS:** reserve space for images, fonts, embeds.
 - Run Lighthouse before declaring a page done.
 
 ### 6.E DOM Cost

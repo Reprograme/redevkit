@@ -125,3 +125,11 @@ updated: "[DATE]"
   - Q: <question> → A: <answer>
   Leave this section empty when the spec is first written.
 -->
+
+## Enhancements
+
+<!--
+  Filled by the enhance command, which appends one dated subsection per change:
+  ### YYYY-MM-DD — <title>
+  Leave this section empty when the spec is first written.
+-->

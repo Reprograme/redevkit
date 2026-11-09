@@ -51,17 +51,10 @@ instead of asking.
 
 ## Slug
 
-1. Use the slug the caller gave, or derive 2–4 kebab-case words from the symptom
-   (for example `login-timeout-500`).
-2. Normalize: lowercase; whitespace and `_` become `-`; keep only `a-z`, `0-9` and `-`;
-   collapse repeated `-`; trim `-`. Reject an empty result and derive a new one.
-3. Path safety: `.redevkit/`, `.redevkit/bugs/` and the slug directory must be real
-   directories (not symlinks) inside the project root. Refuse and report otherwise.
-4. Never overwrite an existing directory. If `.redevkit/bugs/<slug>/` exists:
-   - derived slug: append the shortest suffix that makes it unique (`-2`, `-3`, …);
-   - slug given by the user: interactive, ask whether to use `<slug>-2` (Recommended) or
-     another name; auto, stop and report the collision.
-5. A re-assessment after a `failed` bug test always gets a new directory and links the
+1. Use the slug the caller gave, or derive one from the symptom (for example
+   `login-timeout-500`). Format, path safety under `.redevkit/bugs/` and collisions follow
+   the slug rule in `{{SKILL:redevkit-assess-intake}}`.
+2. A re-assessment after a `failed` bug test always gets a new directory and links the
    previous one under **Related bug**.
 
 ## Steps

@@ -9,7 +9,8 @@ updated: "YYYY-MM-DD"
 ## Active feature
 
 - Feature: [specs/NNN-name or none]
-- Phase: [current pipeline step, for example plan, implement, test, verify]
+- Phase: [specify | plan approved | implementation | test | debug | verify | deploy]
+- Plan approved: [YYYY-MM-DD | no]
 - Branch: [branch name or none]
 
 ## Where we are
@@ -37,14 +38,17 @@ updated: "YYYY-MM-DD"
 
 ## Known issues
 
-- [Bug, limitation or technical debt not yet resolved.]
+- Bug [slug]: [open | closed (verify YYYY-MM-DD)] — [.redevkit/bugs/slug/]
+- [Limitation or technical debt not yet resolved.]
 
 ## Last results
 
-- Test: [PASS | FAIL | SKIPPED (reason)] — [YYYY-MM-DD] — [command] — [report path]
-- Verify: [PASS | FAIL | SKIPPED (reason)] — [YYYY-MM-DD] — [report path]
+- Test: [PASS | FAIL] — [YYYY-MM-DD HH:MM] — [run by redevkit-test | redevkit-verify (step 1)] — [command] — [report path]
+- Verify: [converged+verified | gaps | failed] — [YYYY-MM-DD HH:MM] — [report path]
+- Debug: [specs/NNN-name] — [bug slug] — [YYYY-MM-DD HH:MM] — [verified | partial | failed] — [.redevkit/bugs/slug/]
+- Correction cycle: [specs/NNN-name] — failed after debug [N]/2 · rounds without convergence [N]/3 [· G5 reached YYYY-MM-DD HH:MM, waiting for the user]
 
 ## Workflow preferences
 
-- Branch per feature: [yes | no | ask]
+- Branch per feature: [always | never | ask]
 - [Other workflow preference, for example commit only when asked.]

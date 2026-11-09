@@ -22,6 +22,7 @@ pacotes.]
 - Teste: `[comando]`
 - Servidor de desenvolvimento: `[comando]`
 - Porta do preview: [porta]
+- Project type: [web | fullstack | api | mobile | game | cli | library | desktop | other]
 - Serviços necessários: [por exemplo Docker, banco de dados local, ou nenhum]
 
 ## Restrições técnicas

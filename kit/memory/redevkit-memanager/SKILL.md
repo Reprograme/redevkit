@@ -37,7 +37,7 @@ language `{{LANG}}`; answer the user in the user's language.
 | `project.md` | `project` | Scope · Core objective · Success criteria · Out of scope (current negative decisions) · Problem · Audience · What "working well" looks like · Expected experience · Domain |
 | `system.md` | `system` | Overall architecture · Design decisions · **Invariants** (never pruned) · Patterns in use · Code conventions · Component relationships |
 | `tech.md` | `tech` | Stack · Dependencies · Dev environment (build, test and dev commands, preview port) · Technical constraints |
-| `active.md` | `active` | **Active feature** (`specs/NNN-name`, phase) · Where we are · Recent events · What works · What's left · Next steps · Known issues · Last results (test, verify) · Workflow preferences (branch per feature) |
+| `active.md` | `active` | **Active feature** (`specs/NNN-name`, phase) · Where we are · Recent events · What works · What's left · Next steps · Known issues · Last results (test, verify, debug, correction cycle) · Workflow preferences (branch per feature: `always`, `never` or `ask`) |
 | `changelog.md` | `changelog` | Keep a Changelog (Unreleased + versions) · Consolidated history · Architecture decisions (short ADR) · Constitution amendments (Sync Impact Report) |
 | `user.md` | `user` | Environment and tools · Communication style · Recorded feedback |
 | `topics/<topic>.md` | `user`, `feedback`, `project` or `reference` | Free topics |
@@ -79,7 +79,7 @@ updated: 2026-11-06
 Ask only for confirmation-required writes, the pending-interview round and the legacy choice
 (G7). Follow the shared question protocol: only what changes scope or architecture, one
 question at a time, at most 3 options with the recommended one first and marked
-"(Recommended)", at most 5 questions per command.
+"(Recommended)", at most 5 questions per command (shared with the calling command).
 
 {{ASK}}
 
@@ -134,8 +134,9 @@ shows. Never silently rewrite a contradicted invariant or constitution principle
 project language: `<PENDING INTERVIEW — reason>` (`en`) or `<PENDENTE DE ENTREVISTA — motivo>`
 (`pt-BR`). Never leave a template fill-in (`[FIELD]`) and never delete the section. The first
 modifying command of each session that finds markers runs one short round before its own work:
-at most 5 questions, one at a time, each with a recommendation, starting with the markers that
-change scope or architecture. Unanswered markers stay and are not asked again in the same
+one question at a time, each with a recommendation, starting with the markers that change
+scope or architecture. These questions share the calling command's budget of 5 questions;
+leave room for the command's own questions. Unanswered markers stay and are not asked again in the same
 session. In `--auto`, the markers stay.
 
 ## Operations
@@ -178,8 +179,9 @@ do nothing here: the new command offers amend, resync or exit.
 **State, at phase 3.** Write only what the command changed:
 
 - `active.md`: a new event at the top of Recent events (`- YYYY-MM-DD — what — why`), Active
-  feature and phase, What works, What's left, Next steps, Known issues, and Last results
-  (date, command, `PASS`, `FAIL` or `SKIPPED (reason)`, report path).
+  feature and phase, What works, What's left, Next steps, Known issues, and Last results:
+  rewrite in place the template line the command owns (`Test` with its Run by field,
+  `Verify`, `Debug`, `Correction cycle`), keeping the format of `memory/active.md`.
 - `changelog.md`: deliveries under Unreleased. The changelog mirrors the version the project
   declares; when the project bumps its version, move the Unreleased items under the new one.
 - `system.md`, `tech.md`, `project.md`, `user.md`: only when the command revealed a pattern,
@@ -254,7 +256,8 @@ Called by `{{CMD:redevkit-status}}`. Read-only, facts only:
 
 - Last entry date (as in the 📖 line) and constitution version.
 - Active feature, its phase, and whether its path exists.
-- Last test and verify results with dates, from `active.md` › Last results.
+- From `active.md` › Last results, as written: Test (with Run by), Verify and Debug with
+  their dates, the Correction cycle counters, and a pending G5 when one is recorded.
 - Pending markers, counted per file.
 - Index size (lines out of 200), files over 100 or 256 lines, and any
   [doctor-contract](references/doctor-contract.md) problem seen.

@@ -35,10 +35,5 @@ project declares and is exempt from pruning.
 
 ## Constitution amendments
 
-<!-- Sync Impact Report, one entry per amendment, newest first:
-### v[NEW] - [YYYY-MM-DD]
-- Version: [OLD] → [NEW] ([MAJOR | MINOR | PATCH]: [reason])
-- Principles changed: [list]
-- Sections added or removed: [list]
-- Artifacts to update: [list or none]
-- Follow-up: [TODOs or none] -->
+<!-- Sync Impact Report, one entry per amendment, newest first. The entry format is defined
+     only in the redevkit-constitution phase (step "Sync Impact Report"). -->

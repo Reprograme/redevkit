@@ -37,16 +37,17 @@ In Codex invoke them as `$redevkit-<name>`.
 | `redevkit-enhance` | Change existing behavior (spec delta + appended tasks) |
 | `redevkit-test` | Generate missing tests, run the suite, write `test-report.md` |
 | `redevkit-debug` | Reproduce, fix with a failing regression test first, record the bug |
-| `redevkit-verify` | Converge code with spec, run it for real, run audits |
+| `redevkit-verify` | Run the tests (or reuse a run on the same code), converge with spec, run it for real, audits |
 | `redevkit-preview` | Start, stop or check the local dev server |
 | `redevkit-deploy` | Deploy (only when the user invokes it) |
 | `redevkit-status` | Show facts: active feature, progress, last test and verify |
 
 Every command ends with a handoff: the next command and why. With `--auto` the chain
-new → plan → create/enhance → test runs on its own; on red it continues debug → verify. It
-always stops at the gates: G1 constitution creation or amendment, G2 plan approval, G3
-constitution violation, G4 destructive or irreversible action, G5 debug → verify failing twice,
-G6 deploy (user only), G7 legacy memory choice. Outside the gates, questions are answered with
+new → plan → create/enhance → test runs on its own; on red it continues debug → verify, and
+the verify runs the tests again on the fixed code. It always stops at the gates: G1
+constitution creation or amendment, G2 plan approval, G3 constitution violation, G4
+destructive or irreversible action, G5 correction cycle without convergence (rules in
+`redevkit-verify` step 6), G6 deploy (user only), G7 legacy memory choice. Outside the gates, questions are answered with
 the recommendation and recorded as assumptions.
 
 Small, direct edits outside the pipeline are allowed; anything bigger goes through the commands

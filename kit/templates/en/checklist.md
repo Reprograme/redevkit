@@ -51,6 +51,7 @@ consistent, measurable). It does not mean the implementation is done.
 
 - Mark items `[x]` only after review confirms the criterion is satisfied.
 - Leave items unchecked while they need clarification or correction; add findings inline.
-- The implement phase reads these markers as a gate and never changes them.
+- This checklist is informational, not a gate: the implement phase warns once about open
+  items and the verify report lists them under Not verified. Neither changes the markers.
 - `checklists/requirements.md` is the built-in spec-quality checklist and has its own
   lifecycle (specify and clarify phases).

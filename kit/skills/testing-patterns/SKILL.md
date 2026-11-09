@@ -19,12 +19,11 @@ writes the missing ones, runs the full suite and **appends** a dated run to
 
 How to run:
 
-1. Run `.redevkit/audits/test_runner.py <project_path>` (add `--coverage` for coverage) with
-   the Python interpreter detected per `.redevkit/audits/README.md`. It detects the stack
-   (npm test, Jest, Vitest, pytest, unittest) and runs it.
-2. No Python: record the audit as `SKIPPED (no Python)` and run the project's own test command
-   (from `.redevkit/memory/tech.md`, or `package.json`, `pyproject.toml`, `Cargo.toml`...).
-3. Each run in the report records: the commands, the observed results (passed, failed,
+1. The full suite runs as `{{CMD:redevkit-test}}` step 3 says: Python found →
+   `.redevkit/audits/test_runner.py` per `.redevkit/audits/README.md` (exit `3` → the
+   `tech.md` test command); no Python → the `tech.md` test command. While implementing, run
+   only the tests you touched (light verification, `{{SKILL:lint-and-validate}}`).
+2. Each run in the report records: the commands, the observed results (passed, failed,
    skipped), which acceptance scenarios are covered, the commit (`git rev-parse HEAD`) and
    whether the working tree was clean (`git status --porcelain`).
 

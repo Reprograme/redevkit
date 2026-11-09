@@ -89,9 +89,9 @@ exigem confirmação explícita. -->
   análise e o converge checam os princípios DEVE; uma violação para o trabalho (gate G3) até
   ser corrigida ou justificada no Controle de Complexidade do plano e aceita pelo usuário.
 - **Emendas**: propostas de forma explícita, mostradas ao usuário e aplicadas só depois da
-  confirmação (gate G1). Cada emenda atualiza a linha de versão abaixo e anexa um Sync Impact
-  Report ao `.redevkit/memory/changelog.md` (mudança de versão, princípios e seções alterados,
-  templates e artefatos a revisar, pendências).
+  confirmação (gate G1). Cada emenda atualiza a linha de versão abaixo e registra um Sync
+  Impact Report no `.redevkit/memory/changelog.md` (formato definido pela fase
+  `redevkit-constitution`).
 - **Versionamento** (semver): MAJOR para remover ou redefinir um princípio de forma
   incompatível (inclusive a dispensa do TDD); MINOR para um princípio ou seção novos, ou
   orientação ampliada de forma relevante; PATCH para redação e esclarecimentos.

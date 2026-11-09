@@ -21,9 +21,12 @@ first. Ends with a light verification (D25) and hands off to the test command.
 
 ## Preconditions
 
-- An active feature in `active.md` whose `tasks.md` was approved at G2 (`active.md` phase
-  `plan approved` or later). If not, offer `{{CMD:redevkit-plan}}` and stop.
-- `spec.md`, `plan.md` and `tasks.md` exist in `specs/NNN-short-name/`.
+- An active feature in `active.md` with `- Plan approved: <date>` (set at G2 by the plan
+  command, or by the enhance command when it approved a lightweight spec). If it says `no`,
+  offer `{{CMD:redevkit-plan}}` and stop.
+- `spec.md` and `tasks.md` exist in `specs/NNN-short-name/`, and `plan.md` too, except for a
+  lightweight spec of the enhance command (D55): then the technical context comes from
+  `tech.md` and `system.md`.
 - UI tasks: `DESIGN.md` exists at the project root. If not, return to the plan's DESIGN.md
   gate.
 
@@ -31,8 +34,8 @@ first. Ends with a light verification (D25) and hands off to the test command.
 
 Recall per `{{SKILL:redevkit-memanager}}`: `MEMORY.md`, `active.md`, the invariants in
 `system.md`, `tech.md` (build, test and lint commands). Read
-`.redevkit/memory/constitution.md`. Then load `spec.md`, `plan.md`, `tasks.md`, `research.md`,
-`data-model.md`, `contracts/`, `quickstart.md` and, for UI work, `DESIGN.md`. Print
+`.redevkit/memory/constitution.md`. Then load `spec.md`, `tasks.md` and, when they exist, `plan.md`,
+`research.md`, `data-model.md`, `contracts/`, `quickstart.md` and, for UI work, `DESIGN.md`. Print
 `📖 Memory loaded. Last entry: YYYY-MM-DD.`
 
 ## Questions
@@ -49,8 +52,8 @@ non-interactive runs, adopts the recommendation and records it, except at gates.
 
 ### 1. Check readiness
 
-- Open checklists in `checklists/` with unchecked items: list them and ask whether to proceed
-  (Recommended: proceed when only non-critical items are open).
+- Open domain-checklist items are reported by `{{SKILL:redevkit-implement}}` as one warning;
+  they do not stop this command.
 - Detect the next open task (`- [ ]`) honoring the requested range.
 
 ### 2. Scaffolding (new application)
@@ -63,8 +66,8 @@ scaffold would overwrite existing files, stop for confirmation (G4).
 
 Follow `{{SKILL:redevkit-implement}}`, which drives `{{SKILL:redevkit-orchestrate}}`:
 
-- Order: Setup → Foundational → US1..n → Polish. A phase starts only when the previous one is
-  done.
+- Order: Setup → Foundational → US1..n → Polish, then the appended phases (Enhancement,
+  Convergence) in file order. A phase starts only when the previous one is done.
 - Each task goes to the persona in its `@persona` field, for example
   {{DELEGATE:backend-specialist}} for a `@backend-specialist` task. The orchestrator passes
   the task line, the relevant spec and plan excerpts and the files involved; it never
@@ -72,7 +75,8 @@ Follow `{{SKILL:redevkit-implement}}`, which drives `{{SKILL:redevkit-orchestrat
 - Tasks marked `[P]` whose files are disjoint from the other tasks of the phase run in
   parallel; everything else runs in order.
 - **TDD (D37):** in each user story, write its tests first, run them and record that they
-  fail for the expected reason; then implement until they pass. Skip only when the
+  fail for the expected reason; then implement until they pass, within the
+  retry budget of `{{SKILL:redevkit-orchestrate}}` (blocked tasks follow its policy). Skip only when the
   constitution waives TDD by amendment.
 - UI tasks build against the tokens and components in `DESIGN.md`.
 - Mark a task `[X]` only after its `VERIFY:` criterion was observed (command and result).
@@ -89,7 +93,7 @@ On the files changed in this run, with evidence:
 3. Lint on the changed files.
 
 A failure caused by this run's work is fixed now (same task, same persona). Anything else is
-reported under Known problems and left for the test command. This is not the full suite.
+recorded in `active.md` › Known issues and left for the test command. This is not the full suite.
 
 ### 5. Summary
 

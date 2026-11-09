@@ -13,7 +13,8 @@ node e2e/run.mjs --scenario B --runtime codex
 
 Opções: `--out <dir>` (padrão `e2e/runs/<data>/<cenário>-<runtime>/`), `--work <dir>`
 (padrão: pasta temporária com espaço no caminho), `--timeout-min <n>` por passo (padrão 45) e
-`--check <workDir>` para reaplicar só as verificações.
+`--check <workDir>` para reaplicar só as verificações (também exige `--scenario` e `--runtime`;
+com `--resume debug,verify,test` continua o pipeline na mesma pasta antes de verificar).
 
 ## Cenários
 
@@ -50,7 +51,9 @@ nenhum comando destrutivo nas transcrições; nenhuma auditoria SKIPPED reportad
   `test-report.md` verde.
 - B: backup do `CLAUDE.md` e ponteiro; memória legada mapeada e `archive/` criado; delta na
   spec e tarefas anexadas; `.redevkit/bugs/<slug>/{assessment,fix,test}.md`; teste vermelho
-  antes do debug; `verification.md` com `converged+verified`.
+  antes do debug; `verification.md` com `converged+verified`; o verify roda os testes de novo
+  depois do debug (a última execução do `test-report.md` é `PASS`, executada pelo
+  `redevkit-verify`); ciclo de correção registrado no `active.md`.
 
 O resultado de cada run fica em `result.md`/`result.json`; o resumo consolidado está em
 [RESULTS.md](RESULTS.md).

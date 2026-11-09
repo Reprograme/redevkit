@@ -147,10 +147,14 @@ What are you deploying?
 
 | Symptom | Action |
 |---------|--------|
-| Service down | Rollback immediately |
-| Critical errors | Rollback |
-| Performance >50% degraded | Consider rollback |
+| Service down | Propose rollback now (exact command), run it once the user confirms |
+| Critical errors | Propose rollback |
+| Performance >50% degraded | Consider proposing a rollback |
 | Minor issues | Fix forward if quick |
+
+A rollback or restart in production is a G4 action: present the exact command and its
+effect, and run it only after the user confirms in the same turn. `git revert` creates a
+commit, so it also needs the user's consent.
 
 ### Rollback Strategy by Platform
 
@@ -164,7 +168,7 @@ What are you deploying?
 
 ### Rollback Principles
 
-1. **Speed over perfection**: Rollback first, debug later
+1. **Restore service first, debug later**: propose the rollback early; run it on confirmation
 2. **Don't compound errors**: One rollback, not multiple changes
 3. **Communicate**: Tell team what happened
 4. **Post-mortem**: Understand why after stable
@@ -196,8 +200,9 @@ What are you deploying?
 ### Service Down Priority
 
 1. **Assess**: What's the symptom?
-2. **Quick fix**: Restart if unclear
-3. **Rollback**: If restart doesn't help
+2. **Quick fix**: If unclear, propose a restart with the exact command; run it after the user
+   confirms (G4)
+3. **Rollback**: If the restart does not help, propose the rollback the same way
 4. **Investigate**: After stable
 
 ### Investigation Order

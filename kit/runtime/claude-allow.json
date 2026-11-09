@@ -1,5 +1,5 @@
 {
-  "$comment": "REDEVKIT managed entries for .claude/settings.json permissions.allow (D51). Read-only git, test runners and the optional audits only. Never write, network, package install or deploy commands.",
+  "$comment": "REDEVKIT managed entries for .claude/settings.json permissions.allow (D51). Read-only git (git hash-object only with --stdin, never -w), the project test runners and the optional audits. No git write, package install or deploy command is allowed. Not network-free: test entries run the project's own scripts, which may do anything those scripts do, and security_scan.py runs npm audit, which queries the npm registry.",
   "allow": [
     "Bash(git status *)",
     "Bash(git diff *)",
@@ -7,6 +7,7 @@
     "Bash(git show *)",
     "Bash(git rev-parse *)",
     "Bash(git branch --show-current)",
+    "Bash(git hash-object --stdin)",
     "Bash(npm test *)",
     "Bash(npm run test *)",
     "Bash(pnpm test *)",

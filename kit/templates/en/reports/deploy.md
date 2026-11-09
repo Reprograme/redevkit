@@ -21,21 +21,22 @@ failed, rolled-back, aborted, clean, dirty.
 
 | Check | Reference (from report) | Current | Result |
 | --- | --- | --- | --- |
-| Reference run | [test-report.md or verification.md, run YYYY-MM-DD HH:MM] | — | — |
-| Reference verdict | [PASS or converged+verified] | — | OK / BLOCKED |
+| Debug pending | [no / yes: bug slug, YYYY-MM-DD HH:MM] | — | OK / BLOCKED |
+| Reference run | [test-report.md, run YYYY-MM-DD HH:MM, run by redevkit-test / redevkit-verify (step 1)] | — | — |
+| Reference verdict | [PASS] | — | OK / BLOCKED |
 | Commit (HEAD) | `[SHA]` | `[SHA]` | OK / BLOCKED |
 | Working tree | [clean / dirty] | [clean / dirty] | OK / BLOCKED |
 | Status fingerprint | `[HASH]` | `[HASH]` | OK / BLOCKED |
 | Diff fingerprint | `[HASH]` | `[HASH]` | OK / BLOCKED |
-| Verify after debug | [required: yes / no] | [run YYYY-MM-DD HH:MM, or none] | OK / BLOCKED |
 
 - **Precondition status**: OK / BLOCKED / OVERRIDDEN
-- **Verify suggested**: [yes, not run / ran on YYYY-MM-DD / not needed]
+- **Verify suggested**: [not needed (a converged+verified verify is newer than the reference) / suggested, user chose: verify first or deploy now / a newer verify is gaps or failed, user chose: fix first or deploy anyway]
 - **Override reason**: [required when OVERRIDDEN, written in the user's words; otherwise none]
 
 <!--
-BLOCKED when the reference run is not green, or when the code changed after it
-(HEAD, tree state or fingerprints differ). Then run redevkit-test again before deploying.
+Reference run and comparison: redevkit-test/references/code-state.md § Compare (the
+single definition). BLOCKED when a debug is pending, when there is no reference, when the
+latest test run is not PASS, or when the code changed after it.
 -->
 
 ## Deploy plan

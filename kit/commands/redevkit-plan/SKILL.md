@@ -55,14 +55,10 @@ new feature (Recommended when the input names new behavior) or continue the acti
 
 1. Follow `{{SKILL:redevkit-specify}}`: next `NNN` (highest 3-digit prefix in `specs/` + 1,
    D53) and short-name; `specs/NNN-short-name/spec.md`; the `checklists/requirements.md`
-   quality loop (up to 3 iterations); at most 3 `[NEEDS CLARIFICATION]` markers.
-2. Resolve the markers now with `{{SKILL:redevkit-clarify}}`.
-3. The phase records the active feature in `active.md` (`- Feature: specs/NNN-short-name`, phase `specify`).
-4. **Branch offer (D38).** Only inside a git repository (`git rev-parse --is-inside-work-tree`).
-   If `active.md` › Workflow preferences already says "branch per feature: yes/no", apply it
-   without asking. Otherwise ask: create branch `NNN-short-name` (Recommended when the tree is
-   clean) or stay on the current branch. Save the answer as the preference. Never `git init`,
-   never commit.
+   quality loop; at most 3 `[NEEDS CLARIFICATION]` markers, resolved inside the phase.
+2. The phase records the active feature in `active.md` (`- Feature: specs/NNN-short-name`, phase `specify`, `- Plan approved: no`).
+3. **Branch offer (D38).** The specify phase owns it (preference `always | never | ask` in
+   `active.md` › Workflow preferences); do not ask again here.
 
 Continuing an existing feature: skip this step, but `spec.md` must exist (T7); if it does not,
 run this step.
@@ -118,20 +114,23 @@ step 2. A new application gets its scaffolding tasks in Setup.
 
 Follow `{{SKILL:redevkit-analyze}}` (read-only): duplication, ambiguity, coverage,
 constitution. Fix every CRITICAL finding in `spec.md`, `plan.md` or `tasks.md` and run the
-analysis again, at most 3 rounds. A CRITICAL constitution conflict that cannot be fixed
-without an amendment stops the run (G3). Report the remaining non-critical findings.
+analysis again, within the round limit and stop rule the analyze phase defines (constitution
+findings stop at G3). Report the remaining non-critical findings.
 
 ### 7. Domain checklist (optional)
 
 When the risk calls for it (authentication, payments, personal data, public API, UI-heavy
 feature), follow `{{SKILL:redevkit-checklist}}` for the domain (`security`, `api`, `ux`, …) →
 `checklists/<domain>.md`. In `--auto`, generate it whenever one of those triggers matches.
+Domain checklists are informational: they never block implementation.
 
 ### 8. Plan approval (G2)
 
 Present: feature summary, stack and Project Type, Constitution Check result, design deltas,
 task count per phase, analysis result, assumptions taken. Ask for approval (approve, or
-request changes). On approval, set `active.md` phase to `plan approved (YYYY-MM-DD)`. Without
+request changes). On approval, set `active.md` › Active feature to phase `plan approved` and
+`- Plan approved: YYYY-MM-DD` (the label stays in English in every language); later phases
+change the phase line but never this one. Without
 approval, apply the requested changes and repeat steps 5–8. The chain stops here even in
 `--auto`; in a non-interactive run, end the run and report that approval is pending.
 
@@ -153,7 +152,7 @@ approval, apply the requested changes and repeat steps 5–8. The chain stops he
 ## Memory phase 3
 
 Save per `{{SKILL:redevkit-memanager}}`: `active.md` (active feature, phase, next steps,
-workflow preference for branches), `tech.md` (stack, commands decided), `system.md` (design
+workflow preference for branches), `tech.md` (stack, commands decided, `- Project type:` from `plan.md`), `system.md` (design
 decisions; new or changed invariants only after confirmation), `changelog.md` (short ADR for
 stack and architecture decisions), `project.md` when the visible scope changes, `MEMORY.md`.
 Print `💾 Memory updated (files).`

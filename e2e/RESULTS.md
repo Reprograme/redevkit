@@ -1,13 +1,13 @@
 # Resultados do E2E
 
-Gerado por `e2e/summarize.mjs` em 2026-11-06 12:11 UTC. Roteiro e checagens em [README.md](README.md).
+Gerado por `e2e/summarize.mjs` em 2026-11-06 12:11 UTC; linhas B atualizadas em 2026-11-08 com os runs `r6` (pipeline com o verify rodando o test). Roteiro e checagens em [README.md](README.md).
 
 | Run | Checagens | Veredito | Duração dos passos |
 | --- | --- | --- | --- |
 | A-claude | 12/12 | PASS | 63 min |
 | A-codex | 12/12 | PASS | 49 min |
-| B-claude | 14/14 | PASS | 13 min |
-| B-codex | 14/14 | PASS | 10 min |
+| B-claude | 16/16 | PASS | 15 min |
+| B-codex | 16/16 | PASS | 26 min |
 
 **Resultado:** 4 de 4 aprovados.
 
@@ -26,6 +26,7 @@ silêncio. Cada uma revelou algo, corrigido antes do run final (ver também
 | B-codex, 2ª e 3ª | `enhance` mandou "adicionar endpoint" para o plan; depois o implement exigiu `plan.md` numa spec leve | Heurística de tamanho e exceção D55 no implement, tasks e converge |
 | A-codex, 2ª | `test` deu FAIL só por cenários não automatizáveis (revisão humana, dispositivo de referência) | Regra "Não verificado" no `redevkit-test`. O run final continuou o mesmo projeto pelo fluxo do kit: `debug`, depois `redevkit update` (merge de 3 vias, 0 conflitos) e novo `test` |
 | B-claude, 4ª | O harness não permitia mover o `memory-bank/`; o agente copiou para `archive/`, não removeu os originais e registrou a pendência | Harness autoriza mover o `memory-bank/` (equivale a aprovar o prompt) |
+| B-claude e B-codex, `r6` (2026-11-08) | Novo pipeline: depois do debug, o verify roda o test (passo 1) e grava a execução `PASS` no `test-report.md`; ciclo de correção por feature no `active.md`. Duas checagens novas | Aprovados na primeira tentativa, 16/16 nos dois |
 
 ## Detalhes
 
@@ -77,10 +78,12 @@ silêncio. Cada uma revelou algo, corrigido antes do run final (ver também
 | CLAUDE.md backup + pointer | PASS |  |
 | legacy memory mapped (§9.8) | PASS | mapped: project.md, tech.md, system.md, active.md, changelog.md |
 | archive/ created and memory-bank/ archived | PASS |  |
-| spec delta + tasks (or lightweight spec, D55) | PASS | 001-endpoint-saude |
-| .redevkit/bugs/<slug>/{assessment,fix,test}.md | PASS | about-versao-indefinida |
+| spec delta + tasks (or lightweight spec, D55) | PASS | 001-health-endpoint |
+| .redevkit/bugs/<slug>/{assessment,fix,test}.md | PASS | about-sem-version |
 | verification.md converged+verified (last run) | PASS | converged+verified |
-| test went red before debug (bug exposed) | PASS | FAIL |
+| test went red before debug (bug exposed) | PASS | FAIL → PASS |
+| verify re-ran the tests after debug (last test run PASS, run by redevkit-verify) | PASS | FAIL → PASS |
+| correction cycle recorded in active.md | PASS |  |
 
 ### B-codex
 
@@ -96,7 +99,9 @@ silêncio. Cada uma revelou algo, corrigido antes do run final (ver também
 | CLAUDE.md backup + pointer | PASS |  |
 | legacy memory mapped (§9.8) | PASS | mapped: project.md, tech.md, system.md, active.md, changelog.md |
 | archive/ created and memory-bank/ archived | PASS |  |
-| spec delta + tasks (or lightweight spec, D55) | PASS | 001-health |
-| .redevkit/bugs/<slug>/{assessment,fix,test}.md | PASS | about-versao-indefinida |
+| spec delta + tasks (or lightweight spec, D55) | PASS | 001-endpoint-saude |
+| .redevkit/bugs/<slug>/{assessment,fix,test}.md | PASS | versao-about-ausente |
 | verification.md converged+verified (last run) | PASS | converged+verified |
-| test went red before debug (bug exposed) | PASS | FAIL |
+| test went red before debug (bug exposed) | PASS | FAIL → PASS |
+| verify re-ran the tests after debug (last test run PASS, run by redevkit-verify) | PASS | FAIL → PASS |
+| correction cycle recorded in active.md | PASS |  |

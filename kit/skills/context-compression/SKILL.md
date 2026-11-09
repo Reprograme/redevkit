@@ -81,7 +81,7 @@ Full session summary for long-running work:
 - [x] Researched auth system (8 files, JWT flow mapped)
 - [x] Fixed token expiry bug in jwt.ts:45
 - [x] Added edge case test in jwt.test.ts
-- [x] Verified: all 42 tests passing
+- [x] Verified: `npm test -- auth` → exit 0, 42 passed, 0 failed (HEAD a1b2c3d, tree clean)
 
 ### In Progress
 - [ ] Update API documentation
@@ -95,7 +95,14 @@ Full session summary for long-running work:
 ### Files Modified
 - src/auth/jwt.ts (line 45: comparison fix)
 - tests/auth/jwt.test.ts (added 3 edge case tests)
+
+### Open Problems (keep the evidence)
+- Middleware test fails: `npm test -- middleware` → exit 1 at HEAD a1b2c3d; paste the full stack trace here, verbatim
 ```
+
+Every checkpoint keeps the evidence: each verification claim records the command, the observed
+result and HEAD (`git rev-parse --short HEAD`). Never compress away the failing stack trace of
+a problem that is still open.
 
 ---
 
@@ -117,13 +124,14 @@ From the completed phase, preserve:
 ✅ Decisions made and WHY
 ✅ File paths and line numbers of changes
 ✅ Key findings that inform ongoing work
-✅ Error messages or test results (summarized)
+✅ Evidence: each command run, its observed result and HEAD
+✅ The full failing stack trace of any problem still open
 
 Discard:
 ❌ Step-by-step tool invocation details
 ❌ Full file contents that were read
 ❌ Exploratory dead-ends that didn't lead anywhere
-❌ Verbose error stack traces (keep the message only)
+❌ Stack traces of problems already fixed and verified (keep the message only)
 ```
 
 ### Step 3: Write Summary

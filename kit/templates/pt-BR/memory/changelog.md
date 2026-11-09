@@ -35,10 +35,5 @@ projeto declara e é isento da poda.
 
 ## Emendas da constituição
 
-<!-- Sync Impact Report, uma entrada por emenda, mais recente primeiro:
-### v[NOVA] - [AAAA-MM-DD]
-- Versão: [ANTIGA] → [NOVA] ([MAJOR | MINOR | PATCH]: [motivo])
-- Princípios alterados: [lista]
-- Seções incluídas ou removidas: [lista]
-- Artefatos a atualizar: [lista ou nenhum]
-- Pendências: [TODOs ou nenhuma] -->
+<!-- Sync Impact Report, uma entrada por emenda, mais recente primeiro. O formato da entrada
+     é definido apenas na fase redevkit-constitution (passo "Sync Impact Report"). -->

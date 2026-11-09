@@ -22,6 +22,7 @@ manifest.]
 - Test: `[command]`
 - Dev server: `[command]`
 - Preview port: [port]
+- Project type: [web | fullstack | api | mobile | game | cli | library | desktop | other]
 - Required services: [for example Docker, a local database, or none]
 
 ## Technical constraints

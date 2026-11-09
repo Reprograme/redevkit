@@ -1,8 +1,13 @@
 ## Memory protocol
 
-- Session start: read `.redevkit/memory/MEMORY.md`, then `constitution.md`, then `active.md`.
 - Facts about this project must be written to `.redevkit/memory`, even if native memory has them.
 - `active.md`: state, events, next steps, test results. `changelog.md`: releases, ADRs.
+- Skills name `active.md` sections in English; pt-BR files use the translated headings: Active
+  feature = Feature ativa, Where we are = Onde estamos, Recent events = Eventos recentes, What
+  works = O que funciona, What's left = O que falta, Next steps = Próximos passos, Known issues
+  = Problemas conhecidos, Last results = Últimos resultados, Workflow preferences =
+  Preferências de fluxo. Line labels stay in English in every language: `- Feature:`,
+  `- Plan approved:`, `- Test:`, `- Verify:`, `- Debug:`, `- Correction cycle:`, `- Bug <slug>:`.
 - `project.md`: scope, out of scope. `system.md`: architecture, conventions, invariants.
 - `tech.md`: stack, commands, preview port. `user.md`: environment, style, feedback.
 - Other themes: `topics/<topic>.md`, plus one `MEMORY.md` line `- [type] summary → file.md`.

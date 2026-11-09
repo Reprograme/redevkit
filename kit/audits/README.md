@@ -85,13 +85,29 @@ work from any working directory.
 | `0` | PASS: the audit ran and found nothing at or above its failure threshold |
 | `1` | FAIL: blocking findings |
 | `2` | Usage error or missing input path |
-| `3` | SKIPPED: the audit could not run or does not apply; it printed `SKIPPED (<reason>)` |
+| `3` | SKIPPED: nothing was checked (the audit could not run or does not apply); it printed `SKIPPED (<reason>)` |
+
+The orchestrators (`checklist.py`, `verify_all.py`) aggregate their checks:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | At least one check ran (PASS) and none failed; skipped checks are listed as not verified |
+| `1` | Any check failed or errored |
+| `2` | Usage error (bad option, missing project directory) |
+| `3` | SKIPPED: every check was skipped, nothing was verified; prints `SKIPPED (all N check(s) skipped; nothing was verified)` |
+
+A skipped `required` check (Security Scan, Lint Check, Lighthouse with `--url`) is
+marked `[SKIPPED] (required)` in the summary and named on a `Required check(s) SKIPPED`
+line. It does not fail the suite on its own, but a run where everything skipped is `3`,
+never `0`. The JSON report carries `status` (`passed`, `failed`, `skipped`), `exit_code`
+and `success` (true only for exit `0`).
 
 ## SKIPPED semantics
 
 - A skipped audit is reported as `SKIPPED (<reason>)`, **never** as `PASS`. Examples:
   `SKIPPED (no Python)`, `SKIPPED (npm not found on PATH)`,
   `SKIPPED (no Prisma or Drizzle schema files found)`,
+  `SKIPPED (Drizzle schemas found, not validated)`,
   `SKIPPED (Lighthouse CLI not found on PATH)`.
 - An audit skips when its external tool is missing, cannot start or times out (where
   noted below), or when the project has nothing for it to check.
@@ -99,8 +115,9 @@ work from any working directory.
   result of the checks that did run and prints one `SKIPPED (<reason>)` line per skipped
   sub-check. The orchestrators copy those lines into the summary and the JSON report.
 - A SKIPPED check does not fail a suite, but the summary counts it and says the suite
-  passed with checks "SKIPPED (not verified)". Reports and verify artifacts must list
-  every SKIPPED check with its reason.
+  passed with checks "SKIPPED (not verified)". When every check skipped, the suite itself
+  is SKIPPED (exit `3`), not PASS. Reports and verify artifacts must list every SKIPPED
+  check with its reason.
 
 ## What each audit checks
 
@@ -110,7 +127,7 @@ work from any working directory.
 | `dependency_analyzer.py` | Unbounded or remote dependency versions, missing or duplicate lock files, unpinned Python requirements (offline) | No dependency manifest |
 | `lint_runner.py` | `npm run lint` or project-local `eslint`, project-local `tsc --noEmit`, `ruff`, `mypy` | Each missing linter; all of them missing |
 | `type_coverage.py` | Explicit `any`, `@ts-ignore`, project-local `tsc`, Python annotation ratio | No TS or Python files; `tsc` missing or timed out (sub-check) |
-| `schema_validator.py` | Prisma naming, ids, `createdAt`, missing `@@index` (advisory) | No Prisma or Drizzle schema |
+| `schema_validator.py` | Prisma naming, ids, `createdAt`, missing `@@index` (advisory). Drizzle files are only listed as "not validated" | No Prisma or Drizzle schema; Drizzle schemas only (nothing validated) |
 | `test_runner.py` | `npm test`, project-local vitest or jest, pytest or unittest via `sys.executable` | No test command, runner missing, no tests found |
 | `ux_audit.py` | UX laws, typography, color, motion and effect heuristics | No frontend source files |
 | `accessibility_checker.py` | Input and button labels, `<html lang>`, skip link, keyboard handlers, positive `tabIndex` (comments ignored) | No HTML, JSX or TSX files |

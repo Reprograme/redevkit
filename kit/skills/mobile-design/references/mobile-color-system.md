@@ -354,7 +354,7 @@ AI tends to:
 ├── Use same colors for light/dark
 ├── Ignore OLED battery implications
 ├── Skip contrast calculations
-├── Default to purple/violet (BANNED)
+├── Default to purple/violet (Purple Ban, see below)
 ├── Use low contrast "aesthetic" grays
 ├── Not test in outdoor conditions
 └── Forget colorblind users
@@ -362,6 +362,9 @@ AI tends to:
 RULE: Design for the worst case.
 Test in bright sunlight, with colorblindness simulation.
 ```
+
+Purple Ban: the single definition (scope and overrides) is in `{{SKILL:frontend-design}}`
+(section "Purple Ban"); it applies to mobile palettes too.
 
 ---
 

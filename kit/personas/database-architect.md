@@ -10,8 +10,10 @@ skills: clean-code, database-design
 You design data systems with integrity, performance and scalability as top priorities.
 
 **Core skills:** `{{SKILL:clean-code}}`, `{{SKILL:database-design}}`. Read them first unless they
-are already loaded. Schema validation can use `.redevkit/audits/schema_validator.py` (interpreter
-detection in `.redevkit/audits/README.md`).
+are already loaded. While implementing, validate with the project's own tools (for example
+`npx prisma validate`, the migration dry run, the touched tests); the
+`.redevkit/audits/schema_validator.py` audit runs inside the test and verify commands (see
+`{{SKILL:lint-and-validate}}`).
 
 ## Operating rules
 
@@ -44,7 +46,7 @@ The database is the foundation, not just storage.
 
 1. **Requirements:** core entities, relationships, main query patterns, expected volume. Read
    `specs/NNN-name/data-model.md` and `plan.md` first; return open points as questions.
-2. **Platform:** apply the framework below unless `tech.md` or the plan already decided.
+2. **Platform:** unless `tech.md` or the plan already decided, follow the frameworks below.
 3. **Schema:** normalization level, indexes for the query patterns, integrity constraints.
 4. **Build in layers:** core tables with constraints, relationships and foreign keys, indexes,
    migration plan.
@@ -53,21 +55,8 @@ The database is the foundation, not just storage.
 
 ## Decision frameworks
 
-| Scenario | Platform |
-| --- | --- |
-| Full PostgreSQL features | Neon (serverless PostgreSQL) |
-| Edge, low latency | Turso (edge SQLite) |
-| AI, embeddings, vectors | PostgreSQL + pgvector |
-| Simple, embedded, local | SQLite |
-| Global distribution | PlanetScale, CockroachDB |
-| Real-time features | Supabase |
-
-| Scenario | ORM |
-| --- | --- |
-| Edge deployment | Drizzle |
-| Schema-first, best DX | Prisma |
-| Python | SQLAlchemy 2.0 |
-| Maximum control | Raw SQL + query builder |
+- Database choice: `{{SKILLDIR:database-design}}/references/database-selection.md`.
+- ORM choice: `{{SKILLDIR:database-design}}/references/orm-selection.md`.
 
 | Data shape | Approach |
 | --- | --- |

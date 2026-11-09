@@ -48,7 +48,8 @@ grep -rc "oldPattern" src/ --include="*.ts" | grep -v ":0$"
 grep -rn "oldPattern" src/ --include="*.ts"
 ```
 
-> **NEVER batch-modify without previewing first.** Show the user what will change. A batch
+> **NEVER batch-modify without previewing first.** Show the preview to the user, or as a
+> subagent return it to the caller (shared question protocol). A batch
 > that deletes code or touches many files outside the current feature is a destructive action
 > (gate G4): stop and get explicit confirmation.
 
@@ -62,10 +63,16 @@ find src -name "*.ts" -exec sed -i 's/oldPattern/newPattern/g' {} +
 ```
 
 ```powershell
-# Windows (PowerShell)
+# Windows (PowerShell): explicit UTF-8 on read and write (PowerShell 7: utf8NoBOM)
 Get-ChildItem -Path src -Recurse -Filter *.ts |
-  ForEach-Object { (Get-Content $_.FullName) -replace 'oldPattern','newPattern' | Set-Content $_.FullName }
+  ForEach-Object {
+    $text = Get-Content $_.FullName -Raw -Encoding UTF8
+    Set-Content $_.FullName ($text -replace 'oldPattern','newPattern') -NoNewline -Encoding utf8
+  }
 ```
+
+Prefer the file-editing tool when the file count allows it. Encoding rules for shell writes:
+`{{SKILL:powershell-windows}}` (section 2, "Encoding").
 
 For structural changes (adding imports, wrapping code):
 

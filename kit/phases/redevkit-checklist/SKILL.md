@@ -29,8 +29,11 @@ context. If `spec.md` is missing, stop and tell the caller to run the specify st
 
 ## Ownership
 
-- Domain checklists are reviewer-owned. `[x]` means a reviewer judged the requirement
-  quality criterion satisfied; it never means the work is done.
+- Domain checklists are informational, not a gate: implementation never waits for them.
+  The implement phase shows one warning listing open items, and the verify command lists
+  them under Not verified.
+- Whoever reviews the spec marks items. `[x]` means the requirement quality criterion is
+  satisfied; it never means the work is done.
 - This phase creates or appends items and leaves them all unchecked `[ ]`.
 - `checklists/requirements.md` belongs to `redevkit-specify` and `redevkit-clarify`; never
   write domain items into it.

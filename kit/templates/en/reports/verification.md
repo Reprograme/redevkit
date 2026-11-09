@@ -5,7 +5,7 @@ type: verification
 # Verification: [FEATURE NAME]
 
 - **Feature**: `specs/[NNN-short-name]/`
-- **Inputs**: `spec.md`, `plan.md`, `tasks.md`, `test-report.md` (same directory)
+- **Inputs**: `spec.md`, `plan.md` (when present), `tasks.md`, `test-report.md` (same directory)
 
 <!--
 Append-only. Add one "Run" section at the end of this file for each verify execution.
@@ -27,11 +27,20 @@ failed, PASS, FAIL, SKIPPED, clean, dirty.
 | Diff fingerprint | `[HASH]` |
 
 <!--
-Same commands as the test report:
-  git rev-parse HEAD
-  git status --porcelain -- . ':(exclude).redevkit' ':(exclude)specs'
-  git status --porcelain -- . ':(exclude).redevkit' ':(exclude)specs' | git hash-object --stdin   (status fingerprint)
-  git diff HEAD -- . ':(exclude).redevkit' ':(exclude)specs' | git hash-object --stdin            (diff fingerprint)
+Same commands as the test report: redevkit-test/references/code-state.md.
+-->
+
+### Test evidence
+
+| Field | Value |
+| --- | --- |
+| Test run | `test-report.md`, run [YYYY-MM-DD HH:MM] — [PASS \| FAIL] |
+| Source | [ran in step 1 \| reused: same code state as the current code] |
+| Debug since the previous verify | [bug slug, YYYY-MM-DD HH:MM \| none] |
+
+<!--
+A FAIL test run ends the verification here: verdict failed, and the Convergence, Execution
+and Audits sections are SKIPPED (test run FAIL).
 -->
 
 ### Convergence
@@ -48,7 +57,6 @@ Same commands as the test report:
 | Step | Command | Exit code | Observed result |
 | --- | --- | --- | --- |
 | Build | `[COMMAND]` | [EXIT CODE] | [compiled without errors, or the error] |
-| Full test suite | `[COMMAND]` | [EXIT CODE] | [N passed, N failed, N skipped] |
 | App start | `[COMMAND]` | [EXIT CODE] | [listening on URL, or the error], or SKIPPED ([REASON]) |
 
 #### Critical flows
@@ -74,14 +82,19 @@ Same commands as the test report:
 
 - [What could not be exercised and why, or none]
 
+### Assumptions
+
+- [Assumption taken in this run and why, or none]
+
 ### Verdict
 
 **[converged+verified | gaps | failed]** — [one or two sentences with the decisive evidence].
 
 <!--
-converged+verified: no convergence gaps; build, full suite and critical flows pass; no audit FAIL.
-gaps: execution passes, but convergence found gaps (tasks were appended).
-failed: build, suite, a critical flow or a blocking audit fails.
+converged+verified: test run PASS; no convergence gaps; build and critical flows pass; no audit FAIL.
+gaps: test run PASS and execution passes, but convergence or non-critical audits appended tasks.
+failed: the test run is FAIL, or the build, a critical flow or a blocking audit fails.
 -->
 
-- **Next step**: [redevkit-deploy | redevkit-create or redevkit-enhance (gaps) | redevkit-debug (failed, cycle [1 | 2] of 2)]
+- **Correction cycle** (after this run): failed after debug [N]/2 · rounds without convergence [N]/3
+- **Next step**: [redevkit-deploy | redevkit-create or redevkit-enhance (gaps) | redevkit-debug (failed) | G5 reached: waiting for the user]

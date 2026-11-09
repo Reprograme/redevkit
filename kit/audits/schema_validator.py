@@ -13,7 +13,9 @@ Checks:
 
 Files are discovered with one directory walk that prunes SKIP_DIRS by path
 segment (node_modules is never entered). Schema issues are advisory: the
-audit passes with warnings. With no schema files it is SKIPPED.
+audit passes with warnings. Only Prisma schemas are validated: Drizzle files
+are listed as "not validated". With no schema files, or with Drizzle files
+only (nothing validated), it is SKIPPED.
 """
 from __future__ import annotations
 
@@ -59,6 +61,7 @@ def find_schema_files(project_path: Path) -> List[Tuple[str, Path]]:
             schemas.append(("prisma", path))
         elif path.suffix == ".ts" and parent in {"drizzle", "schema"} and ("schema" in name or "table" in name):
             schemas.append(("drizzle", path))
+    schemas.sort(key=lambda item: item[0] != "prisma")  # stable: validated schemas first
     return schemas[:MAX_SCHEMAS]
 
 
@@ -111,13 +114,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("SKIPPED (no Prisma or Drizzle schema files found)")
         return EXIT_SKIPPED
 
+    validated = [path for kind, path in schemas if kind == "prisma"]
+    not_validated = [path.relative_to(project_path).as_posix() for kind, path in schemas if kind == "drizzle"]
+    for rel in not_validated:
+        print(f"Not validated: {rel} (drizzle, no Drizzle rules)")
+    if not validated:
+        print("SKIPPED (Drizzle schemas found, not validated)")
+        return EXIT_SKIPPED
+
     all_issues = []
-    for schema_type, file_path in schemas:
+    for file_path in validated:
         rel = file_path.relative_to(project_path).as_posix()
-        print(f"\nValidating: {rel} ({schema_type})")
-        issues = validate_prisma_schema(file_path) if schema_type == "prisma" else []
+        print(f"\nValidating: {rel} (prisma)")
+        issues = validate_prisma_schema(file_path)
         if issues:
-            all_issues.append({"file": rel, "type": schema_type, "issues": issues})
+            all_issues.append({"file": rel, "type": "prisma", "issues": issues})
 
     print("\n" + "=" * 60)
     print("SCHEMA ISSUES")
@@ -131,13 +142,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 print(f"  ... and {len(item['issues']) - 5} more issues")
     else:
         print("No schema issues found!")
+    if not_validated:
+        print(f"\nNot validated: {len(not_validated)} Drizzle schema file(s) (listed above)")
 
     total_issues = sum(len(item["issues"]) for item in all_issues)
     output = {
         "script": "schema_validator",
         "project": str(project_path),
-        "schemas_checked": len(schemas),
-        "files": [path.relative_to(project_path).as_posix() for _, path in schemas],
+        "schemas_checked": len(validated),
+        "files": [path.relative_to(project_path).as_posix() for path in validated],
+        "not_validated": not_validated,
         "issues_found": total_issues,
         "passed": True,  # schema issues are advisory warnings
         "issues": all_issues,

@@ -102,17 +102,20 @@ flowchart TD
     EN --> TS
     TS -->|verde| DP["redevkit-deploy<br/>só o usuário dispara · sugere verify antes"]
     TS -->|vermelho| DB["redevkit-debug<br/>.redevkit/bugs/slug"]
-    DB --> VF["redevkit-verify obrigatório<br/>converge + execução + auditorias"]
-    VF -->|ok| DP
-    VF -->|lacunas viram tarefas| B
-    VF -->|falha · máx. 2 ciclos| DB
+    DB --> VF["redevkit-verify obrigatório<br/>roda o test de novo, converge,<br/>execução e auditorias"]
+    VF -->|converged+verified| DP
+    VF -->|gaps: lacunas viram tarefas| B
+    VF -->|failed| DB
+    VF -.->|G5: ciclo de correção sem convergir| U["para e pergunta a você"]
     PV["redevkit-preview · sob demanda"]
     STS["redevkit-status · a qualquer momento"]
 ```
 
 Com `--auto`, a cadeia new → plan → create/enhance → test segue sozinha (e, no vermelho,
-debug → verify), mas sempre para nos gates G1–G7. O deploy é sempre disparado por você. O
-método completo está em [docs/metodo.md](docs/metodo.md).
+debug → verify, com o verify rodando os testes de novo sobre o código corrigido), mas sempre
+para nos gates G1–G7. O G5 impede loops: a cadeia para quando o ciclo de correção não
+converge (regras em [Ciclo de correção e G5](docs/metodo.md#ciclo-de-correção-e-g5)). O
+deploy é sempre disparado por você. O método completo está em [docs/metodo.md](docs/metodo.md).
 
 ## Comandos
 
@@ -125,7 +128,7 @@ método completo está em [docs/metodo.md](docs/metodo.md).
 | enhance | `/redevkit-enhance` | `$redevkit-enhance` | Muda algo existente: delta na spec e tarefas anexadas; mudança grande vai para o plan |
 | test | `/redevkit-test` | `$redevkit-test` | Mapeia cenários para testes, gera os que faltam, roda a suíte e grava `test-report.md` |
 | debug | `/redevkit-debug` | `$redevkit-debug` | Reproduz, acha a causa raiz, teste de regressão primeiro, corrige e registra o bug |
-| verify | `/redevkit-verify` | `$redevkit-verify` | Verificação completa: convergência com a spec, execução real, auditorias e veredito |
+| verify | `/redevkit-verify` | `$redevkit-verify` | Verificação completa: roda o test (ou reaproveita um run sobre o mesmo código), convergência com a spec, execução real, auditorias e veredito |
 | preview | `/redevkit-preview` | `$redevkit-preview` | Sobe, para ou checa o servidor de desenvolvimento local |
 | deploy | `/redevkit-deploy` | `$redevkit-deploy` | Deploy só por invocação do usuário, com plano de rollback, confirmação e smoke test |
 | status | `/redevkit-status` | `$redevkit-status` | Mostra só fatos: feature ativa, progresso, último test e verify, bugs, git |
@@ -161,7 +164,7 @@ A memória do projeto fica em `.redevkit/memory/` (`MEMORY.md` como índice, mai
 decisões, convenções, estado e feedback. Ela é agnóstica de agente: o protocolo de leitura e
 escrita está no próprio `AGENTS.md`, então qualquer agente que leia esse arquivo (Claude
 Code, Codex, DeepSeek ou outro) sabe usá-la. Estado é gravado automaticamente no fim de cada
-comando; emendas da constituição, invariantes e qualquer exclusão pedem confirmação. A
+comando que modifica algo; emendas da constituição, invariantes e qualquer exclusão pedem confirmação. A
 memória nativa de cada agente continua ligada e serve como camada pessoal; em conflito, vale
 `.redevkit/memory/`. Segredos nunca são gravados.
 
@@ -192,26 +195,34 @@ O REDEVKIT **não instala hooks nem deny-list**. A proteção vem de três camad
 3. **Gates do pipeline** (G1–G7) e **deploy só por invocação**: no Claude Code a skill de
    deploy tem `disable-model-invocation: true`; no Codex, `allow_implicit_invocation: false`.
 
-A lista de `permissions.allow` nunca inclui escrita, rede, instalação de pacotes ou deploy.
-Lembre que `npm test` roda o que o seu `package.json` definir; remova entradas se preferir.
+A lista de `permissions.allow` nunca inclui escrita de arquivos, instalação de pacotes ou
+deploy. Ela não é livre de rede: `npm test` roda o que o seu `package.json` definir, e a
+auditoria de segurança pode rodar `npm audit`, que consulta o registro do npm. Remova entradas
+se preferir.
 
 ## CLI
 
 | Comando | Opções | O que faz |
 | --- | --- | --- |
 | `redevkit init [dir]` | `--here`, `--target`, `--lang`, `--dry-run`, `--yes`, `--force`, `--verbose` | Instala no projeto: renderiza os alvos, grava o bloco do `AGENTS.md`, migra o `CLAUDE.md`, faz merge da config e cria o manifesto |
-| `redevkit update` | `--dry-run`, `--no-backup`, `--conflict-report <arq>`, `--verbose` | Atualização em 3 vias dos arquivos gerenciados; arquivos que você alterou são preservados e reportados como conflito. Nunca toca memória, specs ou `DESIGN.md` |
-| `redevkit rollback` | `--backup <id>`, `--list`, `--dry-run` | Restaura um backup (padrão: o mais recente), salvando antes o estado atual |
+| `redevkit update` | `--dry-run`, `--no-backup`, `--conflict-report <arq>`, `--verbose` | Atualização em 3 vias dos arquivos gerenciados. Um arquivo que só você alterou é preservado; um arquivo alterado por você e pelo kit é um conflito: o seu fica e a versão nova vai para `.redevkit/conflicts/<id>/`. Nunca toca memória, specs ou `DESIGN.md` |
+| `redevkit rollback` | `--backup <id>`, `--list`, `--dry-run` | Restaura um backup, salvando antes o estado atual num backup `pre-rollback-<id>`. Padrão: o backup mais recente de init/update/uninstall (os `pre-rollback-*` são ignorados); para desfazer um rollback, use `--backup pre-rollback-<id>` |
 | `redevkit status` | `--quiet`, `--json` | Versão instalada, alvos, idioma e arquivos gerenciados alterados ou ausentes; funciona offline |
 | `redevkit doctor` | `--json` | Confere ferramentas, instalação, `AGENTS.md`, `CLAUDE.md`, memória, numeração de `specs/`, config e confiança no Codex; sai com código diferente de zero se houver erro |
 | `redevkit target add <claude\|codex>` | `--dry-run`, `--yes`, `--verbose` | Adiciona um alvo (com `--yes`, aceita a migração do `CLAUDE.md`) |
-| `redevkit target remove <claude\|codex>` | `--dry-run`, `--verbose` | Remove um alvo; o `AGENTS.md` sempre fica |
+| `redevkit target remove <claude\|codex>` | `--dry-run`, `--verbose` | Remove um alvo; o `AGENTS.md` sempre fica, e o `CLAUDE.md` também. Recusa remover o último alvo |
 | `redevkit version` | `--check` | Mostra a versão; `--check` consulta o npm |
-| `redevkit uninstall` | `--dry-run`, `--yes`, `--force` | Remove os arquivos e as entradas de config gerenciados. Preserva `.redevkit/memory/`, `specs/`, `DESIGN.md`, as notas do `AGENTS.md` e o `CLAUDE.md`. Arquivos gerenciados que você alterou ficam, salvo com `--force` |
+| `redevkit uninstall` | `--dry-run`, `--yes`, `--force` | Remove os arquivos e as entradas de config gerenciados. Preserva `.redevkit/memory/`, `specs/`, `DESIGN.md`, as notas do `AGENTS.md` e o `CLAUDE.md`. Arquivos gerenciados que você alterou ficam, salvo com `--force`. Faz backup antes; sem terminal interativo, exige `--yes` |
 
 `update`, `rollback`, `status`, `doctor`, `target` e `uninstall` agem no diretório atual.
 Backups ficam em `.redevkit/backups/<id>/`; a versão nova de um arquivo em conflito fica em
-`.redevkit/conflicts/`. Mensagens saem no idioma do manifesto.
+`.redevkit/conflicts/`. As mensagens principais saem no idioma do manifesto; os textos dos
+achados do `doctor` e alguns avisos técnicos ficam em inglês. Códigos de saída: `0` sucesso,
+`1` erro, `2` uso incorreto, `130` interrompido (Ctrl+C).
+
+Rodar o `init` de novo num projeto já instalado reaproveita os alvos e o idioma do manifesto,
+sem perguntar, e funciona como um `update`: com `--target` ou `--lang` troca o alvo ou o
+idioma; com `--force` resolve os conflitos (depois do backup).
 
 ## Documentação
 
@@ -254,8 +265,8 @@ without a TTY), `--force`, `--verbose`. Then run `/redevkit-new` in Claude Code 
 `redevkit-enhance`, `redevkit-test`, `redevkit-debug`, `redevkit-verify`,
 `redevkit-preview`, `redevkit-deploy`, `redevkit-status`, plus the memory skill
 `redevkit-memanager`. Invoke them as `/redevkit-<name>` in Claude Code and `$redevkit-<name>`
-in Codex. `--auto` chains new → plan → create/enhance → test (and debug → verify on red) and
-always stops at gates G1–G7; deploy is user-triggered only.
+in Codex. `--auto` chains new → plan → create/enhance → test (and debug → verify on red; verify
+re-runs the tests on the fixed code) and always stops at gates G1–G7; deploy is user-triggered only.
 
 **Artifacts:** `specs/NNN-name/` (spec, plan, tasks, test and verification reports),
 `.redevkit/bugs/`, `.redevkit/assessments/`, `.redevkit/deploys/`, `.redevkit/memory/` and

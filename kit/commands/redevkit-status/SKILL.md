@@ -40,13 +40,14 @@ Collect each fact from its source; show the source when it is not obvious.
 | Fact | Source |
 | --- | --- |
 | Last memory entry | `updated` in the frontmatter of the memory files (latest date) |
-| Active feature and phase | `.redevkit/memory/active.md` line `- Feature: specs/NNN-short-name` (or `none`); check that the path exists |
+| Active feature and phase | `.redevkit/memory/active.md` line `- Feature: specs/NNN-short-name` (or `none` / `nenhuma`); check that the path exists |
 | Task progress per phase | `tasks.md`: per `## Phase N:` heading (`## Fase N:` in pt-BR artifacts), count `- [X]`/`- [x]` over all task lines |
-| Plan approval | `active.md` phase (`plan approved (date)` or not) |
-| Last test | Latest dated run in `test-report.md`: date, verdict, failing count |
+| Plan approval | `active.md` › Active feature › `- Plan approved:` (date, or `no`) |
+| Last test | Latest dated run in `test-report.md`: date, verdict, failing count, run by |
 | Last verify | Latest dated run in `verification.md`: date, verdict |
+| Last debug and correction cycle | `active.md` › Last results › Debug and Correction cycle (counters, G5 reached) |
 | Code changed since last test | Recompute HEAD, working tree and both fingerprints per `{{SKILLDIR:redevkit-test}}/references/code-state.md` and compare with the latest run (read-only commands) |
-| Open bugs | `.redevkit/bugs/<slug>/` without `test.md`, or with a result other than `verified` |
+| Open bugs | `active.md` › Known issues lines `- Bug <slug>: open` (a fact; they close at the next `converged+verified` verify); also list `.redevkit/bugs/<slug>/` folders without `test.md` as interrupted debugs |
 | Pending assessments | `.redevkit/assessments/<slug>/` without `decision.md`, or with `needs-clarification` |
 | Pending interview markers | Count of `<PENDING INTERVIEW` / `<PENDENTE DE ENTREVISTA` per file in `.redevkit/memory/` |
 | Latest deploy | Newest file in `.redevkit/deploys/`: date, environment, verdict |
@@ -81,16 +82,18 @@ file says so; never estimate percentages that were not counted.
 
 ## Handoff
 
-Suggest one next command from the facts, with the reason:
+Suggest one next command from the facts, with the reason. The first row that matches wins:
 
 | Fact | Next |
 | --- | --- |
 | No memory | `{{CMD:redevkit-new}}` |
+| G5 reached, not answered | Answer the G5 question (`{{CMD:redevkit-verify}}` presents it again) |
 | No active feature, pending assessment | `{{CMD:redevkit-brainstorm}}` |
 | No active feature | `{{CMD:redevkit-plan}}` |
 | Plan not approved | `{{CMD:redevkit-plan}}` |
-| Open tasks | `{{CMD:redevkit-create}}` (or `{{CMD:redevkit-enhance}}` for an enhancement phase) |
-| All tasks done, no test on the current code | `{{CMD:redevkit-test}}` |
-| Last test `FAIL`, or open bug | `{{CMD:redevkit-debug}}` |
+| Open tasks (any phase, including Enhancement and Convergence) | `{{CMD:redevkit-create}}` |
 | Debug done, no verify after it | `{{CMD:redevkit-verify}}` |
-| `PASS` or `converged+verified` on the current code | `{{CMD:redevkit-deploy}}` (user-triggered) |
+| The newer of the last test and the last verify is `FAIL` or `failed` | `{{CMD:redevkit-debug}}` |
+| All tasks done, no test on the current code | `{{CMD:redevkit-test}}` |
+| `converged+verified` on the current code | `{{CMD:redevkit-deploy}}` (user-triggered) |
+| `PASS` on the current code | `{{CMD:redevkit-deploy}}` (user-triggered), suggesting `{{CMD:redevkit-verify}}` first |

@@ -54,7 +54,7 @@ updated: YYYY-MM-DD
    quote the spec section for every failure.
 2. Mark passing items `[x]`, failing items `[ ]`.
 3. Fix the spec for each failing item (except CHK005, which `redevkit-clarify` resolves).
-4. Repeat at most 3 iterations. If items still fail, list them under Notes and warn the
-   caller.
+4. Repeat at most 3 iterations (`light` mode: stop after the first). If items still fail,
+   list them under Notes and warn the caller.
 5. When re-validating, toggle only the markers whose state changed; leave every other line
    untouched to avoid noisy diffs.

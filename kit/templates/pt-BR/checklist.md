@@ -53,6 +53,8 @@ claro, consistente, mensurável). Não quer dizer que a implementação está pr
 - Marque itens `[x]` só depois que a revisão confirmar que o critério foi atendido.
 - Deixe os itens desmarcados enquanto precisarem de esclarecimento ou correção; anote os
   achados na própria linha.
-- A fase implement lê estas marcações como gate e nunca as altera.
+- Este checklist é informativo, não é gate: a fase implement avisa uma vez sobre os itens
+  abertos e o relatório do verify os lista em Não verificado. Nenhuma das duas altera as
+  marcações.
 - `checklists/requirements.md` é o checklist embutido de qualidade da spec e tem ciclo de
   vida próprio (fases specify e clarify).

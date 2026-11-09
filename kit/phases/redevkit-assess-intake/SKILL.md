@@ -41,17 +41,19 @@ instead of asking.
 
 ## Slug
 
-1. Use the slug the user gave, or derive 2–4 kebab-case words from the idea.
-2. Normalize: lowercase; whitespace and `_` become `-`; keep only `a-z`, `0-9` and `-`;
+**Slug rule** (the single definition for assessment and bug folders; other skills refer to
+it):
+
+1. Use the slug the user gave, or derive a short name from the idea.
+2. Format: lowercase ASCII (transliterate accents), words joined by `-`, at most 40
+   characters. Normalize: whitespace and `_` become `-`; keep only `a-z`, `0-9` and `-`;
    collapse repeated `-`; trim `-` at both ends. An empty result (for example from `../..`)
-   is rejected: derive a new slug from the idea.
-3. Path safety: `.redevkit/`, `.redevkit/assessments/` and the slug directory, where they
-   exist, must be real directories (not symlinks) that resolve inside the project root.
-   Refuse and report otherwise.
-4. Never overwrite an existing directory. If `.redevkit/assessments/<slug>/` exists:
-   - derived slug: append the shortest suffix that makes it unique (`-2`, `-3`, …);
-   - slug given by the user: in interactive mode ask whether to use `<slug>-2`
-     (Recommended) or another name; in auto mode stop and report the collision.
+   is rejected: derive a new slug.
+3. Path safety: `.redevkit/`, the parent folder (`.redevkit/assessments/` or
+   `.redevkit/bugs/`) and the slug directory, where they exist, must be real directories
+   (not symlinks) that resolve inside the project root. Refuse and report otherwise.
+4. Never overwrite an existing folder: append the shortest suffix that makes it unique
+   (`-2`, `-3`, …).
 
 ## Steps
 

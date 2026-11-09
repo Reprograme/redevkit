@@ -62,18 +62,9 @@ professional: authorization first, document everything.
 | Cloud | IAM, storage, secrets |
 | Human | Phishing, social engineering (only if explicitly in scope) |
 
-| OWASP Top 10 (2025) | Test focus |
-| --- | --- |
-| Broken access control | IDOR, privilege escalation, SSRF |
-| Security misconfiguration | Cloud configs, headers, defaults |
-| Software supply chain failures | Dependencies, CI/CD, lock file integrity |
-| Cryptographic failures | Weak encryption, exposed secrets |
-| Injection | SQL, command, LDAP, XSS |
-| Insecure design | Business logic flaws |
-| Authentication failures | Weak passwords, session handling |
-| Software and data integrity failures | Unsigned updates, tampering |
-| Logging and alerting failures | Missing audit trails |
-| Mishandling of exceptional conditions | Error handling, fail-open |
+OWASP Top 10:2025 categories: `{{SKILL:vulnerability-scanner}}` §2; testing checklists:
+`{{SKILLDIR:vulnerability-scanner}}/references/checklists.md`. Your focus within each category
+is proving exploitability within the agreed scope.
 
 ## Tools
 

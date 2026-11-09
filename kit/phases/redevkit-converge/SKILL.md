@@ -6,7 +6,7 @@ description: Compare code with spec, plan and tasks; append gaps as Convergence 
 # redevkit-converge
 
 Internal phase. Closes the gap between what the feature's artifacts ask for and what the
-code does. Called by `{{CMD:redevkit-verify}}` as its first step. It assesses the current
+code does. Called by `{{CMD:redevkit-verify}}` as its step 2. It assesses the current
 code only: no git history, no branch comparison.
 
 ## Input (from the calling command)
@@ -50,10 +50,15 @@ When nothing remains, `tasks.md` stays byte-for-byte unchanged (no empty header)
    - `missing`: the work is absent;
    - `partial`: it exists but does not fully satisfy the requirement;
    - `contradicts`: it conflicts with the intent or a constitution MUST;
-   - `unrequested`: code not called for by the artifacts (surfaced for review; converge
-     never deletes code).
+   - `unrequested`: code not called for by the artifacts (surfaced for review in the report
+     only: it never becomes a task and never blocks `converged`; converge never deletes
+     code).
 
    With little or no code yet, the whole specified scope is `missing`.
+
+   A gap already covered by an open `[ ]` task in an existing Convergence phase is not a new
+   finding: list it in the report with that task ID (for example "covered by T042") and do
+   not append it again.
 4. **Assign severity.** CRITICAL: violates a constitution MUST, or a `missing`/`contradicts`
    gap that blocks a P1 story. HIGH: `missing` or `partial` on a core requirement. MEDIUM:
    `partial` on a secondary requirement, or `unrequested` with unclear justification. LOW:
@@ -72,8 +77,8 @@ When nothing remains, `tasks.md` stays byte-for-byte unchanged (no empty header)
    constitution principles checked (or "skipped - template"), findings by gap type and by
    severity.
 6. **Append or report converged.**
-   - **Findings** (`tasks_appended`): next ID = highest `T` number + 1; next phase number =
-     highest phase number + 1. Write one task per finding, CRITICAL and constitution
+   - **New findings** (`tasks_appended`): next ID = highest `T` number + 1; next phase number =
+     highest phase number + 1. Write one task per finding except `unrequested`, CRITICAL and constitution
      findings first, following
      the grammar in `{{SKILLDIR:redevkit-tasks}}/references/task-format.md`. Choose the
      persona with `{{SKILL:redevkit-route}}`. Put the trace and gap type in the description:
@@ -84,13 +89,18 @@ When nothing remains, `tasks.md` stays byte-for-byte unchanged (no empty header)
 
      When a gap has no test yet and TDD is required, add the failing-test task before its
      fix task.
-   - **No findings** (`converged`): do not touch `tasks.md`; report "Converged: the
+   - **Only gaps already covered** (`tasks_open`): do not touch `tasks.md`; report the
+     covering task IDs. This still counts as gaps for the caller.
+   - **No gaps at all** (`converged`): do not touch `tasks.md`; report "Converged: the
      implementation satisfies the spec, plan and tasks", with the counts.
 
 ## Report to the caller
 
-- Outcome: `converged` or `tasks_appended` (with the phase number and task IDs appended).
+- Outcome: `converged`, `tasks_appended` (with the phase number and task IDs appended) or
+  `tasks_open`.
 - The findings table and counts.
-- CRITICAL constitution findings flagged for gate G3.
-- Next step for the caller: `tasks_appended` → `redevkit-implement` on the new phase, then
-  converge again; `converged` → continue the verification.
+- Gaps skipped because an open Convergence task already covers them, with the task IDs.
+- CRITICAL constitution findings: gate G3, the calling command stops for the user.
+- Next step: `tasks_appended` or `tasks_open` → the calling command hands off to the create
+  command, which implements the open Convergence tasks; `converged` → continue the
+  verification.

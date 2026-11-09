@@ -49,5 +49,6 @@ failed: the symptom still reproduces, or the fix breaks the suite.
 
 ## Recommendation
 
-[Close the bug and continue to redevkit-verify / hold: reproduction inconclusive /
-reopen: the symptom still reproduces, assess again with this evidence.]
+[verified: continue to redevkit-verify, which closes the bug when it confirms the fix /
+partial: continue to redevkit-verify; name what remains unproven /
+failed: continue to redevkit-verify; the next debug opens a new bug linked to this one.]

@@ -63,7 +63,7 @@ ask per step 6). A task without `@persona` is routed per `{{SKILL:redevkit-route
 | Attempts per task | 2 (the first try plus one corrected brief) |
 | Delegation depth | 1 (personas never delegate) |
 | No progress | Stop a task when an attempt produces no new change and no new evidence, or repeats the same failure |
-| Blocked tasks | Stop the run when a blocked task has dependents in later phases |
+| Blocked tasks | Mark blocked, skip its dependents in any phase, continue independent work (step 7) |
 
 The constitution or the caller may set other limits; theirs win. Never allow open-ended retry or
 self-delegation loops.

@@ -134,7 +134,9 @@ export const applySync = (sync, { projectDir, previousManifest = null, migrateCl
   if (sync.config.codex?.ok && sync.config.codex.changed) touched.push(CONFIG_FILES.codex);
   if (sync.unconfig.claude) touched.push(CONFIG_FILES.claude);
   if (sync.unconfig.codex) touched.push(CONFIG_FILES.codex);
-  const needsBackup = touched.some((rel) => exists(resolveInside(projectDir, rel))) && (previousManifest || sync.claude.action === "migrate" || sync.agentsBefore !== null);
+  // A forced overwrite of a user's file is always backed up, even on a first init (no manifest, no AGENTS.md).
+  const forcedOverwrite = plan.actions.some((a) => String(a.reason ?? "").startsWith("forced"));
+  const needsBackup = touched.some((rel) => exists(resolveInside(projectDir, rel))) && (previousManifest || sync.claude.action === "migrate" || sync.agentsBefore !== null || forcedOverwrite);
   const backupDir = backup && needsBackup
     ? createBackup({ projectDir, files: touched, runId, reason: previousManifest ? "update" : "init", version: sync.version, manifestFiles: previousManifest ? Object.keys(previousManifest.files) : [] })
     : null;

@@ -22,8 +22,8 @@ Read ONLY the references relevant to the request. Check the content map and open
 
 ## Core Principle
 
-- ASK the user for database preferences when unclear and the choice changes the architecture
-  (shared question protocol: one question, recommended option first)
+- When the database preference is unclear and the choice changes the architecture, follow the
+  shared question protocol; as a subagent, return the question to the caller
 - Choose database/ORM based on CONTEXT (check `.redevkit/memory/tech.md` first)
 - Don't default to PostgreSQL for everything
 
@@ -31,7 +31,7 @@ Read ONLY the references relevant to the request. Check the content map and open
 
 Before designing a schema:
 
-- [ ] Asked about database preference (or found it in memory)?
+- [ ] Database preference found in memory or the plan, or resolved via the question protocol?
 - [ ] Chosen the database for THIS context?
 - [ ] Considered the deployment environment?
 - [ ] Planned the index strategy?
@@ -54,7 +54,7 @@ Before designing a schema:
 | --- | --- |
 | `schema_validator.py` | Prisma schema checks: syntax, missing relations, index recommendations, naming |
 
-Run `.redevkit/audits/schema_validator.py <project_path>` with the Python interpreter detected
+In the test and verify commands (not during implementation), run `.redevkit/audits/schema_validator.py <project_path>` with the Python interpreter detected
 per `.redevkit/audits/README.md`. If no Python is available, the audit is
 `SKIPPED (no Python)`: say so and fall back to the project's own commands (for example
 `npx prisma validate`, `npx drizzle-kit check`, the migration dry run, the test suite). Never

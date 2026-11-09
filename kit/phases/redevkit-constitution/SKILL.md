@@ -91,10 +91,11 @@ Overwrite `.redevkit/memory/constitution.md` only after approval.
 
 ### 9. Sync Impact Report (T8)
 
-Append it to `.redevkit/memory/changelog.md`, in the Constitution amendments section (`##
-Constitution amendments` or
-`## Emendas da constituição`, whichever the file uses; create it if missing). It is a
-permanent record, never an HTML comment in the constitution:
+This section is the only definition of the report format; templates point here. Add it to
+`.redevkit/memory/changelog.md` at the top of the Constitution amendments section (newest
+first; `## Constitution amendments` or `## Emendas da constituição`, whichever the file uses;
+create it if missing), with the labels in {{LANG}}. It is a permanent record, never an HTML
+comment in the constitution:
 
 ```markdown
 ### v1.1.0 - 2026-11-12 (MINOR)

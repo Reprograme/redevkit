@@ -32,13 +32,17 @@ If `tasks.md` is missing (or both `plan.md` and `spec.md` are), stop and point t
 
 ## Steps
 
-### 1. Checklist gate (read-only)
+### 1. Checklists (read-only)
 
-If `checklists/` exists, count `[ ]` and `[x]` per file and show a table (checklist, total,
-checked, unchecked, status). Never change checklist markers. If any item is unchecked, ask
-whether to proceed (Recommended: proceed when only domain checklists have open items and
-they are not security items; otherwise stop and fix the spec). In `--auto`, proceed and
-record the open items as an assumption.
+Never change checklist markers.
+
+- **`checklists/requirements.md`** (spec quality): count `[ ]` and `[x]`. If any item is
+  unchecked, ask whether to proceed or stop and fix the spec (Recommended). In `--auto`,
+  proceed and record the open items as an assumption.
+- **Domain checklists** (`checklists/<domain>.md`) are informational. If any has open
+  items, show ONE warning at the start listing them per file (checklist, open count, item
+  IDs), then continue: do not stop and do not ask. The verify command lists them under Not
+  verified.
 
 {{ASK}}
 
@@ -57,7 +61,8 @@ and the linter or formatter ignore settings that exist. Append missing essential
 
 ### 4. Execute phase by phase
 
-Finish a phase before starting the next. Within a phase:
+Finish a phase before starting the next (blocked tasks and their dependents aside, step 7).
+Within a phase:
 
 - Delegate each task to its `@persona` through `{{SKILL:redevkit-orchestrate}}`. Pass the
   task line, the spec and plan excerpts it needs, the files it touches and its VERIFY
@@ -76,7 +81,8 @@ When TDD is required:
    evidence. A test that already passes does not test the new behavior: fix the test
    before continuing.
 3. Run the implementation tasks.
-4. Run the story's tests until they **pass**. Keep the command and the result.
+4. Run the story's tests and confirm they **pass**. Keep the command and the result. A
+   failure follows the retry and blocked-task rules in step 7.
 
 ### 6. Mark progress
 
@@ -85,9 +91,11 @@ Change `- [ ]` to `- [X]` for a task only after its VERIFY criterion was observe
 
 ### 7. Failures
 
-A failing sequential task stops the phase: report the error with context and the suggested
-next step. For `[P]` tasks, finish the others and report the failed ones. A detected
-violation of a constitution MUST principle is gate G3: stop and report. Destructive or
+Retries and blocked tasks follow `{{SKILL:redevkit-orchestrate}}`: at most 2 attempts per
+task (the first try plus one corrected brief); then the task stays `[ ]` and is recorded as
+blocked with its evidence, the tasks that depend on it are skipped, and independent work
+continues. Report every blocked task with the error, context and suggested next step. A
+detected violation of a constitution MUST principle is gate G3: stop and report. Destructive or
 irreversible actions (deleting data, rewriting history, dropping tables) are gate G4: ask
 the user first. Never commit.
 

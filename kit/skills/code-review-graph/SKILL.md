@@ -35,11 +35,14 @@ available before relying on it:
 1. Check if the tool is installed: `Get-Command code-review-graph` (Windows) or
    `command -v code-review-graph` (macOS/Linux).
 2. Check if a `.code-review-graph/` directory exists in the workspace.
-3. If installed but the index is missing, ask the user before running
+3. If installed but the index is missing, get the user's confirmation before running
    `code-review-graph build` (it scans the whole project).
-4. If not installed and the project is large, ask the user whether to install it
-   (`pipx install code-review-graph`) and build a local map. Installing packages is the
+4. If not installed and the project is large, propose installing it
+   (`pipx install code-review-graph`) and building a local map. Installing packages is the
    user's call: never install or build without confirmation.
+
+For steps 3–4 follow the shared question protocol; as a subagent, return the question to the
+caller instead of asking the user.
 5. If the user declines, or Python/pip is unavailable, continue without the graph and say so.
 
 ## When to Use vs When to Skip

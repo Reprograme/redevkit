@@ -53,15 +53,22 @@ recommendation and record it as an assumption, except at gates.
 
 ### 1. Choose the mode
 
-- `--idea` → assess. No active feature → assess. Active feature → clarify.
+- `--idea` → assess. No active feature → assess. Active feature → clarify, unless the input
+  answers a pending `needs-clarification` assessment (2a step 1) → assess.
 - If a feature is active but the input clearly describes a different idea, ask: assess the new
   idea (Recommended when no term of the active spec appears in the input) or clarify the
   active feature.
 
 ### 2a. Assess mode
 
-1. **Slug.** Lowercase ASCII, words joined by `-`, at most 40 characters. If
-   `.redevkit/assessments/<slug>/` exists, append `-2`, `-3`, … Never overwrite.
+1. **Resume or new slug.** Look in `.redevkit/assessments/` for a pending assessment: a
+   `decision.md` whose current verdict is `needs-clarification`. If one exists and the input
+   does not clearly describe a different idea, resume it: keep its slug (several pending: ask
+   which, the most recent one recommended), write the answers in place into the artifact of
+   the stage to revisit named in `decision.md`, run the stages from that one onward (editing
+   existing artifacts in place, never from scratch), then decide again; the decide phase
+   appends a revision. Never create a `-2` folder for a resumed idea. Otherwise create a new
+   slug per the slug rule in `{{SKILL:redevkit-assess-intake}}`.
 2. Run the phases in order, each writing its file in `.redevkit/assessments/<slug>/`:
 
    | Phase | Skill | Artifact |

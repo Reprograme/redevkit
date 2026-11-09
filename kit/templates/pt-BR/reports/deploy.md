@@ -21,22 +21,22 @@ failed, rolled-back, aborted, clean, dirty.
 
 | Verificação | Referência (do relatório) | Atual | Resultado |
 | --- | --- | --- | --- |
-| Execução de referência | [test-report.md ou verification.md, execução AAAA-MM-DD HH:MM] | — | — |
-| Veredito da referência | [PASS ou converged+verified] | — | OK / BLOCKED |
+| Debug pendente | [não / sim: slug do bug, AAAA-MM-DD HH:MM] | — | OK / BLOCKED |
+| Execução de referência | [test-report.md, execução AAAA-MM-DD HH:MM, executada por redevkit-test / redevkit-verify (passo 1)] | — | — |
+| Veredito da referência | [PASS] | — | OK / BLOCKED |
 | Commit (HEAD) | `[SHA]` | `[SHA]` | OK / BLOCKED |
 | Árvore de trabalho | [clean / dirty] | [clean / dirty] | OK / BLOCKED |
 | Impressão digital do status | `[HASH]` | `[HASH]` | OK / BLOCKED |
 | Impressão digital do diff | `[HASH]` | `[HASH]` | OK / BLOCKED |
-| Verify após debug | [obrigatório: sim / não] | [execução AAAA-MM-DD HH:MM, ou nenhuma] | OK / BLOCKED |
 
 - **Status das pré-condições**: OK / BLOCKED / OVERRIDDEN
-- **Verify sugerido**: [sim, não executado / executado em AAAA-MM-DD / não necessário]
+- **Verify sugerido**: [não necessário (há um verify converged+verified mais novo que a referência) / sugerido, o usuário escolheu: verify antes ou deploy agora / um verify mais novo é gaps ou failed, o usuário escolheu: corrigir antes ou fazer o deploy assim mesmo]
 - **Motivo do override**: [obrigatório quando OVERRIDDEN, nas palavras do usuário; senão, nenhum]
 
 <!--
-BLOCKED quando a execução de referência não está verde ou quando o código mudou depois dela
-(HEAD, estado da árvore ou impressões digitais diferentes). Nesse caso, rode o redevkit-test
-de novo antes do deploy.
+Execução de referência e comparação: redevkit-test/references/code-state.md § Compare (a
+definição única). BLOCKED quando há debug pendente, quando não há referência, quando a última
+execução de testes não é PASS ou quando o código mudou depois dela.
 -->
 
 ## Plano de deploy

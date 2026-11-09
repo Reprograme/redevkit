@@ -10,8 +10,8 @@ conflicts across the active feature's artifacts before implementation. Called by
 `{{CMD:redevkit-plan}}` after `redevkit-tasks`.
 
 **Strictly read-only.** Do not modify any file. The output is a report returned to the
-caller, which fixes CRITICAL findings and runs this phase again. Write the report in the
-user's language.
+caller, which fixes CRITICAL findings and runs this phase again (round limit in "Next
+actions for the caller"). Write the report in the user's language.
 
 ## Input (from the calling command)
 
@@ -28,8 +28,8 @@ that produces it, and stop.
 
 `.redevkit/memory/constitution.md` is non-negotiable here. A conflict with a MUST principle
 is always CRITICAL and is fixed in the spec, plan or tasks, never by weakening the principle.
-Changing a principle is a separate amendment through `redevkit-constitution` (gate G1); the
-caller decides whether to stop at gate G3.
+Changing a principle is a separate amendment through `redevkit-constitution` (gate G1); a
+conflict the caller cannot fix in the artifacts stops at gate G3.
 
 ## Steps
 
@@ -100,7 +100,8 @@ Finding IDs use the pass letter plus a number (A1, D2, G3).
 ## Next actions for the caller
 
 - CRITICAL findings: list each with the concrete fix (which file, which section). The caller
-  applies the fixes and runs this phase again; after two runs with CRITICAL findings still
-  open, the caller stops and asks the user.
+  applies the fixes and runs this phase again: **at most 3 analyze rounds** per plan run.
+  If CRITICAL findings remain after round 3, the caller stops and asks the user; a
+  remaining constitution finding stops at gate G3 instead.
 - Only MEDIUM or LOW: the plan may proceed; list improvement suggestions.
 - Zero findings: report success with the coverage metrics.

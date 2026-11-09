@@ -63,14 +63,16 @@ Search `specs/` for the feature the change belongs to (spec titles, user stories
   `## Phase N: Enhancement YYYY-MM-DD`, following the rules of `{{SKILL:redevkit-tasks}}`
   (grammar, TDD first, `@persona` from `{{SKILL:redevkit-route}}`, numbering continues).
   Completed tasks are never rewritten. In `pt-BR` artifacts the headings are
-  `## Melhorias` › `### AAAA-MM-DD — <título>` and `## Fase N: Melhoria AAAA-MM-DD`.
-- **No feature (D55):** create a lightweight spec. Follow `{{SKILL:redevkit-specify}}` for
-  the next `NNN` and the template, but keep only what the change needs (summary, the change's
-  user story, acceptance scenarios, requirements delta, assumptions) and skip the
-  requirements-checklist loop. Tasks follow `{{SKILL:redevkit-tasks}}` for the change only.
+  `## Melhorias` › `### AAAA-MM-DD — <título>` and `## Fase N: Melhoria AAAA-MM-DD`. If that
+  feature is not the active one, make it active in `active.md` (`- Feature:`, which also
+  starts a new Correction cycle line per `{{CMD:redevkit-verify}}` step 6).
+- **No feature (D55):** create a lightweight spec with the light mode of
+  `{{SKILL:redevkit-specify}}` (next `NNN`, template, only what the change needs: summary, the
+  change's user story, acceptance scenarios, requirements delta, assumptions). Tasks follow `{{SKILL:redevkit-tasks}}` for the change only.
   No `plan.md` is written: the technical context comes from `tech.md` and `system.md`, and
   `{{SKILL:redevkit-implement}}` accepts a lightweight spec with `spec.md` + `tasks.md`.
-  Record it as the active feature in `active.md` (`- Feature: specs/NNN-short-name`).
+  Record it as the active feature in `active.md` (`- Feature: specs/NNN-short-name`,
+  `- Plan approved: no` until step 4).
 
 ### 3. Big-change check
 
@@ -91,7 +93,9 @@ continuing as an enhancement.
 Check the delta against the constitution (violation → G3). Present: affected and new files,
 the tasks to append, risks and scope. Ask for approval (approve (Recommended) or request
 changes). In `--auto`, the approval is adopted and recorded as an assumption. Then write the
-delta and the tasks to the files.
+delta and the tasks to the files, and set `active.md` › `- Plan approved: YYYY-MM-DD` (this
+approval of the change plan stands in for G2, for an existing feature and for a lightweight
+spec).
 
 ### 5. Implement
 
@@ -103,7 +107,7 @@ criterion was observed. Destructive or irreversible actions need confirmation (G
 ### 6. Light verification (D25)
 
 On the changed files, with evidence: build or type check, the touched and new tests, lint.
-Fix failures caused by this change; report the rest under Known problems.
+Fix failures caused by this change; record the rest in `active.md` › Known issues.
 
 ## Gates that apply
 
@@ -120,8 +124,8 @@ Fix failures caused by this change; report the rest under Known problems.
 
 ## Memory phase 3
 
-Save per `{{SKILL:redevkit-memanager}}`: `active.md` (active feature, progress, known
-problems, next steps), `changelog.md` (Unreleased › Changed or Added), `tech.md` and
+Save per `{{SKILL:redevkit-memanager}}`: `active.md` (active feature, progress, Known
+issues, next steps), `changelog.md` (Unreleased › Changed or Added), `tech.md` and
 `system.md` when dependencies or patterns changed (invariants only after confirmation),
 `project.md` when the visible scope changed, `MEMORY.md`. Print `💾 Memory updated (files).`
 

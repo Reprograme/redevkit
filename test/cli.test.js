@@ -21,6 +21,26 @@ test("init without TTY and without --yes fails and writes nothing (C4)", () => {
   }
 });
 
+test("first init --force backs up the user file it overwrites (no manifest, no AGENTS.md)", () => {
+  const dir = tmpProject();
+  try {
+    const mine = ["---", "name: redevkit-plan", "description: my own skill", "---", "", "mine", ""].join("\n");
+    write(dir, ".agents/skills/redevkit-plan/SKILL.md", mine);
+    const r = cli(["init", "--yes", "--target", "codex", "--lang", "pt-BR", "--force"], dir);
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    assert.notEqual(read(dir, ".agents/skills/redevkit-plan/SKILL.md"), mine, "the forced file is overwritten");
+    const root = path.join(dir, ".redevkit", "backups");
+    assert.ok(fs.existsSync(root), "a backup directory exists");
+    const saved = fs.readdirSync(root).some((id) => {
+      const p = path.join(root, id, ".agents", "skills", "redevkit-plan", "SKILL.md");
+      return fs.existsSync(p) && fs.readFileSync(p, "utf8") === mine;
+    });
+    assert.ok(saved, "the user's version is in the backup");
+  } finally {
+    rm(dir);
+  }
+});
+
 test("init in a path with spaces and accents; a second init changes nothing", () => {
   const dir = tmpProject("meu projeto ção");
   try {

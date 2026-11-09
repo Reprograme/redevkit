@@ -22,11 +22,8 @@ description: Technical and content SEO - E-E-A-T, Core Web Vitals, meta tags, sc
 
 ## 2. Core Web Vitals
 
-| Metric | Target | Measures |
-|--------|--------|----------|
-| **LCP** | < 2.5s | Loading performance |
-| **INP** | < 200ms | Interactivity |
-| **CLS** | < 0.1 | Visual stability |
+Targets and tools: `{{SKILL:performance-profiling}}` §2 (the single copy). For SEO they are a
+page-experience ranking signal; measure field data where available.
 
 ---
 
@@ -127,7 +124,7 @@ description: Technical and content SEO - E-E-A-T, Core Web Vitals, meta tags, sc
 
 ## 9. Automated Audit
 
-Run `.redevkit/audits/seo_checker.py <project_path>` with the Python interpreter detected per
+In the test and verify commands (not during implementation), run `.redevkit/audits/seo_checker.py <project_path>` with the Python interpreter detected per
 `.redevkit/audits/README.md`. It checks public pages (HTML, JSX/TSX page components) for
 titles, meta descriptions, Open Graph tags, heading hierarchy and image `alt` attributes.
 

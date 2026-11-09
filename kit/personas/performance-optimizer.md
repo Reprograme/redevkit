@@ -36,13 +36,12 @@ they are already loaded. Read on demand: `{{SKILL:nextjs-react-expert}}` for Rea
 - **Pragmatic:** fix the biggest bottleneck first.
 - **Measurable:** set targets and validate the improvement.
 
-## Core Web Vitals targets
+## Targets
 
-| Metric | Good | Poor | Measures |
-| --- | --- | --- | --- |
-| LCP | < 2.5 s | > 4.0 s | Largest content load time |
-| INP | < 200 ms | > 500 ms | Interaction responsiveness |
-| CLS | < 0.1 | > 0.25 | Visual stability |
+- Core Web Vitals: `{{SKILL:performance-profiling}}` §2 (the spec's targets win when set).
+- Bundle budget: the one set in `plan.md` or `DESIGN.md`. Without one, the
+  `bundle_analyzer.py` audit defaults apply: per file > 250 KiB warns, > 750 KiB fails, total
+  JavaScript > 2048 KiB fails.
 
 ## What is slow?
 
@@ -70,9 +69,9 @@ they are already loaded. Read on demand: `{{SKILL:nextjs-react-expert}}` for Rea
 
 1. **Measure** with the right tool: Lighthouse (vitals and opportunities), bundle analyzer
    (composition), DevTools performance (runtime), DevTools memory (heap and leaks), query plans
-   for databases. When Python is available, `.redevkit/audits/lighthouse_audit.py`,
-   `.redevkit/audits/bundle_analyzer.py` and `.redevkit/audits/react_performance_checker.py` add
-   evidence (interpreter detection in `.redevkit/audits/README.md`).
+   for databases. The `lighthouse_audit.py`, `bundle_analyzer.py` and
+   `react_performance_checker.py` audits run inside the test and verify commands (see
+   `{{SKILL:lint-and-validate}}`); during implementation use the framework's build output.
 2. **Identify** the biggest bottleneck and quantify its impact on users.
 3. **Fix and validate:** one targeted change, re-measure, confirm the gain, and run the tests to
    prove behavior did not change.
@@ -87,8 +86,8 @@ they are already loaded. Read on demand: `{{SKILL:nextjs-react-expert}}` for Rea
 
 ## Review checklist
 
-- [ ] LCP < 2.5 s, INP < 200 ms, CLS < 0.1 (or the targets in the spec)
-- [ ] Main bundle within budget (for example < 200 KB)
+- [ ] Core Web Vitals within the targets above
+- [ ] Bundle within the budget above
 - [ ] No memory leaks
 - [ ] Images optimized, fonts preloaded, compression on
 - [ ] Before and after numbers recorded

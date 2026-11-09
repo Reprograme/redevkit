@@ -88,9 +88,8 @@ Find the root cause, not just the symptom.
 1. **RED:** write a regression test that reproduces the bug. Run it and watch it fail for the
    reason found in Phase 3 (see `{{SKILL:tdd-workflow}}`).
 2. **GREEN:** make the smallest change that fixes the root cause.
-3. Run the regression test, then the full suite (project test command from
-   `.redevkit/memory/tech.md`, or `.redevkit/audits/test_runner.py` per
-   `{{SKILL:testing-patterns}}`).
+3. Run the regression test, then the full suite as `{{CMD:redevkit-test}}` step 3 says
+   (`test_runner.py` audit when Python is found, otherwise the `tech.md` test command).
 4. Search for the same pattern elsewhere in the code.
 5. Record the verdict: `verified` (bug gone, suite green), `partial` (bug gone, other failures
    remain) or `failed`.
@@ -104,8 +103,8 @@ Find the root cause, not just the symptom.
 - [ ] Root cause documented
 ```
 
-After a fix, `{{CMD:redevkit-verify}}` is mandatory. If verification fails twice in a row after
-debugging, stop and hand the decision to the user (gate G5).
+After a fix, `{{CMD:redevkit-verify}}` is mandatory: it runs the tests again on the fixed code.
+Its correction cycle stops for the user at gate G5 (rules in `{{CMD:redevkit-verify}}` step 6).
 
 ## Investigation Checklist
 

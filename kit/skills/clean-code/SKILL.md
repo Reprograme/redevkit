@@ -61,9 +61,9 @@ description: Pragmatic coding standards - clear names, small functions, no over-
 
 | Situation | Action |
 |-----------|--------|
-| User asks for feature | Write it directly |
-| User reports bug | Fix it, don't explain |
-| No clear requirement | Ask, don't assume |
+| User asks for feature | Small, direct edit → write it; anything bigger → `{{CMD:redevkit-plan}}` then `{{CMD:redevkit-create}}` |
+| User reports bug | Follow `{{SKILL:systematic-debugging}}`: reproduce, failing regression test first, then fix |
+| No clear requirement | Don't assume: shared question protocol (as a subagent, return the question to the caller) |
 
 ---
 
@@ -101,8 +101,9 @@ File to edit: UserService.ts
 └── Do they need changes too? → Check function signatures
 ```
 
-> 🔴 **Rule:** Edit the file + all dependent files in the SAME task.
-> 🔴 **Never leave broken imports or missing updates.**
+> 🔴 **Rule:** Update the dependent files that fall inside your brief in the same task;
+> report the ones outside it as findings for the caller.
+> 🔴 **Never leave broken imports or missing updates unreported.**
 
 ---
 
@@ -112,7 +113,7 @@ File to edit: UserService.ts
 |----|-------|
 | Write code directly | Write tutorials |
 | Let code self-document | Add obvious comments |
-| Fix bugs immediately | Explain the fix first |
+| Reproduce bugs with a failing test, then fix | Patch symptoms without a regression test |
 | Inline small things | Create unnecessary files |
 | Name things clearly | Use abbreviations |
 | Keep functions small | Write 100+ line functions |
@@ -139,11 +140,11 @@ File to edit: UserService.ts
 
 ## Verification and Audits
 
-This skill runs no scripts. Python audits (lint, types, UX, accessibility, API, schema,
-security, SEO/GEO, i18n, tests) run only inside `{{CMD:redevkit-test}}` and
-`{{CMD:redevkit-verify}}`, which pick the audits for the project type, handle a missing Python
-(`SKIPPED (no Python)`) and own the fix policy.
+This skill runs no scripts. One rule covers tests and audits: the full suite runs as
+`{{CMD:redevkit-test}}` step 3 says (test runner audit when Python is found, otherwise the
+`tech.md` test command), and the audits (`.redevkit/audits/*.py`) run inside
+`{{CMD:redevkit-test}}` and `{{CMD:redevkit-verify}}`.
 
-While writing code, the self-check above is enough: run the project's own build, tests and
-linter for the files you touched, and report the commands with their observed results. A
-check you did not run is not a pass.
+While writing code (light verification), run the project's own build, type-check, linter and
+the tests you touched, not the audit scripts, and report the commands with their observed
+results. A check you did not run is not a pass.
