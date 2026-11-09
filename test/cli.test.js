@@ -228,6 +228,47 @@ test("doctor: detects duplicate NNN, missing memory files and secrets; exit code
   }
 });
 
+test("doctor: memory size limits (files 256 warn, changelog 512 warn, MEMORY.md 256 error, archive/ ignored)", () => {
+  const dir = tmpProject();
+  try {
+    assert.equal(init(dir).status, 0);
+    const fm = (type) => `---\ntype: ${type}\ncreated: 2026-11-08\nupdated: 2026-11-08\n---\n`;
+    const body = (n) => Array.from({ length: n }, (_, i) => `- line ${i + 1}`).join("\n") + "\n";
+    const core = { "constitution.md": "constitution", "project.md": "project", "system.md": "system", "tech.md": "tech", "active.md": "active", "user.md": "user" };
+    for (const [f, type] of Object.entries(core)) write(dir, `.redevkit/memory/${f}`, fm(type) + (f === "system.md" ? "## Invariantes\n" : ""));
+    const doctorMsgs = () => {
+      const r = cli(["doctor", "--json"], dir);
+      return { status: r.status, issues: JSON.parse(r.stdout).issues };
+    };
+
+    // At the limits: no size issue (frontmatter lines count too).
+    write(dir, ".redevkit/memory/MEMORY.md", fm("index") + body(256 - 5));
+    write(dir, ".redevkit/memory/changelog.md", fm("changelog") + body(512 - 5));
+    write(dir, ".redevkit/memory/topics/a.md", fm("project") + body(256 - 5));
+    write(dir, ".redevkit/memory/archive/changelog-2026-10.md", body(2000));
+    let { issues } = doctorMsgs();
+    assert.deepEqual(issues.filter((i) => /lines/.test(i.message)), [], "nothing over the limits yet");
+
+    // One line over each limit.
+    write(dir, ".redevkit/memory/MEMORY.md", fm("index") + body(256 - 4));
+    write(dir, ".redevkit/memory/changelog.md", fm("changelog") + body(512 - 4));
+    write(dir, ".redevkit/memory/topics/a.md", fm("project") + body(256 - 4));
+    const r = doctorMsgs();
+    issues = r.issues;
+    const find = (file) => issues.find((i) => i.file === `.redevkit/memory/${file}` && /lines/.test(i.message));
+    assert.equal(find("MEMORY.md")?.level, "error");
+    assert.match(find("MEMORY.md").message, /257 lines \(max 256\)/);
+    assert.equal(find("changelog.md")?.level, "warn");
+    assert.match(find("changelog.md").message, /513 lines \(over 512\).*archive\/changelog-YYYY-MM\.md/);
+    assert.equal(find("topics/a.md")?.level, "warn");
+    assert.match(find("topics/a.md").message, /257 lines \(over 256\)/);
+    assert.equal(find("archive/changelog-2026-10.md"), undefined, "archive/ is never size-checked");
+    assert.equal(r.status, 1, "the MEMORY.md error makes the doctor fail");
+  } finally {
+    rm(dir);
+  }
+});
+
 test("bin guard works through a path with spaces (H1) and when imported", async () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "redevkit bin "));
   try {

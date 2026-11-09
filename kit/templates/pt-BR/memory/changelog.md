@@ -7,7 +7,8 @@ updated: "YYYY-MM-DD"
 # Changelog
 
 Formato: [Keep a Changelog](https://keepachangelog.com/). Este arquivo espelha a versão que o
-projeto declara e é isento da poda.
+projeto declara. Ele nunca é consolidado; acima de 512 linhas, as entradas mais antigas vão
+para `archive/changelog-AAAA-MM.md`, listadas aqui em linhas `Archived: …`.
 
 ## [Não versionado]
 

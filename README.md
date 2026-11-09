@@ -168,6 +168,12 @@ comando que modifica algo; emendas da constituição, invariantes e qualquer exc
 memória nativa de cada agente continua ligada e serve como camada pessoal; em conflito, vale
 `.redevkit/memory/`. Segredos nunca são gravados.
 
+A memória tem limites de tamanho, mantidos pelo agente a cada gravação: o `MEMORY.md` tem no
+máximo 256 linhas; os outros arquivos são consolidados acima de 256 linhas, sem perder
+conteúdo; o `changelog.md` vai até 512 linhas, e as entradas mais antigas passam para
+`.redevkit/memory/archive/changelog-AAAA-MM.md`. O `redevkit doctor` dá erro quando o
+`MEMORY.md` passa de 256 linhas e avisa quando outro arquivo passa do seu limite.
+
 ## Confiança no projeto
 
 - **Claude Code:** as permissões que a CLI grava em `.claude/settings.json`

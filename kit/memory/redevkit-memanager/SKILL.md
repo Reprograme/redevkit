@@ -32,16 +32,17 @@ language `{{LANG}}`; answer the user in the user's language.
 
 | File | `type` | Sections |
 | --- | --- | --- |
-| `MEMORY.md` | `index` | Index, at most 200 lines: Core (fixed list, one status line per core file), User, Feedback, Project, Reference |
+| `MEMORY.md` | `index` | Index, at most 256 lines: Core (fixed list, one status line per core file), User, Feedback, Project, Reference |
 | `constitution.md` | `constitution` | MUST and SHOULD principles (Test-First by default), governance, semver version line, ratification, amendments. Owned by `{{SKILL:redevkit-constitution}}` |
 | `project.md` | `project` | Scope · Core objective · Success criteria · Out of scope (current negative decisions) · Problem · Audience · What "working well" looks like · Expected experience · Domain |
 | `system.md` | `system` | Overall architecture · Design decisions · **Invariants** (never pruned) · Patterns in use · Code conventions · Component relationships |
 | `tech.md` | `tech` | Stack · Dependencies · Dev environment (build, test and dev commands, preview port) · Technical constraints |
 | `active.md` | `active` | **Active feature** (`specs/NNN-name`, phase) · Where we are · Recent events · What works · What's left · Next steps · Known issues · Last results (test, verify, debug, correction cycle) · Workflow preferences (branch per feature: `always`, `never` or `ask`) |
-| `changelog.md` | `changelog` | Keep a Changelog (Unreleased + versions) · Consolidated history · Architecture decisions (short ADR) · Constitution amendments (Sync Impact Report) |
+| `changelog.md` | `changelog` | Keep a Changelog (Unreleased + versions) · Consolidated history · Architecture decisions (short ADR) · Constitution amendments (Sync Impact Report). At most 512 lines: older entries rotate to `archive/` |
 | `user.md` | `user` | Environment and tools · Communication style · Recorded feedback |
 | `topics/<topic>.md` | `user`, `feedback`, `project` or `reference` | Free topics |
 | `archive/<origin>-<YYYY-MM-DD>/` | none | Legacy originals, kept verbatim |
+| `archive/changelog-<YYYY-MM>.md` | none | Entries rotated out of `changelog.md` (see Prune) |
 
 Section headings come from the templates in the project language (for example `## Invariants`
 in `en`, `## Invariantes` in `pt-BR`). Never rename or delete a template section.
@@ -72,7 +73,7 @@ updated: 2026-11-06
   never add or remove Core lines.
 - **User, Feedback, Project, Reference:** one line per fact or group of facts, in the section
   of its type. Entries are pointers; details live in the target file.
-- At most 200 lines. Every target must exist.
+- At most 256 lines. Every target must exist.
 
 ## Asking the user
 
@@ -99,7 +100,8 @@ as proposals in `active.md` › Next steps and list them in the report. G7 alway
   content is a deletion.
 - An explicit user request to save, change or remove a specific fact is the confirmation for
   that fact. For an invariant, restate the exact rule before writing it. Constitution changes
-  always go through `{{SKILL:redevkit-constitution}}`.
+  always go through `{{SKILL:redevkit-constitution}}`, an internal phase: to the user, suggest
+  `{{CMD:redevkit-new}}` (option "Amend the constitution"), never the phase itself.
 
 Canonical lines, rendered in the user's language:
 
@@ -227,8 +229,9 @@ Runs on every write (files written) and on every sync (all files).
 | Condition | Action |
 | --- | --- |
 | File over 100 lines with 3 or more sections | Add a section index (its `##` headings) right under the title; update it with the sections; remove it when the file drops below 100 lines |
-| File over 256 lines | Consolidate, as below. `changelog.md` is exempt |
-| `MEMORY.md` near 200 lines | Merge related entries and move detail into topic files |
+| File over 256 lines (except `MEMORY.md`, `changelog.md` and `archive/`) | Consolidate, as below |
+| `MEMORY.md` near 256 lines | Merge related entries and move detail into topic files |
+| `changelog.md` over 512 lines | Rotate, as below. It is never consolidated |
 
 Consolidation per file (automatic, nothing is lost):
 
@@ -237,6 +240,22 @@ Consolidation per file (automatic, nothing is lost):
 - `system.md`, `tech.md`: patterns and dependencies that no longer bind the code move to
   `changelog.md` › Architecture decisions.
 - `project.md`, `user.md`, topics: rewrite more concisely and merge duplicates.
+
+Rotation of `changelog.md` (automatic, nothing is lost):
+
+1. Target: `archive/changelog-YYYY-MM.md`, with the year and month of the rotation. If that
+   file exists, append to it; never rewrite what it already holds. Archive files have no
+   frontmatter.
+2. Move whole entries, oldest first by date, until `changelog.md` has at most 512 lines:
+   released versions (`## [X.Y.Z] - date` with their subsections), Consolidated history
+   items, Architecture decisions and Constitution amendments. Never split an entry. Never
+   move Unreleased, the most recent version or the most recent constitution amendment.
+3. In the archive file, start a block `## Rotated on YYYY-MM-DD from changelog.md` and keep
+   each entry under the same section heading it had.
+4. Under the title of `changelog.md`, keep one line per archive file:
+   `Archived: archive/changelog-YYYY-MM.md — <what moved: versions, dates>`.
+5. If nothing movable is left and the file is still over 512 lines, stop and report it; the
+   doctor keeps warning.
 
 Never pruned: invariants and current negative decisions (for example "pagination dropped:
 lists are small by design"). Negative decisions live in `system.md` › Design decisions
@@ -259,7 +278,7 @@ Called by `{{CMD:redevkit-status}}`. Read-only, facts only:
 - From `active.md` › Last results, as written: Test (with Run by), Verify and Debug with
   their dates, the Correction cycle counters, and a pending G5 when one is recorded.
 - Pending markers, counted per file.
-- Index size (lines out of 200), files over 100 or 256 lines, and any
+- Index size (lines out of 256), files over 100 or 256 lines, `changelog.md` over 512, and any
   [doctor-contract](references/doctor-contract.md) problem seen.
 
 Write "unknown" for anything memory does not say. Never invent state.

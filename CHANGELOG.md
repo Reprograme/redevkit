@@ -24,6 +24,9 @@ Code and OpenAI Codex.
   `test-report.md` run when the code state is the same, otherwise it runs the test procedure
   and appends the run. A correction cycle in `active.md` (defined in `redevkit-verify` step 6)
   stops the debug → verify and gaps → create → verify loops at gate G5.
+- Memory size limits: `MEMORY.md` at most 256 lines (doctor error); other memory files
+  consolidated above 256 lines (doctor warning); `changelog.md` at most 512 lines, its oldest
+  entries rotated to `archive/changelog-YYYY-MM.md` (doctor warning above 512).
 - 18 internal phase skills (constitution, specify, clarify, tasks, analyze, checklist,
   implement, converge, orchestrate, route, bug and assess phases), hidden from the Claude
   Code menu and marked `[internal]` in Codex.

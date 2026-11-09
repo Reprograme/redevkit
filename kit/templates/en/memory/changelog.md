@@ -7,7 +7,8 @@ updated: "YYYY-MM-DD"
 # Changelog
 
 Format: [Keep a Changelog](https://keepachangelog.com/). This file mirrors the version the
-project declares and is exempt from pruning.
+project declares. It is never consolidated; above 512 lines its oldest entries rotate to
+`archive/changelog-YYYY-MM.md`, listed here as `Archived: …` lines.
 
 ## [Unreleased]
 

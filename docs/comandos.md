@@ -336,7 +336,7 @@ Skill de memória: chamada pelos comandos no início e no fim, e invocável por 
 | save | fim de comando; "lembre disso", "anote isso", "remember this" | Classifica o fato, grava no arquivo de destino e atualiza o índice |
 | sync | "atualize a memória", "update memory", "UMB" | Revisa todos os arquivos contra o repositório e reconcilia |
 | search | "o que sabemos sobre X?" | Busca em `.redevkit/memory/` (só leitura) |
-| prune | dentro de save e sync | Índice de seções acima de 100 linhas; consolidação acima de 256 (o `changelog.md` é isento) |
+| prune | dentro de save e sync | Índice de seções acima de 100 linhas; consolidação acima de 256; `MEMORY.md` até 256 linhas; o `changelog.md` não é consolidado: acima de 512 linhas, as entradas mais antigas vão para `archive/changelog-AAAA-MM.md` |
 | import | `redevkit-new` com memória legada | Importa conforme o mapa da [migração](migracao.md) |
 | report | chamada pelo `redevkit-status`; entrada vazia | Resumo factual da memória |
 

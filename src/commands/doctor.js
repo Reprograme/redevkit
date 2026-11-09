@@ -101,6 +101,12 @@ const CORE = { "MEMORY.md": "index", "constitution.md": "constitution", "project
 const TOPIC_TYPES = new Set(["user", "feedback", "project", "reference"]);
 const DATE = /^\d{4}-\d{2}-\d{2}/;
 
+/** Memory size limits, in lines (kit/memory/redevkit-memanager/SKILL.md › Prune). */
+export const MEMORY_LIMITS = { index: 256, file: 256, changelog: 512 };
+
+/** Lines of a text file; a final newline does not count as an extra line. */
+export const lineCount = (text) => (text === "" ? 0 : text.replace(/\r?\n$/, "").split(/\r?\n/).length);
+
 /** Memory checks (§9.9). Returns issues. */
 export const checkMemory = (projectDir, lang) => {
   const issues = [];
@@ -116,6 +122,13 @@ export const checkMemory = (projectDir, lang) => {
     const text = readText(path.join(memDir, ...rel.split("/")));
     for (const re of SECRET_PATTERNS) if (re.test(text)) add("error", rel, `possible secret (${re.source.slice(0, 24)}…)`);
     if (rel.startsWith("archive/")) continue;
+    // Size: archive/ grows by design; MEMORY.md has its own (error) limit below.
+    const n = lineCount(text);
+    if (rel === "changelog.md") {
+      if (n > MEMORY_LIMITS.changelog) add("warn", rel, `${n} lines (over ${MEMORY_LIMITS.changelog}): rotate the oldest entries to archive/changelog-YYYY-MM.md (prune)`);
+    } else if (rel !== "MEMORY.md" && n > MEMORY_LIMITS.file) {
+      add("warn", rel, `${n} lines (over ${MEMORY_LIMITS.file}): consolidate it (prune)`);
+    }
     const { data, hasFrontmatter, errors } = parseFrontmatter(text);
     if (!hasFrontmatter) {
       add("error", rel, "missing frontmatter (type, created, updated)");
@@ -132,8 +145,8 @@ export const checkMemory = (projectDir, lang) => {
   const indexPath = path.join(memDir, "MEMORY.md");
   if (exists(indexPath)) {
     const raw = readText(indexPath);
-    const lines = raw.split(/\r?\n/);
-    if (lines.length > 200) add("error", "MEMORY.md", `index has ${lines.length} lines (max 200)`);
+    const indexLines = lineCount(raw);
+    if (indexLines > MEMORY_LIMITS.index) add("error", "MEMORY.md", `index has ${indexLines} lines (max ${MEMORY_LIMITS.index})`);
     // Only real entries ("- [type] … → target"), never the format example inside HTML comments.
     for (const line of raw.replace(/<!--[\s\S]*?-->/g, "").split(/\r?\n/)) {
       if (!/^\s*-\s*\[[a-z]+\]/.test(line)) continue;

@@ -6,7 +6,7 @@ updated: "YYYY-MM-DD"
 
 # Memória do projeto
 
-<!-- Índice com no máximo 200 linhas. Entrada: - [tipo] resumo (até 150 caracteres) → arquivo.md
+<!-- Índice com no máximo 256 linhas. Entrada: - [tipo] resumo (até 150 caracteres) → arquivo.md
      As linhas do Núcleo são fixas: uma por arquivo central, reescrita no lugar para manter o
      status atual. As demais entradas vão na seção do seu tipo: user, feedback, project, reference. -->
 
