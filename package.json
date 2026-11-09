@@ -1,11 +1,18 @@
 {
   "name": "redevkit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Markdown-first kit for Claude Code and OpenAI Codex: spec-driven process (Spec Kit) + specialists, quality and memory (AG Kit).",
   "type": "module",
   "license": "MIT",
   "author": "Ricardo Candido <reprograme@cars.org.br>",
-  "keywords": ["claude-code", "codex", "agents", "skills", "spec-driven-development", "sdd"],
+  "keywords": [
+    "claude-code",
+    "codex",
+    "agents",
+    "skills",
+    "spec-driven-development",
+    "sdd"
+  ],
   "bin": {
     "redevkit": "bin/redevkit.js"
   },
