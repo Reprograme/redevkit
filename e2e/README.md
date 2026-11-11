@@ -1,6 +1,8 @@
-# E2E real (PLANO §15.2)
+# E2E com agentes reais
 
-Dois cenários × dois runtimes, com o `claude -p` e o `codex exec` de verdade. Cada passo do
+Dois cenários × dois runtimes, com o `claude -p` e o `codex exec` de verdade. Exige o
+Claude Code e o Codex CLI instalados e autenticados; cada run consome uso real das contas e
+levou de 15 a 63 minutos nas execuções registradas em [RESULTS.md](RESULTS.md). Cada passo do
 pipeline é uma invocação separada: o estado entre passos fica só nos arquivos do projeto
 (memória, `specs/`, relatórios), que é exatamente o que o REDEVKIT promete.
 

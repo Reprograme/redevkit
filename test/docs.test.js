@@ -1,6 +1,6 @@
 // Documentation consistency (PLANO §13.4 rows D2–D8, §14 F9).
 // - docs/metodo.md may only use spec-driven method terms that exist in kit/templates/.
-// - Every relative Markdown link in README.md and docs/*.md resolves to an existing file.
+// - Every relative Markdown link in the READMEs and docs/*.md resolves to an existing file.
 // - Command names and CLI options cited in the docs exist in the kit and in the CLI.
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -22,7 +22,8 @@ const listFiles = (dir) => {
   return out;
 };
 
-const DOCS = ["README.md", ...fs.readdirSync(path.join(ROOT, "docs")).filter((f) => f.endsWith(".md")).map((f) => `docs/${f}`)];
+const READMES = ["README.md", "README.pt-BR.md"];
+const DOCS = [...READMES, ...fs.readdirSync(path.join(ROOT, "docs")).filter((f) => f.endsWith(".md")).map((f) => `docs/${f}`)];
 
 // Terms the old Spec Kit method doc used without any support in its templates (D3, D4, D6).
 const METHOD_TERMS = [
@@ -68,7 +69,7 @@ test("docs/metodo.md covers the gates, the TDD line and the task grammar", () =>
   assert.ok(metodo.includes("- [ ] T012 [P] [US1] descrição — caminho — @persona — VERIFY: critério"), "task line grammar missing");
 });
 
-test("every relative Markdown link in README.md and docs/*.md resolves", () => {
+test("every relative Markdown link in the READMEs and docs/*.md resolves", () => {
   const broken = [];
   for (const rel of DOCS) {
     const text = stripCode(read(rel));
@@ -104,7 +105,7 @@ test("redevkit-* names cited in the docs exist in the kit", () => {
   assert.deepEqual(unknown, [], `unknown skill names:\n${unknown.join("\n")}`);
 });
 
-test("CLI commands and options in README.md exist in the CLI", () => {
+test("CLI commands and options in the READMEs exist in the CLI", () => {
   const program = buildProgram();
   const options = new Set();
   const commands = new Set();
@@ -122,9 +123,9 @@ test("CLI commands and options in README.md exist in the CLI", () => {
     const hint = /^argument-hint:\s*(.*)$/m.exec(skill)?.[1] ?? "";
     for (const m of hint.matchAll(/--[a-z][a-z-]*/g)) options.add(m[0]);
   }
-  const readme = read("README.md");
+  const readme = READMES.map(read).join("\n");
   const unknownOptions = [...new Set([...readme.matchAll(/(?<![\w-])--[a-z][a-z-]*/g)].map((m) => m[0]))].filter((o) => !options.has(o));
-  assert.deepEqual(unknownOptions, [], `README.md cites options the CLI and the commands do not have: ${unknownOptions.join(", ")}`);
+  assert.deepEqual(unknownOptions, [], `the READMEs cite options the CLI and the commands do not have: ${unknownOptions.join(", ")}`);
   const unknownCommands = [...readme.matchAll(/`redevkit ([a-z-]+)/g)].map((m) => m[1]).filter((c) => !commands.has(c));
-  assert.deepEqual(unknownCommands, [], `README.md cites CLI commands that do not exist: ${unknownCommands.join(", ")}`);
+  assert.deepEqual(unknownCommands, [], `the READMEs cite CLI commands that do not exist: ${unknownCommands.join(", ")}`);
 });

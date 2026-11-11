@@ -1,297 +1,383 @@
 # REDEVKIT
 
-Kit *Markdown-first* para **Claude Code** e **OpenAI Codex** que une dois projetos:
+**From idea to verified code: spec-driven development with specialist agents and shared project memory, for Claude Code and OpenAI Codex.**
 
-- do **Spec Kit**, o processo orientado a especificação e os artefatos rastreáveis
-  (spec → plan → tasks);
-- do **AG Kit**, as personas especialistas, as regras de qualidade, o gate de design, a
-  verificação por execução e a memória do projeto.
+[![npm version](https://img.shields.io/npm/v/redevkit)](https://www.npmjs.com/package/redevkit)
+[![CI](https://github.com/Reprograme/redevkit/actions/workflows/ci.yml/badge.svg)](https://github.com/Reprograme/redevkit/actions/workflows/ci.yml)
+[![Node.js >= 20](https://img.shields.io/badge/node-%3E%3D20-339933)](package.json)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-O valor está nas skills e nos prompts em Markdown. A CLI (`redevkit`) só instala: copia o
-kit, renderiza o mesmo conteúdo para cada agente, grava o bloco gerenciado do `AGENTS.md` e
-atualiza com merge em 3 vias. Serve tanto para projeto novo quanto para projeto existente.
+**English** · [Português (Brasil)](README.pt-BR.md)
 
-## O que você ganha
+REDEVKIT is a Markdown-first kit of skills, personas, templates and rules. It merges two
+open-source projects:
 
-- **11 comandos de pipeline** (`redevkit-*`), cada um terminando com um *handoff* para o
-  próximo passo.
-- **Fases internas** reutilizadas pelos comandos (constituição, specify, clarify, tasks,
-  analyze, checklist, implement, converge, roteamento, orquestração, bug, assess).
-- **19 personas**, instaladas como subagentes nativos: `.claude/agents/<persona>.md` no Claude
-  Code e `.codex/agents/<persona>.toml` no Codex.
-- **Skills de conhecimento** (frontend, backend, jogos, mobile, segurança, testes, deploy…)
-  acionadas por um roteador por domínio.
-- **Memória do projeto** em `.redevkit/memory/`, legível por qualquer agente.
-- **Constituição** do projeto com Test-First por padrão e emendas versionadas.
-- **Verificação por execução**: nenhum comando declara sucesso sem o comando executado e o
-  resultado observado.
-- **Auditorias Python opcionais** em `.redevkit/audits/`. Elas ignoram dependências, saída de
-  build, relatórios gerados e o que o `.gitignore` ignora; outros caminhos entram em
-  `.redevkit/audit-ignore` (veja o [README das auditorias](kit/audits/README.md)).
+- from **[Spec Kit](https://github.com/github/spec-kit)**: the spec-driven process and its
+  traceable artifacts (spec → plan → tasks);
+- from **[AG Kit](https://github.com/vudovn/ag-kit)**: specialist personas, quality rules, the
+  design gate, execution-based verification and project memory.
 
-## Requisitos
+The value lives in the Markdown. The `redevkit` CLI only installs and maintains it: it copies
+the kit into your project, renders the same content for each agent, writes a managed block in
+`AGENTS.md` and updates with a three-way merge. It works for new and existing projects.
 
-- **Node.js ≥ 20** para a CLI.
-- **Claude Code** e/ou **OpenAI Codex CLI**.
-- **Python 3**, opcional: só para as auditorias em `.redevkit/audits/`. Sem Python, as
-  auditorias ficam `SKIPPED` com o motivo e os comandos usam o build, os testes e o lint do
-  próprio projeto.
-- **git**, opcional e recomendado. O kit nunca roda `git init` e só cria commits quando você
-  pede.
+## Contents
 
-## Instalação e uso
+- [Features](#features)
+- [How it fits together](#how-it-fits-together)
+- [Requirements](#requirements)
+- [Quick start](#quick-start)
+- [Workflow](#workflow)
+- [Agent commands](#agent-commands)
+- [Artifacts and installed files](#artifacts-and-installed-files)
+- [Project memory](#project-memory)
+- [Trust and safety](#trust-and-safety)
+- [CLI reference](#cli-reference)
+- [Updating and recovery](#updating-and-recovery)
+- [Troubleshooting](#troubleshooting)
+- [Documentation](#documentation)
+- [Development](#development)
+- [License and credits](#license-and-credits)
 
-O pacote `redevkit` ainda não está publicado no npm. Quando publicado, a instalação será:
+## Features
 
-```bash
-npx redevkit init            # no diretório atual
-npx redevkit init meu-app    # em outro diretório (criado se não existir)
-```
-
-Até lá, use o repositório local:
-
-```bash
-git clone <url-do-repositorio> redevkit
-cd redevkit
-npm install
-node bin/redevkit.js init /caminho/do/projeto
-
-# ou, para ter o comando `redevkit` no PATH:
-npm link
-redevkit init /caminho/do/projeto
-```
-
-Opções do `init`:
-
-| Opção | Efeito |
+| Feature | What it gives you |
 | --- | --- |
-| `[dir]` | Diretório do projeto. Sem ele, usa o diretório atual |
-| `--here` | Instala no diretório atual |
-| `--target <alvo>` | `claude`, `codex` ou `both` |
-| `--lang <idioma>` | Idioma dos artefatos: `pt-BR` ou `en` |
-| `--dry-run` | Mostra o que mudaria, sem gravar nada |
-| `-y, --yes` | Aceita os padrões e as confirmações (obrigatório sem terminal interativo) |
-| `--force` | Sobrescreve arquivos em conflito (depois do backup) |
-| `--verbose` | Lista cada ação por arquivo |
+| Spec-driven process | What to build in `spec.md`, how in `plan.md`, in what order in `tasks.md`. |
+| 11 pipeline commands | Discovery, planning, implementation, tests, debugging, verification, preview, deploy and status. Each one ends with a handoff to the next step. |
+| 19 specialist personas | Native subagents (`.claude/agents/<persona>.md`, `.codex/agents/<persona>.toml`) for frontend, backend, security, testing, games and more. |
+| 39 knowledge skills | Domain guidance (frontend, backend, games, mobile, security, testing, deployment…) loaded by a domain router. |
+| 18 internal phases | Reusable steps behind the commands: constitution, specify, clarify, tasks, analyze, checklist, implement, converge, routing, orchestration, bug handling and idea assessment. |
+| Test-First by default | The project constitution requires watching a test fail before implementing; waivers are versioned amendments. |
+| Evidence before claims | No command reports success without the command it ran and the result it observed. |
+| Shared project memory | Decisions, conventions and state in `.redevkit/memory/`, readable by any agent. |
+| Optional Python audits | Security, lint, types, accessibility, SEO and more in `.redevkit/audits/` ([audits README](kit/audits/README.md)). |
+| Managed installation | Manifest, backups, three-way updates and rollback. |
 
-Num terminal interativo, o `init` pergunta o alvo (padrão `both`) e o idioma (padrão
-`pt-BR`). Sem terminal interativo, exige `--yes` e usa esses padrões quando `--target` e
-`--lang` não são informados. O `init` não acessa a rede: o conteúdo vem dentro do pacote.
+## How it fits together
 
-Depois do `init`, abra o projeto no agente e rode o primeiro comando:
+```mermaid
+flowchart LR
+    KIT["kit/<br/>skills, personas, templates"] --> CLI["redevkit CLI<br/>install and update"]
+    CLI --> CLAUDE["Claude Code<br/>.claude/skills, .claude/agents"]
+    CLI --> CODEX["Codex<br/>.agents/skills, .codex/agents"]
+    CLI --> CTX["AGENTS.md<br/>shared rules"]
+    CLAUDE --> PROJ["Project code and tests"]
+    CODEX --> PROJ
+    CTX --> PROJ
+    PROJ --> SPECS["specs/<br/>specs and evidence"]
+    PROJ --> MEM[".redevkit/memory/<br/>decisions and continuity"]
+    MEM -.-> CLAUDE
+    MEM -.-> CODEX
+```
+
+## Requirements
+
+| Dependency | Needed for |
+| --- | --- |
+| **Node.js ≥ 20** | Running the CLI. |
+| **Claude Code** and/or **OpenAI Codex CLI** | Running the skills after installation. |
+| **Python ≥ 3.9** (optional) | The audits in `.redevkit/audits/`. Without it, audits are reported as `SKIPPED` with the reason and the commands rely on the project's own build, test and lint. |
+| **git** (optional, recommended) | Versioning code, specs and memory. The kit never runs `git init` and only commits when you ask. |
+
+## Quick start
+
+### 1. Install the kit in your project
+
+```bash
+npx redevkit init            # in the current directory
+npx redevkit init my-app     # in another directory (created if missing)
+```
+
+Or install the CLI globally and use `redevkit` directly:
+
+```bash
+npm install -g redevkit
+redevkit init my-app
+```
+
+In an interactive terminal, `init` asks for the target (default `both`) and the artifact
+language (default `pt-BR`). Without a TTY it requires `--yes` and uses those defaults unless
+`--target` and `--lang` are given. `init` never touches the network: the kit ships inside the
+package.
+
+| `init` option | Effect |
+| --- | --- |
+| `[dir]` | Project directory; defaults to the current directory |
+| `--here` | Use the current directory (takes precedence over `[dir]`) |
+| `--target <target>` | `claude`, `codex` or `both` |
+| `--lang <lang>` | Artifact language: `pt-BR` or `en` |
+| `--dry-run` | Show what would change, write nothing |
+| `-y, --yes` | Accept defaults and confirmations, including the migration of an existing `CLAUDE.md` (required without a TTY) |
+| `--force` | Overwrite conflicting files (after a backup) |
+| `--verbose` | List every file action |
+
+Running `init` again on an installed project reuses the manifest's targets and language
+without asking and behaves like `redevkit update`; `--target` or `--lang` switch them, and
+`--force` resolves conflicts after a backup.
+
+### 2. Start in the agent
+
+Open the project in your agent and run the first command:
 
 - Claude Code: `/redevkit-new`
 - Codex: `$redevkit-new`
 
-O `redevkit-new` pergunta se o projeto é novo ou existente, cria a memória, importa memória
-legada se você quiser e ratifica a constituição. Daí em diante, cada comando diz qual é o
-próximo.
+`redevkit-new` asks whether the project is new or existing, creates the memory, offers to
+import legacy memory (`memory-bank/`, `.agents/memory/` or `.specify/memory/`) and has you
+ratify the constitution. Then plan your first feature:
 
-## Pipeline
+```text
+/redevkit-plan A to-do list with add, complete and filter
+```
+
+From there, every command tells you which one comes next.
+
+## Workflow
 
 ```mermaid
 flowchart TD
-    NEW["redevkit-new · 1x por projeto<br/>novo ou existente<br/>memória + constituição"] --> Q{"Ideia ainda vaga?"}
-    Q -->|sim| BS["redevkit-brainstorm<br/>assess: intake, research, define, shape, decide"]
+    NEW["new · once per project<br/>memory + constitution"] --> Q{"Idea still vague?"}
+    Q -->|yes| BS["brainstorm<br/>assess the idea"]
     BS -->|go| PLAN
-    Q -->|não| PLAN["redevkit-plan feature<br/>spec, roteamento por domínio, plan,<br/>DESIGN.md, tasks com TDD, analyze"]
-    PLAN -.->|dúvidas na spec| CL["redevkit-brainstorm em modo clarify"]
-    CL -.-> PLAN
-    PLAN -->|gate: aprovação do plano| B{"Feature nova ou mudança?"}
-    B -->|nova| CR["redevkit-create"]
-    B -->|mudança no existente| EN["redevkit-enhance"]
-    CR --> TS["redevkit-test"]
+    Q -->|no| PLAN["plan<br/>spec, domain routing, plan,<br/>DESIGN.md, TDD tasks, analysis"]
+    PLAN -->|"G2: plan approval"| KIND{"New feature or change?"}
+    KIND -->|new| CR["create"]
+    KIND -->|change| EN["enhance"]
+    CR --> TS["test"]
     EN --> TS
-    TS -->|verde| DP["redevkit-deploy<br/>só o usuário dispara · sugere verify antes"]
-    TS -->|vermelho| DB["redevkit-debug<br/>.redevkit/bugs/slug"]
-    DB --> VF["redevkit-verify obrigatório<br/>roda o test de novo, converge,<br/>execução e auditorias"]
-    VF -->|converged+verified| DP
-    VF -->|gaps: lacunas viram tarefas| B
+    TS -->|PASS| DONE["review; verify suggested"]
+    TS -->|FAIL| DB["debug"]
+    DB --> VF["verify · mandatory after debug<br/>re-runs tests, convergence,<br/>execution, audits"]
+    DONE -.-> VF
+    VF -->|gaps| KIND
     VF -->|failed| DB
-    VF -.->|G5: ciclo de correção sem convergir| U["para e pergunta a você"]
-    PV["redevkit-preview · sob demanda"]
-    STS["redevkit-status · a qualquer momento"]
+    VF -->|converged+verified| READY["ready"]
+    VF -.->|"G5: correction cycle<br/>does not converge"| ASK["stop and ask you"]
+    READY -.->|"you invoke it"| DP["deploy<br/>G6, rollback plan, smoke test"]
 ```
 
-Com `--auto`, a cadeia new → plan → create/enhance → test segue sozinha (e, no vermelho,
-debug → verify, com o verify rodando os testes de novo sobre o código corrigido), mas sempre
-para nos gates G1–G7. O G5 impede loops: a cadeia para quando o ciclo de correção não
-converge (regras em [Ciclo de correção e G5](docs/metodo.md#ciclo-de-correção-e-g5)). O
-deploy é sempre disparado por você. O método completo está em [docs/metodo.md](docs/metodo.md).
+`redevkit-status` reports facts at any time; `redevkit-preview` starts, stops or checks the
+local dev server on demand.
 
-## Comandos
+With `--auto`, the chain runs on its own: new → plan → create/enhance → test, and on a red test
+debug → verify (which re-runs the tests on the fixed code). It always stops at the gates, and
+deploy is never part of the chain:
 
-| Comando | Claude Code | Codex | Para que serve |
-| --- | --- | --- | --- |
-| new | `/redevkit-new` | `$redevkit-new` | Inicializa o projeto uma vez: novo ou existente, memória, memória legada, constituição |
-| brainstorm | `/redevkit-brainstorm` | `$redevkit-brainstorm` | Avalia uma ideia vaga (`go`, `needs-clarification`, `kill`) ou esclarece a feature ativa |
-| plan | `/redevkit-plan` | `$redevkit-plan` | Spec, roteamento por domínio, plano, gate do `DESIGN.md`, tarefas com TDD, análise e aprovação |
-| create | `/redevkit-create` | `$redevkit-create` | Implementa as tarefas aprovadas de uma feature nova, uma persona por tarefa, testes primeiro |
-| enhance | `/redevkit-enhance` | `$redevkit-enhance` | Muda algo existente: delta na spec e tarefas anexadas; mudança grande vai para o plan |
-| test | `/redevkit-test` | `$redevkit-test` | Mapeia cenários para testes, gera os que faltam, roda a suíte e grava `test-report.md` |
-| debug | `/redevkit-debug` | `$redevkit-debug` | Reproduz, acha a causa raiz, teste de regressão primeiro, corrige e registra o bug |
-| verify | `/redevkit-verify` | `$redevkit-verify` | Verificação completa: roda o test (ou reaproveita um run sobre o mesmo código), convergência com a spec, execução real, auditorias e veredito |
-| preview | `/redevkit-preview` | `$redevkit-preview` | Sobe, para ou checa o servidor de desenvolvimento local |
-| deploy | `/redevkit-deploy` | `$redevkit-deploy` | Deploy só por invocação do usuário, com plano de rollback, confirmação e smoke test |
-| status | `/redevkit-status` | `$redevkit-status` | Mostra só fatos: feature ativa, progresso, último test e verify, bugs, git |
-
-A skill de memória `redevkit-memanager` também pode ser chamada diretamente
-(`/redevkit-memanager` ou `$redevkit-memanager`), e responde a pedidos como "lembre disso" e
-"atualize a memória". Detalhes de cada comando: [docs/comandos.md](docs/comandos.md).
-
-## Onde ficam os artefatos
-
-| O quê | Onde |
+| Gate | When the chain stops |
 | --- | --- |
-| Spec, plano, tarefas, contratos, checklists | `specs/NNN-nome/` |
-| Relatórios de teste e de verificação | `specs/NNN-nome/test-report.md`, `specs/NNN-nome/verification.md` |
+| G1 | Constitution created or amended |
+| G2 | Plan approval (end of `redevkit-plan`) |
+| G3 | Constitution violation detected |
+| G4 | Destructive or irreversible action |
+| G5 | Correction cycle without convergence: 2 `failed` verifies after a debug, or 3 verifies in a row without `converged+verified` ([rules](docs/metodo.md#ciclo-de-correção-e-g5)) |
+| G6 | Deploy (only you trigger it) |
+| G7 | Choice about legacy memory |
+
+The full method is in [docs/metodo.md](docs/metodo.md) (Portuguese).
+
+## Agent commands
+
+Invoke them as `/redevkit-<name>` in Claude Code and `$redevkit-<name>` in Codex.
+
+| Command | What it does |
+| --- | --- |
+| `redevkit-new` | Initializes the project once: new or existing, memory, legacy memory, constitution |
+| `redevkit-brainstorm` | Assesses a vague idea (`go`, `needs-clarification`, `kill`) or clarifies the active feature |
+| `redevkit-plan` | Spec, domain routing, plan, `DESIGN.md` gate, TDD tasks, analysis and approval |
+| `redevkit-create` | Implements the approved tasks of a new feature, one persona per task, tests first |
+| `redevkit-enhance` | Changes existing behavior: spec delta and appended tasks; large changes go to `redevkit-plan` |
+| `redevkit-test` | Maps scenarios to tests, writes the missing ones, runs the suite and records `test-report.md` |
+| `redevkit-debug` | Reproduces, finds the root cause, writes a regression test first, fixes and records the bug |
+| `redevkit-verify` | Runs the tests (or reuses a run on the same code state), checks convergence with the spec, executes the app, runs audits and gives a verdict |
+| `redevkit-preview` | Starts, stops or checks the local dev server |
+| `redevkit-deploy` | User-invoked only: preconditions, rollback plan, confirmation and smoke test |
+| `redevkit-status` | Facts only: active feature, progress, last test and verify, bugs, git |
+
+The memory skill `redevkit-memanager` can also be invoked directly and answers requests such as
+"remember this" or "update the memory". Full reference: [docs/comandos.md](docs/comandos.md)
+(Portuguese).
+
+## Artifacts and installed files
+
+Artifacts created while you work:
+
+| What | Where |
+| --- | --- |
+| Spec, plan, tasks, contracts, checklists | `specs/NNN-name/` |
+| Test and verification reports (append-only) | `specs/NNN-name/test-report.md`, `specs/NNN-name/verification.md` |
 | Bugs | `.redevkit/bugs/<slug>/{assessment,fix,test}.md` |
-| Avaliações de ideia | `.redevkit/assessments/<slug>/{intake,research,definition,shape,decision}.md` |
-| Deploys | `.redevkit/deploys/AAAA-MM-DD-<ambiente>.md` |
-| Memória e constituição | `.redevkit/memory/` |
-| Fonte da verdade visual | `DESIGN.md` na raiz |
-| Templates (os de `overrides/` têm precedência) | `.redevkit/templates/overrides/`, depois `.redevkit/templates/` |
-| Instruções do projeto | `AGENTS.md`, fora do bloco `REDEVKIT` |
+| Idea assessments | `.redevkit/assessments/<slug>/{intake,research,definition,shape,decision}.md` |
+| Deploy reports | `.redevkit/deploys/YYYY-MM-DD-<environment>.md` |
+| Memory and constitution | `.redevkit/memory/` |
+| Visual source of truth | `DESIGN.md` at the project root |
+| Your own instructions | `AGENTS.md`, outside the `REDEVKIT` block |
 
-Arquivos que a CLI instala: `AGENTS.md` (bloco gerenciado), `CLAUDE.md` (ponteiro, alvo
-claude), `.claude/` (alvo claude), `.agents/skills/` e `.codex/` (alvo codex),
-`.redevkit/manifest.json`, `.redevkit/templates/` (só o idioma escolhido),
-`.redevkit/audits/` e `.redevkit/.gitignore` (que ignora `backups/`, `tmp/` e `conflicts/`).
+Files the CLI installs:
 
-## Memória
+| Path | Content |
+| --- | --- |
+| `AGENTS.md` | Managed `REDEVKIT` block with the shared rules; your notes outside it are kept |
+| `CLAUDE.md`, `.claude/` | Pointer to `AGENTS.md`, skills, agents and permissions (target `claude`) |
+| `.agents/skills/`, `.codex/` | Skills, agents and config (target `codex`) |
+| `.redevkit/manifest.json` | Installed version, targets, language and file hashes |
+| `.redevkit/templates/` | Templates in the chosen language; files in `.redevkit/templates/overrides/` take precedence |
+| `.redevkit/audits/` | Optional Python audits |
+| `.redevkit/.gitignore` | Ignores `backups/`, `tmp/` and `conflicts/` |
 
-A memória do projeto fica em `.redevkit/memory/` (`MEMORY.md` como índice, mais
-`constitution.md`, `project.md`, `system.md`, `tech.md`, `active.md`, `changelog.md`,
-`user.md` e `topics/`), é versionada no git por inteiro e é a fonte da verdade sobre
-decisões, convenções, estado e feedback. Ela é agnóstica de agente: o protocolo de leitura e
-escrita está no próprio `AGENTS.md`, então qualquer agente que leia esse arquivo (Claude
-Code, Codex, DeepSeek ou outro) sabe usá-la. Estado é gravado automaticamente no fim de cada
-comando que modifica algo; emendas da constituição, invariantes e qualquer exclusão pedem confirmação. A
-memória nativa de cada agente continua ligada e serve como camada pessoal; em conflito, vale
-`.redevkit/memory/`. Segredos nunca são gravados.
+## Project memory
 
-A memória tem limites de tamanho, mantidos pelo agente a cada gravação: o `MEMORY.md` tem no
-máximo 256 linhas; os outros arquivos são consolidados acima de 256 linhas, sem perder
-conteúdo; o `changelog.md` vai até 512 linhas, e as entradas mais antigas passam para
-`.redevkit/memory/archive/changelog-AAAA-MM.md`. O `redevkit doctor` dá erro quando o
-`MEMORY.md` passa de 256 linhas e avisa quando outro arquivo passa do seu limite.
+`.redevkit/memory/` is the single, versioned source of truth for decisions, conventions, state
+and feedback: `MEMORY.md` (index), `constitution.md`, `project.md`, `system.md`, `tech.md`,
+`active.md`, `changelog.md`, `user.md` and `topics/`. Its read/write protocol lives in
+`AGENTS.md`, so any agent that reads that file (Claude Code, Codex or another) can use it.
 
-## Confiança no projeto
+- State is written automatically at the end of each command that changes something.
+  Constitution amendments, invariants and any deletion ask for confirmation.
+- Each agent's native memory stays on as a personal layer; on conflict, `.redevkit/memory/`
+  wins.
+- Secrets are never written to memory.
+- Size limits are kept by the agent on every write: `MEMORY.md` up to 256 lines; other files
+  are consolidated above 256 lines without losing content; `changelog.md` goes up to 512 lines,
+  then its oldest entries move to `.redevkit/memory/archive/changelog-YYYY-MM.md`.
+  `redevkit doctor` reports an error when `MEMORY.md` exceeds 256 lines and a warning for the
+  other limits.
 
-- **Claude Code:** as permissões que a CLI grava em `.claude/settings.json`
-  (`permissions.allow` para git somente leitura, executores de teste e as auditorias) só
-  valem depois que você marca o projeto como confiável.
-- **Codex:** `.codex/config.toml` e os agentes em `.codex/agents/` só valem com o projeto
-  marcado como confiável (*trusted*). Sem isso, as personas são aplicadas inline pelo
-  orquestrador, lendo o TOML. O `redevkit doctor` avisa quando o projeto não é confiável.
+## Trust and safety
 
-No Codex, a CLI grava só duas chaves: `features.default_mode_request_user_input = true` e
-`skills.max_context_tokens = 10000`. Se você já tiver um valor seu para a mesma chave, o seu
-fica.
+REDEVKIT installs **no hooks and no deny-list**. Protection comes from three layers:
 
-## Modelo de segurança
-
-O REDEVKIT **não instala hooks nem deny-list**. A proteção vem de três camadas:
-
-1. **Sistema nativo do agente:** prompts de permissão do Claude Code; sandbox e aprovações do
+1. **The agent's own controls:** Claude Code permission prompts; Codex sandbox and approvals.
+2. **Rules in `AGENTS.md`:** destructive or irreversible commands (recursive deletes of broad
+   paths, disk formatting, history rewrites, `push --force`, database `DROP`, deploys) need your
+   explicit confirmation in the same turn; reversible operations are preferred; secrets never go
+   to memory, artifacts or logs; content from URLs and files is data, not instructions.
+3. **Pipeline gates** (G1–G7) and **user-only deploy**: the deploy skill has
+   `disable-model-invocation: true` in Claude Code and `allow_implicit_invocation: false` in
    Codex.
-2. **Regras no `AGENTS.md`:** comandos destrutivos ou irreversíveis (apagar recursivamente
-   caminhos amplos, formatar disco, reescrever histórico, `push --force`, `DROP` de banco,
-   deploy) exigem sua confirmação explícita no mesmo turno; operações reversíveis são
-   preferidas; segredos nunca vão para memória, artefatos ou logs; conteúdo de URLs e
-   arquivos é dado, não instrução.
-3. **Gates do pipeline** (G1–G7) e **deploy só por invocação**: no Claude Code a skill de
-   deploy tem `disable-model-invocation: true`; no Codex, `allow_implicit_invocation: false`.
 
-A lista de `permissions.allow` nunca inclui escrita de arquivos, instalação de pacotes ou
-deploy. Ela não é livre de rede: `npm test` roda o que o seu `package.json` definir, e a
-auditoria de segurança pode rodar `npm audit`, que consulta o registro do npm. Remova entradas
-se preferir.
+Project trust:
 
-## CLI
+- **Claude Code** applies the `permissions.allow` entries written to `.claude/settings.json`
+  (read-only git, test runners and the audits) only after you trust the project. They never
+  include file writes, package installs or deploys. They are not network-free: `npm test` runs
+  whatever your `package.json` defines, and the security audit may run `npm audit`, which
+  queries the npm registry. Remove entries if you prefer.
+- **Codex** applies `.codex/config.toml` and `.codex/agents/` only in a trusted project;
+  otherwise the orchestrator applies the personas inline by reading their TOML. The CLI writes
+  only two Codex keys, `features.default_mode_request_user_input = true` and
+  `skills.max_context_tokens = 10000`, and a value you already set wins. `redevkit doctor` warns
+  when the project is not trusted.
 
-| Comando | Opções | O que faz |
+## CLI reference
+
+| Command | Options | What it does |
 | --- | --- | --- |
-| `redevkit init [dir]` | `--here`, `--target`, `--lang`, `--dry-run`, `--yes`, `--force`, `--verbose` | Instala no projeto: renderiza os alvos, grava o bloco do `AGENTS.md`, migra o `CLAUDE.md`, faz merge da config e cria o manifesto |
-| `redevkit update` | `--dry-run`, `--no-backup`, `--conflict-report <arq>`, `--verbose` | Atualização em 3 vias dos arquivos gerenciados. Um arquivo que só você alterou é preservado; um arquivo alterado por você e pelo kit é um conflito: o seu fica e a versão nova vai para `.redevkit/conflicts/<id>/`. Nunca toca memória, specs ou `DESIGN.md` |
-| `redevkit rollback` | `--backup <id>`, `--list`, `--dry-run` | Restaura um backup, salvando antes o estado atual num backup `pre-rollback-<id>`. Padrão: o backup mais recente de init/update/uninstall (os `pre-rollback-*` são ignorados); para desfazer um rollback, use `--backup pre-rollback-<id>` |
-| `redevkit status` | `--quiet`, `--json` | Versão instalada, alvos, idioma e arquivos gerenciados alterados ou ausentes; funciona offline |
-| `redevkit doctor` | `--json` | Confere ferramentas, instalação, `AGENTS.md`, `CLAUDE.md`, memória, numeração de `specs/`, config e confiança no Codex; sai com código diferente de zero se houver erro |
-| `redevkit target add <claude\|codex>` | `--dry-run`, `--yes`, `--verbose` | Adiciona um alvo (com `--yes`, aceita a migração do `CLAUDE.md`) |
-| `redevkit target remove <claude\|codex>` | `--dry-run`, `--verbose` | Remove um alvo; o `AGENTS.md` sempre fica, e o `CLAUDE.md` também. Recusa remover o último alvo |
-| `redevkit version` | `--check` | Mostra a versão; `--check` consulta o npm |
-| `redevkit uninstall` | `--dry-run`, `--yes`, `--force` | Remove os arquivos e as entradas de config gerenciados. Preserva `.redevkit/memory/`, `specs/`, `DESIGN.md`, as notas do `AGENTS.md` e o `CLAUDE.md`. Arquivos gerenciados que você alterou ficam, salvo com `--force`. Faz backup antes; sem terminal interativo, exige `--yes` |
+| `redevkit init [dir]` | `--here`, `--target`, `--lang`, `--dry-run`, `--yes`, `--force`, `--verbose` | Installs the kit: renders the targets, writes the `AGENTS.md` block, migrates `CLAUDE.md`, merges the config and creates the manifest |
+| `redevkit update` | `--dry-run`, `--no-backup`, `--conflict-report <file>`, `--verbose` | Three-way update of the managed files (see [Updating and recovery](#updating-and-recovery)). Never touches memory, specs or `DESIGN.md` |
+| `redevkit rollback` | `--backup <id>`, `--list`, `--dry-run` | Restores a backup, saving the current state first |
+| `redevkit status` | `--quiet`, `--json` | Installed version, targets, language and changed or missing managed files; works offline |
+| `redevkit doctor` | `--json` | Checks tools, installation, `AGENTS.md`, `CLAUDE.md`, memory, `specs/` numbering, config and Codex trust; exits non-zero on errors |
+| `redevkit target add <claude\|codex>` | `--dry-run`, `--yes`, `--verbose` | Adds a target (`--yes` accepts the `CLAUDE.md` migration) |
+| `redevkit target remove <claude\|codex>` | `--dry-run`, `--verbose` | Removes a target; `AGENTS.md` and `CLAUDE.md` stay. Refuses to remove the last target |
+| `redevkit version` | `--check` | Prints the version; `--check` queries npm for the latest one |
+| `redevkit uninstall` | `--dry-run`, `--yes`, `--force` | Removes the managed files and config entries after a backup. Keeps `.redevkit/memory/`, `specs/`, `DESIGN.md`, your `AGENTS.md` notes and `CLAUDE.md`; managed files you changed stay unless `--force`. Requires `--yes` without a TTY |
 
-`update`, `rollback`, `status`, `doctor`, `target` e `uninstall` agem no diretório atual.
-Backups ficam em `.redevkit/backups/<id>/`; a versão nova de um arquivo em conflito fica em
-`.redevkit/conflicts/`. As mensagens principais saem no idioma do manifesto; os textos dos
-achados do `doctor` e alguns avisos técnicos ficam em inglês. Códigos de saída: `0` sucesso,
-`1` erro, `2` uso incorreto, `130` interrompido (Ctrl+C).
+- Every command except `init` acts on the current directory: run it from the project root.
+- The `redevkit status` CLI command inspects the installation; the `redevkit-status` agent
+  command reports on the development work.
+- Messages follow the manifest language; `doctor` findings and some technical warnings are in
+  English.
+- Exit codes: `0` success, `1` error, `2` usage error, `130` interrupted (Ctrl+C).
 
-Rodar o `init` de novo num projeto já instalado reaproveita os alvos e o idioma do manifesto,
-sem perguntar, e funciona como um `update`: com `--target` ou `--lang` troca o alvo ou o
-idioma; com `--force` resolve os conflitos (depois do backup).
+## Updating and recovery
 
-## Documentação
+`update` installs the kit bundled with the CLI you run, so get the new CLI first
+(`npm install -g redevkit@latest`, or `npx redevkit@latest update`). Then, from the project
+root:
 
-- [Método](docs/metodo.md): o processo orientado a especificação, a constituição, os gates e
-  a gramática das tarefas.
-- [Comandos](docs/comandos.md): referência de cada comando e da skill de memória.
-- [Migração](docs/migracao.md): vindo do AG Kit, do Spec Kit, de um `memory-bank/` ou de um
-  `CLAUDE.md` existente.
-- [MCP](docs/mcp.md): como registrar servidores MCP no Claude Code e no Codex.
-- [Autoria do kit](docs/kit-authoring.md): o contrato para quem edita `kit/` (em inglês).
-- [Changelog](CHANGELOG.md).
+```bash
+redevkit status
+redevkit update --dry-run
+redevkit update
+redevkit doctor
+```
 
-## Licença e créditos
+The three-way merge compares the installed base, your copy and the new kit. A file only you
+changed is kept. A file changed by both you and the kit is a conflict: yours stays and the new
+version goes to `.redevkit/conflicts/<id>/`.
 
-MIT, ver [LICENSE](LICENSE). O REDEVKIT contém material derivado do
-[AG Kit](https://github.com/vudovn/ag-kit) (vudovn, MIT) e do
-[Spec Kit](https://github.com/github/spec-kit) (GitHub, MIT); os créditos e os avisos de
-licença estão em [NOTICE](NOTICE).
+`init`, `update`, `target` and `uninstall` back up the files they change to
+`.redevkit/backups/<id>/`:
 
-## English
+```bash
+redevkit rollback --list       # list backups
+redevkit rollback --dry-run    # preview the restore
+redevkit rollback              # restore the latest backup
+```
 
-REDEVKIT is a Markdown-first kit for **Claude Code** and **OpenAI Codex**. It merges the
-spec-driven process and traceable artifacts of **Spec Kit** (spec → plan → tasks) with the
-specialist personas, quality rules, design gate, execution-based verification and project
-memory of **AG Kit**. The `redevkit` CLI only installs: it copies the kit, renders the same
-content for each agent, writes the managed block of `AGENTS.md` and updates with a
-three-way merge.
+Before restoring, `rollback` saves the current state as `pre-rollback-<id>`. The default
+restore skips those safety backups; to undo a rollback, run
+`redevkit rollback --backup pre-rollback-<id>`.
 
-**Requirements:** Node.js ≥ 20; Claude Code and/or Codex CLI; Python 3 is optional (audits
-only; without it audits are reported as `SKIPPED` and the project's own commands are used).
+## Troubleshooting
 
-**Install:** the `redevkit` npm package is not published yet. Once published:
-`npx redevkit init`. Until then, clone this repository, run `npm install`, then
-`node bin/redevkit.js init <project-dir>` (or `npm link` and `redevkit init`). Options:
-`--here`, `--target claude|codex|both`, `--lang pt-BR|en`, `--dry-run`, `--yes` (required
-without a TTY), `--force`, `--verbose`. Then run `/redevkit-new` in Claude Code or
-`$redevkit-new` in Codex.
+| Symptom | Fix |
+| --- | --- |
+| `redevkit` is not recognized | Use `npx redevkit …`, or check the global npm install and your `PATH`; reopen the terminal. |
+| A non-interactive run asks for confirmation | Add `--yes`, plus `--target` and `--lang` to make the choices explicit. This also applies to `--dry-run`. |
+| The skills do not show up | Check the installed target, open the project folder itself in the agent and restart the session. |
+| Codex ignores the config or the personas | Trust the project and run `redevkit doctor`. Untrusted, the personas still run inline. |
+| Audits show `SKIPPED` | Read the reason: Python, an external tool, the app URL or applicability may be missing. |
+| `update` reported conflicts | Compare your file with the new version in `.redevkit/conflicts/` and merge by hand. |
+| The project has a `CLAUDE.md`, `memory-bank/` or another kit | Read the [migration guide](docs/migracao.md) and run `init --dry-run` first. |
 
-**Commands:** `redevkit-new`, `redevkit-brainstorm`, `redevkit-plan`, `redevkit-create`,
-`redevkit-enhance`, `redevkit-test`, `redevkit-debug`, `redevkit-verify`,
-`redevkit-preview`, `redevkit-deploy`, `redevkit-status`, plus the memory skill
-`redevkit-memanager`. Invoke them as `/redevkit-<name>` in Claude Code and `$redevkit-<name>`
-in Codex. `--auto` chains new → plan → create/enhance → test (and debug → verify on red; verify
-re-runs the tests on the fixed code) and always stops at gates G1–G7; deploy is user-triggered only.
+`redevkit status --json` and `redevkit doctor --json` help diagnose an installation; review
+their output before sharing it.
 
-**Artifacts:** `specs/NNN-name/` (spec, plan, tasks, test and verification reports),
-`.redevkit/bugs/`, `.redevkit/assessments/`, `.redevkit/deploys/`, `.redevkit/memory/` and
-`DESIGN.md`.
+## Documentation
 
-**Memory:** `.redevkit/memory/` is the single, versioned source of truth for the project. Its
-protocol lives in `AGENTS.md`, so any agent that reads that file can use it. Native agent
-memory stays on; on conflict the project memory wins.
+The guides are in Brazilian Portuguese, except the kit authoring contract.
 
-**Trust and safety:** Claude Code applies the `.claude/settings.json` permissions only in a
-trusted project; Codex applies `.codex/config.toml` and `.codex/agents/` only in a trusted
-project (otherwise personas run inline). REDEVKIT installs no hooks and no deny-list: it
-relies on the runtime's permissions and sandbox, the safety rules in `AGENTS.md`, the
-pipeline gates and user-only deploy.
+| Document | Content |
+| --- | --- |
+| [Method](docs/metodo.md) | Constitution, spec, plan, task grammar, TDD, gates and `--auto` |
+| [Commands](docs/comandos.md) | Inputs, behavior and outputs of every command and of the memory skill |
+| [Migration](docs/migracao.md) | Coming from AG Kit, Spec Kit, `memory-bank/` or an existing `CLAUDE.md` |
+| [MCP](docs/mcp.md) | Registering MCP servers in Claude Code and Codex |
+| [Audits](kit/audits/README.md) | Interpreter detection, options, path exclusions, exit codes, `SKIPPED` (English) |
+| [Runtime notes](docs/notas-runtime.md) | Dated compatibility notes for each agent |
+| [Kit authoring](docs/kit-authoring.md) | Contract for editing `kit/` (English) |
+| [Acceptance](docs/aceite.md) | Decisions mapped to implementation and checks |
+| [E2E](e2e/README.md), [results](e2e/RESULTS.md) | Real-agent scenarios and their recorded runs |
+| [Changelog](CHANGELOG.md) | Release history |
 
-**CLI:** `init`, `update`, `rollback`, `status`, `doctor`, `target add|remove`, `version`,
-`uninstall` (see the table above). Docs in `docs/` are in Brazilian Portuguese, except
-[docs/kit-authoring.md](docs/kit-authoring.md).
+## Development
 
-**License:** MIT. See [NOTICE](NOTICE) for the AG Kit and Spec Kit credits.
+```bash
+git clone https://github.com/Reprograme/redevkit.git
+cd redevkit
+npm ci
+node bin/redevkit.js init /path/to/project   # or: npm link, then redevkit init
+```
+
+Checks (the same ones [CI](.github/workflows/ci.yml) runs on Linux, Windows and macOS):
+
+```bash
+npm test                  # unit tests
+npm run validate          # kit validation
+npm run test:audits       # Python audit tests
+npm run lint:md           # Markdown lint
+node test/pack-check.mjs  # package allowlist
+```
+
+Before changing `kit/`, read [docs/kit-authoring.md](docs/kit-authoring.md). Add tests for
+behavior changes and update the matching docs. To report a problem, open an
+[issue](https://github.com/Reprograme/redevkit/issues) with the CLI version, OS, agent, the
+command you ran, what you expected and what happened.
+
+## License and credits
+
+[MIT](LICENSE). REDEVKIT contains material derived from [AG Kit](https://github.com/vudovn/ag-kit)
+(vudovn, MIT) and [Spec Kit](https://github.com/github/spec-kit) (GitHub, MIT); credits and
+license notices are in [NOTICE](NOTICE).

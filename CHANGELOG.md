@@ -10,6 +10,10 @@ All notable changes to REDEVKIT are documented in this file. The format follows
 
 ### Added
 
+- First public release on npm and GitHub. `README.md` is now in English, with the full
+  Brazilian Portuguese version in `README.pt-BR.md`; `package.json` declares the repository,
+  homepage and issue tracker.
+
 - Audits share one exclusion policy (`kit/audits/audit_common.py`): common defaults
   (dependency and vendor folders, build output, generated reports such as
   `playwright-report/`, minified files), the project's `.gitignore`, and user patterns from

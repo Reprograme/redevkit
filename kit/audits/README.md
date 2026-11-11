@@ -1,8 +1,8 @@
 # REDEVKIT audits
 
 Optional, dependency-free Python audits installed in `.redevkit/audits/`. Skills and
-commands run them to collect evidence (D05, K12). They never replace the project's own
-build, test and lint commands; they add static checks on top of them.
+commands run them to collect evidence for their reports. They never replace the project's
+own build, test and lint commands; they add static checks on top of them.
 
 Every script uses only the Python standard library (Playwright is an optional import),
 runs on Python 3.9 or newer, writes UTF-8 to stdout, never uses `shell=True`, resolves
@@ -213,8 +213,9 @@ Every audit that scans files accepts `--exclude PATTERN` (repeatable) and
 
 ## Tests
 
-The regression tests live in `test-audits/` of the REDEVKIT repository, one module per
-fixed bug (S1-S5, S7-S13, P4) with fixtures in `test-audits/fixtures/<bug-id>/`:
+The regression tests live in `test-audits/` of the
+[REDEVKIT repository](https://github.com/Reprograme/redevkit), one module per fixed bug
+(`test_<bug-id>_*.py`) with fixtures in `test-audits/fixtures/<bug-id>/`:
 
 ```bash
 python -m unittest discover -s test-audits -v

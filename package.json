@@ -5,6 +5,14 @@
   "type": "module",
   "license": "MIT",
   "author": "Ricardo Candido <reprograme@cars.org.br>",
+  "homepage": "https://github.com/Reprograme/redevkit#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Reprograme/redevkit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Reprograme/redevkit/issues"
+  },
   "keywords": [
     "claude-code",
     "codex",
@@ -26,6 +34,7 @@
     "LICENSE",
     "NOTICE",
     "README.md",
+    "README.pt-BR.md",
     "CHANGELOG.md"
   ],
   "scripts": {
