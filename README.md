@@ -96,6 +96,16 @@ npm install -g redevkit
 redevkit init my-app
 ```
 
+| Goal | npm command |
+| --- | --- |
+| Check the latest published version | `redevkit version --check` or `npm view redevkit version` |
+| Update the global CLI | `npm install -g redevkit@latest` |
+| Run a specific version without installing | `npx redevkit@1.0.2 init --here` |
+| Remove the global CLI | `npm uninstall -g redevkit` |
+
+Updating the CLI does not change your projects; run `redevkit update` in each one (see
+[Updating and recovery](#updating-and-recovery)).
+
 In an interactive terminal, `init` asks for the target (default `both`) and the artifact
 language (default `pt-BR`). Without a TTY it requires `--yes` and uses those defaults unless
 `--target` and `--lang` are given. `init` never touches the network: the kit ships inside the

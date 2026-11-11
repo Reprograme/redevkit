@@ -96,6 +96,16 @@ npm install -g redevkit
 redevkit init meu-app
 ```
 
+| Objetivo | Comando do npm |
+| --- | --- |
+| Ver a versão publicada mais recente | `redevkit version --check` ou `npm view redevkit version` |
+| Atualizar a CLI global | `npm install -g redevkit@latest` |
+| Usar uma versão específica sem instalar | `npx redevkit@1.0.2 init --here` |
+| Remover a CLI global | `npm uninstall -g redevkit` |
+
+Atualizar a CLI não altera os seus projetos; rode `redevkit update` em cada um (ver
+[Atualização e recuperação](#atualização-e-recuperação)).
+
 Num terminal interativo, o `init` pergunta o alvo (padrão `both`) e o idioma dos artefatos
 (padrão `pt-BR`). Sem terminal interativo, exige `--yes` e usa esses padrões, a menos que
 `--target` e `--lang` sejam informados. O `init` não acessa a rede: o kit vem dentro do pacote.
