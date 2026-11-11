@@ -6,6 +6,15 @@ All notable changes to REDEVKIT are documented in this file. The format follows
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-11-11
+
+### Changed
+
+- Documentation only: both READMEs list the npm commands to check the published version,
+  update, run a specific version and remove the CLI (`redevkit version --check`,
+  `npm install -g redevkit@latest`, `npx redevkit@<version>`, `npm uninstall -g redevkit`).
+  No change to the CLI or the kit.
+
 ## [1.0.2] - 2026-11-11
 
 ### Added

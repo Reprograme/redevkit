@@ -100,7 +100,7 @@ redevkit init meu-app
 | --- | --- |
 | Ver a versão publicada mais recente | `redevkit version --check` ou `npm view redevkit version` |
 | Atualizar a CLI global | `npm install -g redevkit@latest` |
-| Usar uma versão específica sem instalar | `npx redevkit@1.0.2 init --here` |
+| Usar uma versão específica sem instalar | `npx redevkit@1.0.3 init --here` |
 | Remover a CLI global | `npm uninstall -g redevkit` |
 
 Atualizar a CLI não altera os seus projetos; rode `redevkit update` em cada um (ver

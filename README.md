@@ -100,7 +100,7 @@ redevkit init my-app
 | --- | --- |
 | Check the latest published version | `redevkit version --check` or `npm view redevkit version` |
 | Update the global CLI | `npm install -g redevkit@latest` |
-| Run a specific version without installing | `npx redevkit@1.0.2 init --here` |
+| Run a specific version without installing | `npx redevkit@1.0.3 init --here` |
 | Remove the global CLI | `npm uninstall -g redevkit` |
 
 Updating the CLI does not change your projects; run `redevkit update` in each one (see

@@ -1,6 +1,6 @@
 {
   "name": "redevkit",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Markdown-first kit for Claude Code and OpenAI Codex: spec-driven process (Spec Kit) + specialists, quality and memory (AG Kit).",
   "type": "module",
   "license": "MIT",
