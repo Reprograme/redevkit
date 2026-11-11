@@ -124,7 +124,7 @@ page-experience ranking signal; measure field data where available.
 
 ## 9. Automated Audit
 
-In the test and verify commands (not during implementation), run `.redevkit/audits/seo_checker.py <project_path>` with the Python interpreter detected per
+In the verify command's audit step (not during implementation), when its orchestrator did not already run it, run `.redevkit/audits/seo_checker.py <project_path>` with the Python interpreter detected per
 `.redevkit/audits/README.md`. It checks public pages (HTML, JSX/TSX page components) for
 titles, meta descriptions, Open Graph tags, heading hierarchy and image `alt` attributes.
 

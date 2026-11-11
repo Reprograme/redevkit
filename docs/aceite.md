@@ -30,7 +30,7 @@ Comandos de verificação usados abaixo:
 | D12 | Node ≥ 20, ESM, npm (`package.json`), base no `managed-tree` do AG Kit (`src/core/managed-tree.js`). |
 | D13 | Prefixo `redevkit-` em comandos e fases; personas e conhecimento com nome original (`src/core/validate.js` `NAMES`). |
 | D14 | Nenhum script auxiliar do Spec Kit; numeração e pré-requisitos descritos em `kit/phases/redevkit-specify/SKILL.md`. |
-| D15 | 17 auditorias + 3 orquestradores em `kit/audits/`; fallback SKIPPED em `kit/audits/README.md`; `test-audits/test_skipped_contract.py`. |
+| D15 | 17 auditorias + 3 orquestradores em `kit/audits/` (mais o módulo compartilhado `audit_common.py`, desde a 1.0.2); fallback SKIPPED em `kit/audits/README.md`; `test-audits/test_skipped_contract.py`. |
 | D16 | Sem hook e sem deny-list (nada em `kit/runtime/` além de allow); seção Safety do bloco do `AGENTS.md`. |
 | D17 | `.claude/agents/<p>.md` + skill fina (`claude.js` `personaFile`/`personaSkill`); `test/render.test.js`. |
 | D18 | `.codex/agents/<p>.toml` via `smol-toml`; fallback inline no `{{DELEGATE}}` do Codex; `test/render.test.js`. |
@@ -232,3 +232,22 @@ no `active.md`.
 Evidência de execução: E2E real do cenário B (`e2e/runs/r6`, 2026-11-08) aprovado com 16/16
 checagens no Claude Code e no Codex, inclusive as duas novas; ver [e2e/RESULTS.md](../e2e/RESULTS.md).
 Testes: 46 Node e 63 Python; `validate-kit` e markdownlint sem achados.
+
+## 6. Revisão 1.0.2 (2026-11-10)
+
+Origem: num projeto real (PHP/CodeIgniter com Playwright), todos os achados das auditorias
+caíram em código de terceiros, arquivos gerados ou protótipos. As afirmações do relato foram
+conferidas no código e corrigidas:
+
+| Achado | Correção | Evidência |
+| --- | --- | --- |
+| Cada auditoria tinha sua própria lista de pastas ignoradas; `vendor/` só em parte delas; nenhuma lia o `.gitignore`; não havia como excluir caminhos | Política única em `kit/audits/audit_common.py`: padrões comuns, `.gitignore`, `.redevkit/audit-ignore` e `--exclude PATTERN` (`--no-gitignore` desliga o segundo) | `test-audits/test_s11_exclusions.py` |
+| UX, acessibilidade, SEO e GEO não liam views `.php` | Views `.php`/`.phtml` com os blocos PHP mascarados; parciais não disparam checagens de documento | `test-audits/test_s12_php_views.py` |
+| O passo 4 do verify rodava a suíte de testes de novo pelos orquestradores | `--no-tests` em `checklist.py` e `verify_all.py`; o verify sempre passa a opção | `test-audits/test_p4_no_runtime_flag.py`; `kit/commands/redevkit-verify/references/execution.md` |
+| Quedas e falsos positivos nas auditorias (`onClick`, `regex.exec(`, `<Header>`, BOM, arquivos fora de UTF-8) | Corrigidos script a script | `test-audits/test_s13_audit_review.py` |
+| Achados em código que o projeto não mantém viravam tarefas ou `failed` | Triagem no verify: ficam fora do escopo e vão para as Notas da auditoria | `execution.md` § Audits, passo 6 |
+| `rollback` apagava os arquivos gerenciados que a execução desfeita não tinha tocado | Remove só o que a execução criou; o primeiro `init` faz backup da configuração do usuário que reescreve | `test/cli.test.js`, `test/core.test.js` |
+| `doctor` não executava atalhos `.cmd` em caminho com espaço; erros de uso saíam com 1; Ctrl+C no prompt não saía com 130 | `src/commands/doctor.js`, `src/cli.js`, `src/core/prompt.js` | `test/cli.test.js` |
+| Estado "sem tarefa aberta" indefinido no create; status e deploy comparavam com execução de escopo parcial | Texto dos comandos corrigido | `kit/commands/redevkit-create`, `redevkit-status`, `redevkit-deploy` |
+
+Não refeito nesta revisão: o E2E real (`node e2e/run.mjs`) e a CI nos três sistemas.

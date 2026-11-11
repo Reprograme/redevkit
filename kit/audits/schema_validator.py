@@ -11,8 +11,8 @@ Checks:
     - Index recommendations
     - Naming conventions
 
-Files are discovered with one directory walk that prunes SKIP_DIRS by path
-segment (node_modules is never entered). Schema issues are advisory: the
+Files are discovered with one directory walk under the shared exclusion policy
+(``audit_common.PathFilter``; node_modules is never entered). Schema issues are advisory: the
 audit passes with warnings. Only Prisma schemas are validated: Drizzle files
 are listed as "not validated". With no schema files, or with Drizzle files
 only (nothing validated), it is SKIPPED.
@@ -21,18 +21,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
+sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audit_common import PathFilter, add_exclusion_arguments, path_filter_from_args  # noqa: E402
+
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
-SKIP_DIRS = {
-    "node_modules", ".git", "dist", "build", ".next", "out", "coverage", "__pycache__",
-    ".venv", "venv", "vendor", ".agents", ".claude", ".codex", ".redevkit",
-}
 MAX_SCHEMAS = 10
 
 
@@ -44,17 +44,15 @@ def utf8_stdio() -> None:
             pass
 
 
-def walk_files(root: Path):
-    for current, dirs, files in os.walk(root):
-        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
-        for name in sorted(files):
-            yield Path(current) / name
+def walk_files(root: Path, path_filter: Optional[PathFilter] = None):
+    path_filter = path_filter if path_filter is not None else PathFilter(root)
+    yield from path_filter.walk(root)
 
 
-def find_schema_files(project_path: Path) -> List[Tuple[str, Path]]:
+def find_schema_files(project_path: Path, path_filter: Optional[PathFilter] = None) -> List[Tuple[str, Path]]:
     """Find database schema files outside node_modules and build output."""
     schemas: List[Tuple[str, Path]] = []
-    for path in walk_files(project_path):
+    for path in walk_files(project_path, path_filter):
         parent = path.parent.name.lower()
         name = path.name.lower()
         if path.suffix == ".prisma" and (name == "schema.prisma" or parent in {"prisma", "schema"}):
@@ -95,6 +93,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     utf8_stdio()
     parser = argparse.ArgumentParser(description="Validate database schema files (Prisma, Drizzle)")
     parser.add_argument("project", nargs="?", default=".")
+    add_exclusion_arguments(parser)
     args = parser.parse_args(argv)
     project_path = Path(args.project).resolve()
     if not project_path.is_dir():
@@ -106,9 +105,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print(f"{'=' * 60}")
     print(f"Project: {project_path}")
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    path_filter = path_filter_from_args(project_path, args)
+    print(path_filter.describe())
     print("-" * 60)
 
-    schemas = find_schema_files(project_path)
+    schemas = find_schema_files(project_path, path_filter)
     print(f"Found {len(schemas)} schema files")
     if not schemas:
         print("SKIPPED (no Prisma or Drizzle schema files found)")

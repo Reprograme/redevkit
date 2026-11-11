@@ -37,13 +37,20 @@ export const which = (cmd, env = process.env) => {
   return null;
 };
 
+/**
+ * `cmd.exe /s /c` command line for a .cmd/.bat shim. `/s` strips the first and the last quote of
+ * the whole line, so it needs an outer pair; without it a path with spaces (e.g. an npm shim in
+ * C:\Users\<First Last>\AppData\Roaming\npm) is cut at the first space and never runs.
+ */
+export const cmdLine = (exe, args = []) => `""${exe}"${args.map((a) => ` ${a}`).join("")}"`;
+
 /** Run `<cmd> <args>` and return trimmed output, or null when it does not actually run (R2/R3). */
 export const probe = (cmd, args = ["--version"], { timeout = 15000 } = {}) => {
   const exe = which(cmd);
   if (!exe) return null;
   let r;
   if (process.platform === "win32" && /\.(cmd|bat)$/i.test(exe)) {
-    r = spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", `"${exe}" ${args.join(" ")}`], { encoding: "utf8", timeout, windowsVerbatimArguments: true });
+    r = spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", cmdLine(exe, args)], { encoding: "utf8", timeout, windowsVerbatimArguments: true });
   } else {
     r = spawnSync(exe, args, { encoding: "utf8", timeout });
   }

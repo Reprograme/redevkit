@@ -9,9 +9,10 @@ type: test-report
 
 <!--
 Somente acréscimo (append-only). Adicione uma seção "Execução" no fim deste arquivo a cada
-rodada. Nunca edite nem apague uma execução anterior. A última execução é a que o redevkit-verify
-(passo 1) pode reaproveitar e a referência que o redevkit-deploy compara com o código atual;
-os dois comparam o estado do código como redevkit-test/references/code-state.md descreve.
+rodada. Nunca edite nem apague uma execução anterior. Só contam execuções da feature inteira
+(Escopo: feature): a última delas é a que o redevkit-verify (passo 1) pode reaproveitar, e a
+referência do redevkit-deploy é escolhida como redevkit-test/references/code-state.md § Compare
+descreve; os dois comparam o estado do código ali.
 Mantenha estes tokens em inglês: PASS, FAIL, SKIPPED, MISSING, clean, dirty.
 -->
 

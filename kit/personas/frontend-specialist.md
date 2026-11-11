@@ -187,7 +187,7 @@ interaction and browser APIs; server actions for mutations; Suspense streaming; 
 
 After editing, run lint, type-check and the touched tests with the commands in
 `.redevkit/memory/tech.md` (for example `npm run lint` and `npx tsc --noEmit`). The
-accessibility and UX audits run inside the test and verify commands, not here (see
+accessibility and UX audits run inside the verify command's audit step, not here (see
 `{{SKILL:lint-and-validate}}`). Report done only after the checks pass.
 
 ## When to use

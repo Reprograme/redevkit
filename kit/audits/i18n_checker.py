@@ -4,24 +4,29 @@
 Locale files are recognised in nested layouts (``locales/en/common.json``) and
 in flat layouts (``locales/en.json``, ``messages/pt-BR.json``): the language is
 taken from the file name when the name is a locale code, otherwise from the
-parent directory.
+parent directory. Locale JSON is read as UTF-8 with or without a BOM.
+
+Paths follow the shared exclusion policy (``audit_common.PathFilter``) plus
+test and spec folders.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audit_common import PathFilter, add_exclusion_arguments, path_filter_from_args  # noqa: E402
+
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
 
-SKIP_DIRS = {
-    "node_modules", ".git", ".agents", ".claude", ".codex", ".redevkit", "dist", "build",
-    "__pycache__", ".venv", "venv", ".next", "tests", "test", "spec", "specs",
-}
+# i18n-specific directories, on top of the shared exclusion defaults.
+SKIP_DIRS = {"tests", "test", "spec", "specs"}
 LOCALE_DIRS = {"locales", "locale", "translations", "lang", "langs", "i18n", "messages", "l10n"}
 
 # ISO 639-1 language codes plus a few common ISO 639-3 codes used by i18n libraries.
@@ -92,17 +97,15 @@ HARDCODED_PATTERNS = {
 }
 
 
-def walk_files(root: Path):
-    """Yield files under root, pruning SKIP_DIRS by path segment (never by substring)."""
-    for current, dirs, files in os.walk(root):
-        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
-        for name in sorted(files):
-            yield Path(current) / name
+def walk_files(root: Path, path_filter: Optional[PathFilter] = None):
+    """Yield non-excluded files under root (exclusion by path segment, never by substring)."""
+    path_filter = path_filter if path_filter is not None else PathFilter(root, extra_dirs=SKIP_DIRS)
+    yield from path_filter.walk(root)
 
 
-def find_locale_files(root: Path) -> List[Path]:
+def find_locale_files(root: Path, path_filter: Optional[PathFilter] = None) -> List[Path]:
     found = set()
-    for path in walk_files(root):
+    for path in walk_files(root, path_filter):
         if path.suffix == ".po":
             found.add(path)
             continue
@@ -137,8 +140,8 @@ def check_locale_completeness(locale_files: list[Path], root: Path) -> dict[str,
         if path.suffix == ".po":
             continue
         try:
-            content = json.loads(path.read_text("utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+            content = json.loads(path.read_text("utf-8-sig"))
+        except (OSError, ValueError) as exc:  # ValueError: invalid JSON or invalid UTF-8
             issues.append({"severity": "high", "file": path.relative_to(root).as_posix(), "issue": f"Invalid locale JSON: {exc}"})
             continue
         language, namespace = locale_identity(path, root)
@@ -165,8 +168,8 @@ def check_locale_completeness(locale_files: list[Path], root: Path) -> dict[str,
     return {"status": "checked", "files": len(locale_files), "languages": languages, "issues": issues, "notes": []}
 
 
-def iter_code_files(root: Path):
-    for path in walk_files(root):
+def iter_code_files(root: Path, path_filter: Optional[PathFilter] = None):
+    for path in walk_files(root, path_filter):
         if path.suffix.lower() in CODE_TYPES:
             yield path
 
@@ -177,7 +180,7 @@ def project_uses_i18n(root: Path, code_files: list[Path], locale_files: list[Pat
     package = root / "package.json"
     if package.is_file():
         try:
-            text = package.read_text("utf-8").lower()
+            text = package.read_text("utf-8", errors="ignore").lower()
             if any(name in text for name in ("i18next", "next-intl", "react-intl", "vue-i18n", "@lingui")):
                 return True
         except OSError:
@@ -233,9 +236,10 @@ def check_hardcoded_strings(root: Path, code_files: list[Path], enforce: bool) -
     return {"status": "checked", "files_checked": checked, "files_using_i18n": files_using_i18n, "issues": issues, "notes": []}
 
 
-def audit(root: Path, strict: bool = False) -> dict[str, Any]:
-    locale_files = find_locale_files(root)
-    code_files = list(iter_code_files(root))
+def audit(root: Path, strict: bool = False, path_filter: Optional[PathFilter] = None) -> dict[str, Any]:
+    path_filter = path_filter if path_filter is not None else PathFilter(root, extra_dirs=SKIP_DIRS)
+    locale_files = find_locale_files(root, path_filter)
+    code_files = list(iter_code_files(root, path_filter))
     enforce = strict or project_uses_i18n(root, code_files, locale_files)
     locale = check_locale_completeness(locale_files, root)
     code = check_hardcoded_strings(root, code_files, enforce)
@@ -257,11 +261,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("project", nargs="?", default=".")
     parser.add_argument("--strict", action="store_true", help="Scan hard-coded strings even when no i18n setup is detected")
     parser.add_argument("--json", action="store_true", dest="as_json")
+    add_exclusion_arguments(parser)
     args = parser.parse_args(argv)
     root = Path(args.project).resolve()
     if not root.is_dir():
         parser.error(f"Project directory does not exist: {root}")
-    report = audit(root, args.strict)
+    report = audit(root, args.strict, path_filter_from_args(root, args, extra_dirs=SKIP_DIRS))
     if not report["applicable"]:
         reason = "no i18n framework or locale files detected"
         if args.as_json:

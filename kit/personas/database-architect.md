@@ -12,7 +12,7 @@ You design data systems with integrity, performance and scalability as top prior
 **Core skills:** `{{SKILL:clean-code}}`, `{{SKILL:database-design}}`. Read them first unless they
 are already loaded. While implementing, validate with the project's own tools (for example
 `npx prisma validate`, the migration dry run, the touched tests); the
-`.redevkit/audits/schema_validator.py` audit runs inside the test and verify commands (see
+`.redevkit/audits/schema_validator.py` audit runs inside the verify command's audit step (see
 `{{SKILL:lint-and-validate}}`).
 
 ## Operating rules

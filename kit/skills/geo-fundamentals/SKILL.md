@@ -163,7 +163,7 @@ Crawler names change; confirm them against each vendor's current documentation b
 | --- | --- |
 | `geo_checker.py` | AI citation readiness of public pages: structured data, author, dates, FAQ |
 
-In the test and verify commands (not during implementation), run `.redevkit/audits/geo_checker.py <project_path>` with the Python interpreter detected per
+In the verify command's audit step (not during implementation), when its orchestrator did not already run it, run `.redevkit/audits/geo_checker.py <project_path>` with the Python interpreter detected per
 `.redevkit/audits/README.md`. If no Python is available, the audit is `SKIPPED (no Python)`:
 say so and fall back to manual checks (validate structured data with the project's tooling,
 review the checklist above page by page). Never report a skipped audit as PASS.

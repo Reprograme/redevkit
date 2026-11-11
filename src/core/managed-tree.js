@@ -109,16 +109,23 @@ export const nextManifestFiles = (plan, previous = {}) => {
 
 /**
  * Copy the given project-relative files (those that exist) into .redevkit/backups/<runId>/.
+ * `manifestFiles` is the managed set before the run: a rollback removes only managed files the run
+ * added, never the ones it left untouched (which are not in the backup).
+ * With `recordAbsent`, the listed files that do not exist yet are recorded as `absent`: the run is
+ * about to create them, so a rollback removes them again.
  * Returns the backup directory or null when there was nothing to save.
  */
-export const createBackup = ({ projectDir, files, runId = createRunId(), reason = "update", version = "unknown", manifestFiles = null }) => {
-  const existing = [...new Set(files)].filter((rel) => isSafeRelative(rel) && hashFileIfExists(resolveInside(projectDir, rel)) && hashFileIfExists(resolveInside(projectDir, rel)) !== "symlink");
+export const createBackup = ({ projectDir, files, runId = createRunId(), reason = "update", version = "unknown", manifestFiles = null, recordAbsent = false }) => {
+  const safe = [...new Set(files)].filter((rel) => isSafeRelative(rel));
+  const state = new Map(safe.map((rel) => [rel, hashFileIfExists(resolveInside(projectDir, rel))]));
+  const existing = safe.filter((rel) => state.get(rel) && state.get(rel) !== "symlink" && state.get(rel) !== "not-a-file");
   if (existing.length === 0) return null;
   const backupRel = `${BACKUP_ROOT}/${runId}`;
   for (const rel of existing) {
     writeInside(projectDir, `${backupRel}/${rel}`, fs.readFileSync(resolveInside(projectDir, rel)));
   }
   const meta = { schemaVersion: 1, createdAt: new Date().toISOString(), reason, version, files: existing.sort(), managedFiles: manifestFiles };
+  if (recordAbsent) meta.absent = safe.filter((rel) => state.get(rel) === undefined).sort();
   writeInside(projectDir, `${backupRel}/${BACKUP_META}`, `${JSON.stringify(meta, null, 2)}\n`);
   return path.join(projectDir, ...backupRel.split("/"));
 };
@@ -159,8 +166,9 @@ export const listBackups = (projectDir) => {
 };
 
 /**
- * Restore a backup: first save the current state (safety backup), then remove managed files
- * that did not exist in the backup, then copy the backup files back.
+ * Restore a backup: first save the current state (safety backup), then remove the files the run
+ * created (managed files that were neither in the backup nor managed before the run, and files
+ * recorded as absent), then copy the backup files back.
  */
 export const restoreBackup = ({ projectDir, backupId = null, currentManaged = [], extraFiles = [], dryRun = false, runId = createRunId() }) => {
   const backups = listBackups(projectDir);
@@ -168,13 +176,19 @@ export const restoreBackup = ({ projectDir, backupId = null, currentManaged = []
   if (!selected) throw new Error(backupId ? `Backup not found: ${backupId}` : "No backups found");
   const backupFiles = selected.meta.files ?? listFiles(selected.path).filter((f) => f !== BACKUP_META);
   const backupSet = new Set(backupFiles);
-  const toRemove = currentManaged.filter((f) => !backupSet.has(f) && exists(resolveInside(projectDir, f)));
+  // Managed before the run but not in the backup = left untouched by the run: keep it.
+  const managedBefore = new Set(Array.isArray(selected.meta.managedFiles) ? selected.meta.managedFiles : []);
+  const absent = Array.isArray(selected.meta.absent) ? selected.meta.absent : [];
+  const toRemove = [...new Set([...currentManaged.filter((f) => !managedBefore.has(f)), ...absent])].filter(
+    (f) => !backupSet.has(f) && isSafeRelative(f) && exists(resolveInside(projectDir, f)),
+  );
   if (dryRun) return { selected, restore: backupFiles, remove: toRemove, safetyBackupDir: null };
   const safetyBackupDir = createBackup({
     projectDir,
-    files: [...new Set([...currentManaged, ...backupFiles, ...extraFiles])],
+    files: [...new Set([...currentManaged, ...backupFiles, ...extraFiles, ...absent])],
     runId: `pre-rollback-${runId}`,
     reason: "pre-rollback",
+    recordAbsent: true,
   });
   for (const rel of toRemove) removeInside(projectDir, rel);
   for (const rel of backupFiles) {

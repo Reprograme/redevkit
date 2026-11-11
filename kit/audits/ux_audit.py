@@ -89,9 +89,12 @@ Analyzes code for compliance with:
 Total: 80+ checks across all design principles
 
 Usage:
-    python ux_audit.py <project_path_or_file> [--json]
+    python ux_audit.py <project_path_or_file> [--json] [--exclude PATTERN] [--no-gitignore]
 
-With no .tsx/.jsx/.html/.vue/.svelte/.css file the audit is SKIPPED.
+Files: .tsx/.jsx/.html/.vue/.svelte/.css and PHP views (.php/.phtml with markup;
+their PHP blocks are masked first). Paths follow the shared exclusion policy
+(``audit_common.PathFilter``) plus ``ui/`` (generated component libraries).
+With no such file the audit is SKIPPED.
 """
 from __future__ import annotations
 
@@ -103,8 +106,32 @@ import sys
 from pathlib import Path
 from typing import Optional, Sequence
 
+sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audit_common import (  # noqa: E402
+    PathFilter, add_exclusion_arguments, path_filter_from_args, read_markup_source,
+)
+
 
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
+EXTENSIONS = {'.tsx', '.jsx', '.html', '.vue', '.svelte', '.css', '.php', '.phtml'}
+# Banned purple family: hex values, Tailwind color classes and CSS color keywords
+# used as values. Plain words ("violeta", "magenta" in copy) are not colors.
+PURPLE_PATTERN = re.compile(
+    r"#(?:8b5cf6|a855f7|9333ea|7c3aed|6d28d9|a78bfa|c4b5fd|ddd6fe|ede9fe)\b"
+    r"|\b(?:bg|text|from|via|to|border|ring|fill|stroke|outline|decoration|accent|caret|divide|shadow|placeholder)"
+    r"-(?:purple|violet|fuchsia)-\d{2,3}\b"
+    r"|:\s*(?:purple|violet|fuchsia|magenta|lavender)\b",
+    re.IGNORECASE,
+)
+
+
+def _float(value: str) -> Optional[float]:
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 def utf8_stdio() -> None:
@@ -114,10 +141,8 @@ def utf8_stdio() -> None:
         except (AttributeError, ValueError, OSError):
             pass
 
-SKIP_DIRS = {
-    "node_modules", ".git", "dist", "build", ".next", "out", "coverage", "ui",
-    ".agents", ".claude", ".codex", ".redevkit",
-}
+# UX-specific directories, on top of the shared exclusion defaults.
+SKIP_DIRS = {"ui"}
 
 class UXAuditor:
     def __init__(self):
@@ -128,9 +153,11 @@ class UXAuditor:
 
     def audit_file(self, filepath: str) -> None:
         try:
-            with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
-                content = f.read()
-        except: return
+            content = read_markup_source(filepath)
+        except OSError:
+            return
+        if content is None:
+            return  # a PHP file without markup (controller, model): not a view
 
         self.files_checked += 1
         filename = os.path.basename(filepath)
@@ -303,7 +330,7 @@ class UXAuditor:
             # Extract line-height values
             line_heights = re.findall(r'(?:leading-|line-height:\s*)([\d.]+)', content)
             for lh in line_heights:
-                if float(lh) > 1.5:
+                if (_float(lh) or 0) > 1.5:
                     self.warnings.append(f"[Typography] {filename}: Heading has line-height {lh} (>1.3). Headings should be tighter (1.1-1.3).")
 
         # 2.4 Letter Spacing (Tracking)
@@ -440,7 +467,7 @@ class UXAuditor:
         if shadow_count > 0:
             # Check for shadow opacity levels (should indicate hierarchy)
             opacities = re.findall(r'rgba?\([^)]+,\s*([\d.]+)\)', content)
-            shadow_opacities = [float(o) for o in opacities if float(o) < 0.5]
+            shadow_opacities = [v for v in (_float(o) for o in opacities) if v is not None and v < 0.5]
             if shadow_count >= 3 and len(shadow_opacities) > 0:
                 # Check if there's variety in shadow opacities for different elevations
                 unique_opacities = len(set(shadow_opacities))
@@ -522,14 +549,10 @@ class UXAuditor:
         # --- 4. COLOR SYSTEM (color-system.md) ---
 
         # 4.1 PURPLE BAN - Critical check from color-system.md
-        purple_hexes = ['#8B5CF6', '#A855F7', '#9333EA', '#7C3AED', '#6D28D9',
-                        '#8B5CF6', '#A78BFA', '#C4B5FD', '#DDD6FE', '#EDE9FE',
-                        '#8b5cf6', '#a855f7', '#9333ea', '#7c3aed', '#6d28d9',
-                        'purple', 'violet', 'fuchsia', 'magenta', 'lavender']
-        for purple in purple_hexes:
-            if purple.lower() in content.lower():
-                self.issues.append(f"[Color] {filename}: PURPLE DETECTED ('{purple}'). Banned by the design rules. Use Teal/Cyan/Emerald instead.")
-                break
+        purple = PURPLE_PATTERN.search(content)
+        if purple:
+            found = purple.group(0).lstrip(': \t')
+            self.issues.append(f"[Color] {filename}: PURPLE DETECTED ('{found}'). Banned by the design rules. Use Teal/Cyan/Emerald instead.")
 
         # 4.2 60-30-10 Rule check
         # Count color usage to estimate ratio
@@ -588,6 +611,8 @@ class UXAuditor:
         # Check for excessively long or short animations
         durations = re.findall(r'(?:duration|animation-duration|transition-duration):\s*([\d.]+)(s|ms)', content)
         for duration, unit in durations:
+            if _float(duration) is None:
+                continue
             duration_ms = float(duration) * (1000 if unit == 's' else 1)
             if duration_ms < 50:
                 self.warnings.append(f"[Animation] {filename}: Very fast animation ({duration}{unit}). Minimum 50ms for visibility.")
@@ -695,13 +720,12 @@ class UXAuditor:
         if re.search(r'<img(?![^>]*alt=)[^>]*>', content):
             self.issues.append(f"[Accessibility] {filename}: Missing img alt text")
 
-    def audit_directory(self, directory: str) -> None:
-        extensions = {'.tsx', '.jsx', '.html', '.vue', '.svelte', '.css'}
-        for root, dirs, files in os.walk(directory):
-            dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
-            for file in files:
-                if Path(file).suffix in extensions:
-                    self.audit_file(os.path.join(root, file))
+    def audit_directory(self, directory: str, path_filter: Optional[PathFilter] = None) -> None:
+        if path_filter is None:
+            path_filter = PathFilter(directory, extra_dirs=SKIP_DIRS)
+        for path in path_filter.walk(Path(directory).resolve()):
+            if path.suffix.lower() in EXTENSIONS:
+                self.audit_file(str(path))
 
     def get_report(self):
         return {
@@ -717,6 +741,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Audit frontend sources against UX and design principles")
     parser.add_argument("project", nargs="?", default=".", help="Project directory or single file")
     parser.add_argument("--json", action="store_true", dest="as_json")
+    add_exclusion_arguments(parser)
     args = parser.parse_args(argv)
     path = args.project
     is_json = args.as_json
@@ -728,7 +753,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if os.path.isfile(path):
         auditor.audit_file(path)
     else:
-        auditor.audit_directory(path)
+        auditor.audit_directory(path, path_filter_from_args(path, args, extra_dirs=SKIP_DIRS))
 
     report = auditor.get_report()
     if report["files_checked"] == 0:

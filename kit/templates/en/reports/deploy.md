@@ -36,7 +36,7 @@ failed, rolled-back, aborted, clean, dirty.
 <!--
 Reference run and comparison: redevkit-test/references/code-state.md § Compare (the
 single definition). BLOCKED when a debug is pending, when there is no reference, when the
-latest test run is not PASS, or when the code changed after it.
+latest feature-wide test run is not PASS, or when the code changed after it.
 -->
 
 ## Deploy plan

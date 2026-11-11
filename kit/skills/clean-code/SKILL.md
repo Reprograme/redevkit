@@ -143,7 +143,7 @@ File to edit: UserService.ts
 This skill runs no scripts. One rule covers tests and audits: the full suite runs as
 `{{CMD:redevkit-test}}` step 3 says (test runner audit when Python is found, otherwise the
 `tech.md` test command), and the audits (`.redevkit/audits/*.py`) run inside
-`{{CMD:redevkit-test}}` and `{{CMD:redevkit-verify}}`.
+`{{CMD:redevkit-verify}}` step 4.
 
 While writing code (light verification), run the project's own build, type-check, linter and
 the tests you touched, not the audit scripts, and report the commands with their observed

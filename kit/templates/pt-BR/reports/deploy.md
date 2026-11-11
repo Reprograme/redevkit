@@ -36,7 +36,7 @@ failed, rolled-back, aborted, clean, dirty.
 <!--
 Execução de referência e comparação: redevkit-test/references/code-state.md § Compare (a
 definição única). BLOCKED quando há debug pendente, quando não há referência, quando a última
-execução de testes não é PASS ou quando o código mudou depois dela.
+execução de testes da feature inteira não é PASS ou quando o código mudou depois dela.
 -->
 
 ## Plano de deploy

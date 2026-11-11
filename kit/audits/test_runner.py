@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Optional, Sequence
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
 TIMEOUT_SECONDS = 300
 NO_TESTS_EXIT_CODES = {5}  # pytest "no tests collected", unittest "NO TESTS RAN" (3.12+)
+NPM_PLACEHOLDER = "no test specified"  # `npm init` default: echo "Error: no test specified" && exit 1
 
 
 def utf8_stdio() -> None:
@@ -92,15 +93,16 @@ def detect_test_framework(project_path: Path) -> Dict[str, Any]:
     if package_json.exists():
         result["type"] = "node"
         try:
-            pkg = json.loads(package_json.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+            pkg = json.loads(package_json.read_text(encoding="utf-8-sig"))  # npm accepts a BOM
+        except (OSError, ValueError) as exc:  # ValueError: invalid JSON or invalid UTF-8
             pkg = {}
             result["skip_reason"] = f"package.json could not be read: {exc}"
         scripts = pkg.get("scripts", {}) if isinstance(pkg, dict) else {}
         deps: Dict[str, Any] = {}
         if isinstance(pkg, dict):
-            deps.update(pkg.get("dependencies", {}) or {})
-            deps.update(pkg.get("devDependencies", {}) or {})
+            for section in ("dependencies", "devDependencies"):
+                if isinstance(pkg.get(section), dict):
+                    deps.update(pkg[section])
 
         coverage_cmd = None
         framework = None
@@ -113,7 +115,12 @@ def detect_test_framework(project_path: Path) -> Dict[str, Any]:
             jest = local_bin(project_path, "jest")
             coverage_cmd = [jest, "--coverage"] if jest else None
 
-        if isinstance(scripts, dict) and "test" in scripts:
+        test_script = scripts.get("test") if isinstance(scripts, dict) else None
+        placeholder = isinstance(test_script, str) and NPM_PLACEHOLDER in test_script
+        if placeholder and not framework:
+            # Not a test command: fall through to the Python detection, else SKIPPED.
+            result["skip_reason"] = "package.json test script is the npm placeholder (no test specified)"
+        elif not placeholder and isinstance(scripts, dict) and "test" in scripts:
             npm = which("npm")
             result["framework"] = framework or "npm test"
             if npm:
@@ -207,7 +214,12 @@ def run_tests(cmd: List[str], cwd: Path) -> Dict[str, Any]:
     result["output"] = (proc.stdout or "")[:3000]
     result["error"] = (proc.stderr or "")[-1500:]
     _parse_counts(combined, result)
-    if proc.returncode == 0:
+    ran_nothing = re.search(r"^Ran 0 tests?\b", combined, re.MULTILINE) is not None
+    if proc.returncode == 0 and ran_nothing:
+        # unittest before Python 3.12 exits 0 when it finds no test: nothing was verified.
+        result["status"] = "skipped"
+        result["error"] = "no tests found"
+    elif proc.returncode == 0:
         result["status"] = "passed"
     elif proc.returncode in NO_TESTS_EXIT_CODES and result["tests_failed"] == 0:
         result["status"] = "skipped"

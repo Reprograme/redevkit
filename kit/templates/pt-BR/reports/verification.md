@@ -92,7 +92,8 @@ Convergência, Evidência de execução e Auditorias ficam SKIPPED (test run FAI
 
 <!--
 converged+verified: execução de testes PASS; nenhuma lacuna de convergência; build e fluxos
-críticos passam; nenhuma auditoria com FAIL.
+críticos passam; nenhuma auditoria com FAIL por achados no escopo (achados em código de
+terceiros ou gerado vão para Observações como fora do escopo e nunca viram tarefas).
 gaps: execução de testes PASS e a execução passa, mas a convergência ou auditorias não
 críticas anexaram tarefas.
 failed: a execução de testes é FAIL, ou o build, um fluxo crítico ou uma auditoria

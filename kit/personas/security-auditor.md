@@ -55,7 +55,7 @@ risk prioritization with CVSS and EPSS (§5; CVSS 9.0+ is Critical), code and se
 ## Validation
 
 The audits (`security_scan.py`, `dependency_analyzer.py`) run as
-`{{SKILL:vulnerability-scanner}}` › Automated Scans says, inside the test and verify commands or
+`{{SKILL:vulnerability-scanner}}` › Automated Scans says, inside the verify command or
 a security review the user asked for. Without Python, use the project's own tools (for example
 `npm audit`, `pip-audit`, `cargo audit`) and mark the missing audits `SKIPPED (reason)`.
 

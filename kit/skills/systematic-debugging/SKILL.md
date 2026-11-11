@@ -88,16 +88,17 @@ Find the root cause, not just the symptom.
 1. **RED:** write a regression test that reproduces the bug. Run it and watch it fail for the
    reason found in Phase 3 (see `{{SKILL:tdd-workflow}}`).
 2. **GREEN:** make the smallest change that fixes the root cause.
-3. Run the regression test, then the full suite as `{{CMD:redevkit-test}}` step 3 says
-   (`test_runner.py` audit when Python is found, otherwise the `tech.md` test command).
+3. Run the regression test, then the relevant suite as `{{SKILL:redevkit-bug-test}}` says
+   (tests of the changed modules and of the feature; the full suite only when the project has
+   no narrower command). The full suite runs next, in `{{CMD:redevkit-verify}}` step 1.
 4. Search for the same pattern elsewhere in the code.
-5. Record the verdict: `verified` (bug gone, suite green), `partial` (bug gone, other failures
-   remain) or `failed`.
+5. Record the verdict: `verified` (bug gone, relevant suite green), `partial` (bug gone, other
+   failures remain) or `failed`.
 
 ```markdown
 ## Fix Verification
 - [ ] Regression test failed before the fix and passes after it
-- [ ] Full suite run, results recorded (command + observed output)
+- [ ] Relevant suite run, results recorded (command + observed output)
 - [ ] Related functionality still works
 - [ ] Similar code checked
 - [ ] Root cause documented

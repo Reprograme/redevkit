@@ -75,8 +75,23 @@ import sys
 from pathlib import Path
 from typing import Optional, Sequence
 
+sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audit_common import PathFilter, add_exclusion_arguments, path_filter_from_args  # noqa: E402
+
 
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
+EXTENSIONS = {'.tsx', '.ts', '.jsx', '.js', '.dart'}
+# A size property and a two-digit value below 44, not the start of "100" or "30%".
+SMALL_TARGET = re.compile(r'(?<![\w-])(?:width|height|size):\s*([0-3]\d)(?![\d.%])')
+
+
+def _float(value: str) -> Optional[float]:
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 def utf8_stdio() -> None:
@@ -86,10 +101,8 @@ def utf8_stdio() -> None:
         except (AttributeError, ValueError, OSError):
             pass
 
-SKIP_DIRS = {
-    "node_modules", ".git", "dist", "build", ".next", "out", "coverage", "ios", "android",
-    ".idea", ".agents", ".claude", ".codex", ".redevkit",
-}
+# Mobile-specific directories (native projects), on top of the shared exclusion defaults.
+SKIP_DIRS = {"ios", "android"}
 
 class MobileAuditor:
     def __init__(self):
@@ -121,7 +134,7 @@ class MobileAuditor:
 
         # 1.1 Touch Target Size Check
         # Look for small touch targets
-        small_sizes = re.findall(r'(?:width|height|size):\s*([0-3]\d)', content)
+        small_sizes = SMALL_TARGET.findall(content)
         for size in small_sizes:
             if int(size) < 44:
                 self.issues.append(f"[Touch Target] {filename}: Touch target size {size}px < 44px minimum (iOS: 44pt, Android: 48dp)")
@@ -278,11 +291,11 @@ class MobileAuditor:
         # 4.3 Mobile Line Height Check
         line_heights = re.findall(r'lineHeight:\s*([\d.]+)', content)
         for lh in line_heights:
-            if float(lh) > 1.8:
+            if (_float(lh) or 0) > 1.8:
                 self.warnings.append(f"[Typography] {filename}: lineHeight {lh} too high for mobile. Mobile text needs tighter spacing (1.3-1.5).")
 
         # 4.4 Font Size Limits
-        font_sizes = re.findall(r'fontSize:\s*([\d.]+)', content)
+        font_sizes = [fs for fs in re.findall(r'fontSize:\s*([\d.]+)', content) if _float(fs) is not None]
         for fs in font_sizes:
             size = float(fs)
             if size < 12:
@@ -375,7 +388,7 @@ class MobileAuditor:
             has_body = bool(re.search(r'fontSize:\s*17.*regular|body', content))
 
             # Check if following iOS scale roughly
-            font_sizes = re.findall(r'fontSize:\s*([\d.]+)', content)
+            font_sizes = [fs for fs in re.findall(r'fontSize:\s*([\d.]+)', content) if _float(fs) is not None]
             ios_scale_sizes = [34, 28, 22, 20, 17, 16, 15, 13, 12, 11]
             matching_ios = sum(1 for size in font_sizes if any(abs(float(size) - ios_size) < 1 for ios_size in ios_scale_sizes))
 
@@ -632,13 +645,12 @@ class MobileAuditor:
             # This is more of a configuration check, not code pattern
             self.passed_count += 1  # Hermes is default in RN 0.70+
 
-    def audit_directory(self, directory: str) -> None:
-        extensions = {'.tsx', '.ts', '.jsx', '.js', '.dart'}
-        for root, dirs, files in os.walk(directory):
-            dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
-            for file in files:
-                if Path(file).suffix in extensions:
-                    self.audit_file(os.path.join(root, file))
+    def audit_directory(self, directory: str, path_filter: Optional[PathFilter] = None) -> None:
+        if path_filter is None:
+            path_filter = PathFilter(directory, extra_dirs=SKIP_DIRS)
+        for path in path_filter.walk(Path(directory).resolve()):
+            if path.suffix.lower() in EXTENSIONS:
+                self.audit_file(str(path))
 
     def get_report(self):
         return {
@@ -656,6 +668,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Audit React Native / Flutter sources for mobile UX")
     parser.add_argument("project", nargs="?", default=".", help="Project directory or single file")
     parser.add_argument("--json", action="store_true", dest="as_json")
+    add_exclusion_arguments(parser)
     args = parser.parse_args(argv)
     path = args.project
     is_json = args.as_json
@@ -667,7 +680,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if os.path.isfile(path):
         auditor.audit_file(path)
     else:
-        auditor.audit_directory(path)
+        auditor.audit_directory(path, path_filter_from_args(path, args, extra_dirs=SKIP_DIRS))
 
     report = auditor.get_report()
     if report["mobile_files"] == 0:
@@ -677,7 +690,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if is_json:
         print(json.dumps(report, indent=2))
     else:
-        print(f"\n[MOBILE AUDIT] {report['files_checked']} mobile files checked")
+        print(f"\n[MOBILE AUDIT] {report['mobile_files']} mobile files checked ({report['files_checked']} source files read)")
         print("-" * 50)
         if report['issues']:
             print(f"[!] ISSUES ({len(report['issues'])}):")

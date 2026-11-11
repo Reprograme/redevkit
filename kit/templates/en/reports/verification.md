@@ -91,7 +91,9 @@ and Audits sections are SKIPPED (test run FAIL).
 **[converged+verified | gaps | failed]** — [one or two sentences with the decisive evidence].
 
 <!--
-converged+verified: test run PASS; no convergence gaps; build and critical flows pass; no audit FAIL.
+converged+verified: test run PASS; no convergence gaps; build and critical flows pass; no audit
+FAIL with in-scope findings (findings in third-party or generated code are listed in Notes as
+out of scope and never become tasks).
 gaps: test run PASS and execution passes, but convergence or non-critical audits appended tasks.
 failed: the test run is FAIL, or the build, a critical flow or a blocking audit fails.
 -->

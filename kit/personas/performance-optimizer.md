@@ -70,7 +70,7 @@ they are already loaded. Read on demand: `{{SKILL:nextjs-react-expert}}` for Rea
 1. **Measure** with the right tool: Lighthouse (vitals and opportunities), bundle analyzer
    (composition), DevTools performance (runtime), DevTools memory (heap and leaks), query plans
    for databases. The `lighthouse_audit.py`, `bundle_analyzer.py` and
-   `react_performance_checker.py` audits run inside the test and verify commands (see
+   `react_performance_checker.py` audits run inside the verify command's audit step (see
    `{{SKILL:lint-and-validate}}`); during implementation use the framework's build output.
 2. **Identify** the biggest bottleneck and quantify its impact on users.
 3. **Fix and validate:** one targeted change, re-measure, confirm the gain, and run the tests to

@@ -17,12 +17,13 @@ PROJECT_AUDITS = (
 EXPECTED_SCRIPTS = set(PROJECT_AUDITS) | {
     "security_scan", "lighthouse_audit", "playwright_runner", "checklist", "verify_all", "validation_runner",
 }
+HELPER_MODULES = {"audit_common"}  # imported by the audits, never run directly
 
 
 class TestSkippedContract(unittest.TestCase):
-    def test_kit_ships_exactly_the_twenty_scripts(self):
+    def test_kit_ships_exactly_the_twenty_scripts_and_the_shared_helper(self):
         shipped = {path.stem for path in AUDITS_DIR.glob("*.py")}
-        self.assertEqual(shipped, EXPECTED_SCRIPTS)
+        self.assertEqual(shipped, EXPECTED_SCRIPTS | HELPER_MODULES)
         self.assertFalse((AUDITS_DIR / "convert_rules.py").exists())  # S6
 
     def test_empty_project_is_skipped_never_passed(self):
@@ -58,7 +59,8 @@ class TestSkippedContract(unittest.TestCase):
                 self.assertIn("from __future__ import annotations", text)
                 if path.name != "security_scan.py":  # it only names the pattern it detects
                     self.assertNotIn("shell=True", text)
-                if path.name not in {"checklist.py", "verify_all.py"}:  # they delegate to validation_runner
+                # checklist/verify_all delegate to validation_runner; the helper prints nothing.
+                if path.name not in {"checklist.py", "verify_all.py", "audit_common.py"}:
                     self.assertIn("reconfigure(encoding=\"utf-8\"", text)
 
     def test_no_bytecode_left_in_kit(self):

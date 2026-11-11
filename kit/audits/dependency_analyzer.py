@@ -1,26 +1,30 @@
 #!/usr/bin/env python3
 """Offline dependency hygiene analyzer for common package ecosystems.
 
-Manifests are found with one directory walk that prunes SKIP_DIRS by path
-segment (node_modules is never entered). With no manifest the audit is SKIPPED.
+Manifests are found with one directory walk under the shared exclusion policy
+(``audit_common.PathFilter``; node_modules is never entered). A package.json
+without dependencies needs no lock file, and a workspace package is covered by
+a lock file in any parent directory inside the project. With no manifest the
+audit is SKIPPED.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
+sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audit_common import PathFilter, add_exclusion_arguments, path_filter_from_args  # noqa: E402
+
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
-SKIP_DIRS = {
-    "node_modules", ".git", ".agents", ".claude", ".codex", ".redevkit", ".venv", "venv",
-    "dist", "build", ".next", "vendor", "__pycache__",
-}
 SEVERITY = {"none": 99, "low": 1, "medium": 2, "high": 3, "critical": 4}
+JS_LOCK_FILES = ("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb")
 
 
 def utf8_stdio() -> None:
@@ -31,12 +35,21 @@ def utf8_stdio() -> None:
             pass
 
 
-def iter_named_files(root: Path, names: set):
-    for current, dirs, files in os.walk(root):
-        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
-        for name in sorted(files):
-            if name in names:
-                yield Path(current) / name
+def iter_named_files(root: Path, names: set, path_filter: Optional[PathFilter] = None):
+    path_filter = path_filter if path_filter is not None else PathFilter(root)
+    for path in path_filter.walk(root):
+        if path.name in names:
+            yield path
+
+
+def _lock_files(package_dir: Path, root: Path) -> list[str]:
+    """Lock files next to the manifest, else in the nearest parent inside the project (workspaces)."""
+    folder = package_dir
+    while True:
+        locks = [name for name in JS_LOCK_FILES if (folder / name).exists()]
+        if locks or folder == root or root not in folder.parents:
+            return locks
+        folder = folder.parent
 
 
 def add(findings: list[dict[str, Any]], severity: str, issue: str, path: Path, detail: str) -> None:
@@ -45,9 +58,12 @@ def add(findings: list[dict[str, Any]], severity: str, issue: str, path: Path, d
 
 def analyze_package_json(path: Path, root: Path, findings: list[dict[str, Any]]) -> dict[str, Any]:
     try:
-        data = json.loads(path.read_text("utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        data = json.loads(path.read_text("utf-8-sig"))  # npm accepts a UTF-8 BOM
+    except (OSError, ValueError) as exc:  # ValueError: invalid JSON or invalid UTF-8
         add(findings, "high", "Invalid package.json", path.relative_to(root), str(exc))
+        return {"file": path.relative_to(root).as_posix(), "dependencies": 0}
+    if not isinstance(data, dict):
+        add(findings, "high", "Invalid package.json", path.relative_to(root), "top-level value is not an object")
         return {"file": path.relative_to(root).as_posix(), "dependencies": 0}
 
     deps: dict[str, str] = {}
@@ -65,9 +81,8 @@ def analyze_package_json(path: Path, root: Path, findings: list[dict[str, Any]])
         elif normalized.startswith("github:") and "#" not in normalized:
             add(findings, "medium", "GitHub dependency is not pinned to a ref", path.relative_to(root), f"{name}: {spec}")
 
-    package_dir = path.parent
-    locks = [name for name in ("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb") if (package_dir / name).exists()]
-    if not locks:
+    locks = _lock_files(path.parent, root)
+    if deps and not locks:  # a manifest without dependencies has nothing to lock
         add(findings, "high", "Missing JavaScript lock file", path.relative_to(root), "Add and commit one package-manager lock file.")
     elif len(locks) > 1:
         add(findings, "medium", "Multiple JavaScript lock files", path.relative_to(root), ", ".join(locks))
@@ -78,7 +93,7 @@ def analyze_requirements(path: Path, root: Path, findings: list[dict[str, Any]])
     unpinned = []
     total = 0
     try:
-        lines = path.read_text("utf-8").splitlines()
+        lines = path.read_text("utf-8-sig", errors="replace").splitlines()
     except OSError as exc:
         add(findings, "high", "Unreadable requirements file", path.relative_to(root), str(exc))
         return {"file": path.relative_to(root).as_posix(), "dependencies": 0}
@@ -96,13 +111,19 @@ def analyze_requirements(path: Path, root: Path, findings: list[dict[str, Any]])
     return {"file": path.relative_to(root).as_posix(), "dependencies": total, "unpinned": len(unpinned)}
 
 
-def analyze(root: Path) -> dict[str, Any]:
+def analyze(root: Path, path_filter: Optional[PathFilter] = None) -> dict[str, Any]:
+    root = root.resolve()
+    path_filter = path_filter if path_filter is not None else PathFilter(root)
     findings: list[dict[str, Any]] = []
     manifests: list[dict[str, Any]] = []
     other_manifests = 0
-    for path in iter_named_files(root, {"package.json"}):
+    named = list(iter_named_files(root, {
+        "package.json", "requirements.txt", "requirements-dev.txt", "requirements-prod.txt",
+        "Cargo.toml", "Gemfile", "go.mod", "Pipfile", "pyproject.toml",
+    }, path_filter))
+    for path in (p for p in named if p.name == "package.json"):
         manifests.append(analyze_package_json(path, root, findings))
-    for path in iter_named_files(root, {"requirements.txt", "requirements-dev.txt", "requirements-prod.txt"}):
+    for path in (p for p in named if p.name.startswith("requirements")):
         manifests.append(analyze_requirements(path, root, findings))
 
     # Lightweight presence checks for other ecosystems.
@@ -113,7 +134,7 @@ def analyze(root: Path) -> dict[str, Any]:
         ("Pipfile", ("Pipfile.lock",), "Python/Pipenv"),
         ("pyproject.toml", ("poetry.lock", "uv.lock", "requirements.txt"), "Python"),
     ):
-        for path in iter_named_files(root, {manifest}):
+        for path in (p for p in named if p.name == manifest):
             other_manifests += 1
             present = [name for name in locks if (path.parent / name).exists()]
             if not present:
@@ -143,11 +164,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("project", nargs="?", default=".")
     parser.add_argument("--output", choices=["json", "summary"], default="summary")
     parser.add_argument("--fail-on", choices=list(SEVERITY), default="high")
+    add_exclusion_arguments(parser)
     args = parser.parse_args(argv)
     root = Path(args.project).resolve()
     if not root.is_dir():
         parser.error(f"Project directory does not exist: {root}")
-    report = analyze(root)
+    report = analyze(root, path_filter_from_args(root, args))
     if not report["manifest_count"]:
         print(f"Dependency Analysis: {root}")
         print("SKIPPED (no dependency manifest found)")

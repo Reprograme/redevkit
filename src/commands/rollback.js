@@ -1,6 +1,6 @@
 // redevkit rollback [--backup <id>] [--dry-run]  (§10)
 import path from "node:path";
-import { t, getLang } from "../core/i18n.js";
+import { t, getLang, setLang } from "../core/i18n.js";
 import { CONFIG_FILES, CONTEXT_FILES } from "../core/install.js";
 import { listBackups, restoreBackup } from "../core/managed-tree.js";
 import { loadManifest } from "../core/manifest.js";
@@ -8,6 +8,7 @@ import { CliError } from "./init.js";
 
 export const runRollback = async (opts, { log = console.log, projectDir = process.cwd() } = {}) => {
   const { manifest } = loadManifest(projectDir);
+  if (manifest?.lang) setLang(manifest.lang); // messages in the manifest language, like the other commands
   if (opts.list) {
     const backups = listBackups(projectDir);
     if (!backups.length) log(t("noBackups"));

@@ -62,6 +62,8 @@ class CheckSpec:
     required: bool = False
     args: Tuple[str, ...] = ()
     timeout: int = 300
+    excludes: bool = False  # the script walks the project: forward --exclude / --no-gitignore
+    tests: bool = False  # runs the project's test suite: SKIPPED with --no-tests
 
 
 @dataclass
@@ -122,9 +124,27 @@ def build_parser(description: str) -> argparse.ArgumentParser:
         action="store_true",
         help="Skip every URL-based runtime check (Lighthouse, Playwright)",
     )
+    parser.add_argument(
+        "--no-tests",
+        action="store_true",
+        help="Do not run the project's test suite (Test Runner is reported as SKIPPED); "
+             "use it when the suite already ran for this code",
+    )
     parser.add_argument("--stop-on-fail", action="store_true", help="Stop after the first failed check")
     parser.add_argument("--report", type=Path, help="Write a machine-readable JSON report")
+    parser.add_argument(
+        "--exclude", action="append", default=[], metavar="PATTERN",
+        help="Exclude paths matching this .gitignore-style pattern (relative to the project root) "
+             "in every audit that scans files; repeatable",
+    )
+    parser.add_argument(
+        "--no-gitignore", action="store_true",
+        help="Audits that scan files do not read the project's .gitignore files",
+    )
     return parser
+
+
+NO_TESTS_REASON = "test suite not run (--no-tests); its evidence comes from a separate run"
 
 
 def select_specs(specs: Iterable[CheckSpec], no_runtime: bool) -> List[CheckSpec]:
@@ -132,7 +152,8 @@ def select_specs(specs: Iterable[CheckSpec], no_runtime: bool) -> List[CheckSpec
     return [spec for spec in specs if not (no_runtime and spec.target == "url")]
 
 
-def _command_for(spec: CheckSpec, script: Path, project: Path, url: Optional[str]) -> Optional[List[str]]:
+def _command_for(spec: CheckSpec, script: Path, project: Path, url: Optional[str],
+                 exclude: Sequence[str] = (), no_gitignore: bool = False) -> Optional[List[str]]:
     command = [sys.executable, str(script)]
     if spec.target == "project":
         command.append(str(project))
@@ -141,6 +162,10 @@ def _command_for(spec: CheckSpec, script: Path, project: Path, url: Optional[str
             return None
         command.append(url)
     command.extend(spec.args)
+    if spec.excludes:
+        command.extend(f"--exclude={pattern}" for pattern in exclude)
+        if no_gitignore:
+            command.append("--no-gitignore")
     return command
 
 
@@ -160,14 +185,18 @@ def _child_env() -> dict:
     return env
 
 
-def run_check(spec: CheckSpec, audits_dir: Path, project: Path, url: Optional[str]) -> CheckResult:
+def run_check(spec: CheckSpec, audits_dir: Path, project: Path, url: Optional[str],
+              exclude: Sequence[str] = (), no_gitignore: bool = False, no_tests: bool = False) -> CheckResult:
+    if no_tests and spec.tests:
+        CONSOLE.skipped(f"{spec.name}: SKIPPED ({NO_TESTS_REASON})")
+        return CheckResult(spec.name, spec.category, "skipped", spec.required, reason=NO_TESTS_REASON)
     script = audits_dir / spec.script
     if not script.is_file():
         reason = f"script not found: {script.name}"
         CONSOLE.skipped(f"{spec.name}: SKIPPED ({reason})")
         return CheckResult(spec.name, spec.category, "skipped", spec.required, reason=reason)
 
-    command = _command_for(spec, script, project, url)
+    command = _command_for(spec, script, project, url, exclude, no_gitignore)
     if command is None:
         reason = "URL not provided"
         CONSOLE.skipped(f"{spec.name}: SKIPPED ({reason})")
@@ -247,6 +276,9 @@ def execute_suite(
     project: Path,
     url: Optional[str],
     stop_on_fail: bool = False,
+    exclude: Sequence[str] = (),
+    no_gitignore: bool = False,
+    no_tests: bool = False,
 ) -> List[CheckResult]:
     results: List[CheckResult] = []
     current_category = ""
@@ -254,7 +286,7 @@ def execute_suite(
         if spec.category != current_category:
             current_category = spec.category
             CONSOLE.header(current_category)
-        result = run_check(spec, audits_dir, project, url)
+        result = run_check(spec, audits_dir, project, url, exclude, no_gitignore, no_tests)
         results.append(result)
         if stop_on_fail and result.status in {"failed", "error"}:
             break
@@ -346,8 +378,16 @@ def run_suite(title: str, summary_title: str, description: str, suite: Sequence[
     print(f"Project: {project}\nAudits: {AUDITS_DIR}\nURL: {args.url or 'not provided'}")
     if args.no_runtime:
         print("Runtime checks: disabled (--no-runtime)")
+    if args.no_tests:
+        print("Test suite: not run (--no-tests)")
+    if args.exclude or args.no_gitignore:
+        flags = [f"--exclude={pattern}" for pattern in args.exclude] + (["--no-gitignore"] if args.no_gitignore else [])
+        print(f"Exclusions forwarded to file-scanning audits: {' '.join(flags)}")
 
-    results = execute_suite(specs, AUDITS_DIR, project, args.url, args.stop_on_fail)
+    results = execute_suite(
+        specs, AUDITS_DIR, project, args.url, args.stop_on_fail,
+        exclude=args.exclude, no_gitignore=args.no_gitignore, no_tests=args.no_tests,
+    )
     code = print_summary(summary_title, results, started)
     if args.report:
         write_report(args.report.resolve(), project, AUDITS_DIR, results, started)

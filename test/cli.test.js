@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -149,6 +150,74 @@ test("target remove/add codex and rollback", () => {
     assert.equal(rb.status, 0, rb.stderr);
     assert.deepEqual(JSON.parse(read(dir, ".redevkit/manifest.json")).targets, ["claude"]);
     assert.equal(has(dir, ".agents/skills/redevkit-new/SKILL.md"), false);
+    // Files the rolled-back run did not touch stay: the claude install and the common files.
+    const st = JSON.parse(cli(["status", "--json"], dir).stdout);
+    assert.deepEqual(st.missing, [], "rollback must not delete managed files the run left untouched");
+    assert.ok(has(dir, ".claude/skills/redevkit-new/SKILL.md"));
+    assert.ok(has(dir, ".redevkit/templates/spec.md"));
+    assert.equal(has(dir, ".codex/config.toml"), false, "the config file created by `target add` is removed again");
+  } finally {
+    rm(dir);
+  }
+});
+
+test("rollback of an update restores only what the update touched, in the manifest language", () => {
+  const dir = tmpProject();
+  try {
+    assert.equal(cli(["init", "--yes", "--target", "claude", "--lang", "en"], dir).status, 0);
+    const skill = ".claude/skills/redevkit-status/SKILL.md";
+    const original = read(dir, skill);
+    // Simulate an older install of one file: the update rewrites only that file.
+    write(dir, skill, "old version\n");
+    const mPath = path.join(dir, ".redevkit", "manifest.json");
+    const m = JSON.parse(fs.readFileSync(mPath, "utf8"));
+    m.files[skill] = createHash("sha256").update("old version\n").digest("hex");
+    fs.writeFileSync(mPath, JSON.stringify(m));
+    const up = cli(["update"], dir);
+    assert.equal(up.status, 0, up.stderr);
+    assert.equal(read(dir, skill), original);
+    const managed = Object.keys(JSON.parse(read(dir, ".redevkit/manifest.json")).files).length;
+    const dry = cli(["rollback", "--dry-run"], dir);
+    assert.equal(dry.status, 0, dry.stderr);
+    assert.doesNotMatch(dry.stdout, /^\s+remove /m, "nothing to remove: the update added no file");
+    const rb = cli(["rollback"], dir);
+    assert.equal(rb.status, 0, rb.stderr);
+    assert.match(rb.stdout, /Backup \S+ restored/, "messages follow the manifest language (en)");
+    assert.equal(read(dir, skill), "old version\n");
+    const st = JSON.parse(cli(["status", "--json"], dir).stdout);
+    assert.deepEqual(st.missing, []);
+    assert.equal(Object.keys(JSON.parse(read(dir, ".redevkit/manifest.json")).files).length, managed);
+  } finally {
+    rm(dir);
+  }
+});
+
+test("first init backs up a user settings.json it rewrites; rollback undoes the whole init", () => {
+  const dir = tmpProject();
+  try {
+    const mine = '{"model":"x"}\n';
+    write(dir, ".claude/settings.json", mine);
+    const r = cli(["init", "--yes", "--target", "claude", "--lang", "en"], dir);
+    assert.equal(r.status, 0, r.stderr);
+    assert.notEqual(read(dir, ".claude/settings.json"), mine, "managed allow entries were merged");
+    const rb = cli(["rollback"], dir);
+    assert.equal(rb.status, 0, rb.stderr + rb.stdout);
+    assert.equal(read(dir, ".claude/settings.json"), mine);
+    for (const rel of [".redevkit/manifest.json", "CLAUDE.md", "AGENTS.md", ".claude/skills"]) assert.equal(has(dir, rel), false, `${rel} created by init is removed`);
+  } finally {
+    rm(dir);
+  }
+});
+
+test("usage errors exit with 2; --help and --version exit with 0", () => {
+  const dir = tmpProject();
+  try {
+    for (const args of [["init", "--bogus"], ["nosuch"], ["target", "add"], ["init", "--target"], ["init", "a", "b"], []]) {
+      const r = cli(args, dir);
+      assert.equal(r.status, 2, `${args.join(" ") || "(no command)"}: ${r.stderr}`);
+    }
+    for (const args of [["--help"], ["init", "--help"], ["--version"]]) assert.equal(cli(args, dir).status, 0, args.join(" "));
+    assert.deepEqual(fs.readdirSync(dir), [], "nothing written");
   } finally {
     rm(dir);
   }

@@ -104,10 +104,12 @@ evidence. Delegate browser flows when needed: {{DELEGATE:qa-automation-engineer}
 Run the audits as [execution](references/execution.md) § Audits describes: Python detection
 per `.redevkit/audits/README.md`; `verify_all.py` or `checklist.py` chosen by the Project Type
 in `plan.md` (or `tech.md` for a lightweight spec); `--no-runtime` when no app is running or
-the type has no runtime. No Python →
+the type has no runtime; always `--no-tests` (step 1 is the test evidence). No Python →
 `SKIPPED (no Python interpreter)` plus the project's own lint and type-check commands.
 Audit exit codes: `0` PASS, `1` FAIL, `2` usage error, `3` SKIPPED. Exit `3` is never a pass:
-record `SKIPPED (<reason printed by the script>)`.
+record `SKIPPED (<reason printed by the script>)`. One orchestrator run is the suite; then
+triage the findings by file: findings in third-party or generated code are out of scope and
+never become tasks or `failed` (same reference, steps 3 and 6).
 
 ### 5. Report
 
@@ -195,7 +197,7 @@ or changed, `MEMORY.md`. Print `💾 Memory updated (files).`
 Every line of the report comes from a command that ran and its observed output, or from the
 reused `test-report.md` run it names. A skipped audit or flow is `SKIPPED (reason)`, never
 `PASS`. `converged+verified` is allowed only when the test run is `PASS`, convergence found no
-gaps and every executed check passed.
+gaps and every executed check passed (audit findings that are all out of scope aside).
 
 ## Handoff
 

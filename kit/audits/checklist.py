@@ -2,7 +2,8 @@
 """Run the fast REDEVKIT validation checklist.
 
 Usage:
-    python checklist.py [project] [--url URL] [--no-runtime] [--stop-on-fail] [--report FILE]
+    python checklist.py [project] [--url URL] [--no-runtime] [--no-tests] [--stop-on-fail]
+                        [--report FILE] [--exclude PATTERN ...] [--no-gitignore]
 """
 from __future__ import annotations
 
@@ -22,14 +23,15 @@ CORE_CHECKS = (
         "P0 Security",
         required=True,
         args=("--output", "summary", "--fail-on", "high"),
+        excludes=True,
     ),
     CheckSpec("Lint Check", "lint_runner.py", "P1 Code Quality", required=True),
-    CheckSpec("Type Coverage", "type_coverage.py", "P1 Code Quality"),
-    CheckSpec("Schema Validation", "schema_validator.py", "P2 Data Layer"),
-    CheckSpec("Test Runner", "test_runner.py", "P3 Testing"),
-    CheckSpec("UX Audit", "ux_audit.py", "P4 UX & Accessibility"),
-    CheckSpec("Accessibility Check", "accessibility_checker.py", "P4 UX & Accessibility"),
-    CheckSpec("SEO Check", "seo_checker.py", "P5 SEO"),
+    CheckSpec("Type Coverage", "type_coverage.py", "P1 Code Quality", excludes=True),
+    CheckSpec("Schema Validation", "schema_validator.py", "P2 Data Layer", excludes=True),
+    CheckSpec("Test Runner", "test_runner.py", "P3 Testing", tests=True),
+    CheckSpec("UX Audit", "ux_audit.py", "P4 UX & Accessibility", excludes=True),
+    CheckSpec("Accessibility Check", "accessibility_checker.py", "P4 UX & Accessibility", excludes=True),
+    CheckSpec("SEO Check", "seo_checker.py", "P5 SEO", excludes=True),
 )
 
 URL_CHECKS = (

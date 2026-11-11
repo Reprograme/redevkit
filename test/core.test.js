@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 import test from "node:test";
 import { parse as tomlParse } from "smol-toml";
+import { cmdLine, probe } from "../src/commands/doctor.js";
+import { ask } from "../src/core/prompt.js";
+import { relativeLinks } from "../src/core/validate.js";
 import { appendMigratedNotes, isPointer, migratableContent, removeAgentsBlock, upsertAgentsBlock, BEGIN, END } from "../src/core/context-files.js";
 import { asList, parseFrontmatter, stringifyFrontmatter } from "../src/core/frontmatter.js";
 import { atomicWrite, cleanupPendingTemps, crossesLink, isSafeRelative, pendingTempCount, removeInside, writeInside } from "../src/core/fsutil.js";
@@ -157,6 +161,80 @@ test("backup and restore round-trip, with a safety backup", () => {
   }
 });
 
+test("restore removes only files the run created; untouched managed files stay", () => {
+  const dir = tmpProject();
+  try {
+    write(dir, "kept.md", "untouched by the run");
+    write(dir, "changed.md", "before");
+    // Backup taken by a run that changes changed.md, adds added.md and creates new-config.toml.
+    createBackup({ projectDir: dir, files: ["changed.md", "new-config.toml"], runId: "u1", manifestFiles: ["kept.md", "changed.md"], recordAbsent: true });
+    write(dir, "changed.md", "after");
+    write(dir, "added.md", "added by the run");
+    write(dir, "new-config.toml", "x = 1\n");
+    const dry = restoreBackup({ projectDir: dir, backupId: "u1", currentManaged: ["kept.md", "changed.md", "added.md"], dryRun: true });
+    assert.deepEqual([...dry.remove].sort(), ["added.md", "new-config.toml"]);
+    restoreBackup({ projectDir: dir, backupId: "u1", currentManaged: ["kept.md", "changed.md", "added.md"], runId: "r2" });
+    assert.equal(read(dir, "kept.md"), "untouched by the run");
+    assert.equal(read(dir, "changed.md"), "before");
+    assert.equal(has(dir, "added.md"), false);
+    assert.equal(has(dir, "new-config.toml"), false);
+    // Undoing the rollback brings the post-run state back.
+    restoreBackup({ projectDir: dir, backupId: "pre-rollback-r2", currentManaged: ["kept.md", "changed.md"], runId: "r3" });
+    assert.equal(read(dir, "changed.md"), "after");
+    assert.equal(read(dir, "added.md"), "added by the run");
+    assert.equal(read(dir, "new-config.toml"), "x = 1\n");
+    assert.equal(read(dir, "kept.md"), "untouched by the run");
+  } finally {
+    rm(dir);
+  }
+});
+
+test("ask(): Ctrl+C exits 130, end of input cancels, an answer is trimmed", async () => {
+  const tty = () => {
+    const input = new PassThrough();
+    input.isTTY = true;
+    input.setRawMode = () => {};
+    const output = new PassThrough();
+    output.isTTY = true;
+    output.columns = 80;
+    return { input, output };
+  };
+  const run = async (feed) => {
+    const s = tty();
+    setTimeout(() => feed(s.input), 10);
+    try {
+      return { answer: await ask("q? ", s) };
+    } catch (err) {
+      return { exitCode: err.exitCode };
+    }
+  };
+  assert.deepEqual(await run((i) => i.write("\x03")), { exitCode: 130 });
+  assert.deepEqual(await run((i) => i.end()), { exitCode: 1 });
+  assert.deepEqual(await run((i) => i.write(" both \r")), { answer: "both" });
+});
+
+test("doctor probe runs .cmd shims whose path has spaces (Windows)", (t) => {
+  assert.equal(cmdLine("C:\\Program Files\\nodejs\\npm.cmd", ["--version"]), '""C:\\Program Files\\nodejs\\npm.cmd" --version"');
+  if (process.platform !== "win32") {
+    t.skip("cmd.exe shims are Windows-only");
+    return;
+  }
+  const dir = tmpProject("bin com espaço");
+  const savedPath = process.env.PATH;
+  try {
+    fs.writeFileSync(path.join(dir, "redevkit-fake-tool.cmd"), "@echo fake-tool 1.2.3\r\n");
+    process.env.PATH = `${dir}${path.delimiter}${savedPath}`;
+    assert.equal(probe("redevkit-fake-tool"), "fake-tool 1.2.3");
+  } finally {
+    process.env.PATH = savedPath;
+    rm(dir);
+  }
+});
+
+test("validator does not crash on a link with a malformed %-escape", () => {
+  assert.deepEqual(relativeLinks("See [a](100%.md) and [b](x%20y.md)."), ["100%.md", "x y.md"]);
+});
+
 test("AGENTS.md block: insert, update and remove are idempotent", () => {
   const created = upsertAgentsBlock(null, "Block v1", "pt-BR");
   assert.ok(created.startsWith(BEGIN));
@@ -220,6 +298,15 @@ test("config.toml merge: absent, existing with comments, user value, invalid (D5
   assert.equal(un.text, user.replace(/\n$/, "") + "\n");
   assert.equal(unmergeCodexConfig(fresh.text).text, null);
   assert.equal(mergeCodexConfig("[broken", entries).ok, false);
+  // Tables defined through dotted keys get dotted managed lines; a re-run must recognize them as
+  // ours, not report them as the user's values.
+  const dotted = mergeCodexConfig('model = "x"\nskills.enabled = true\n\n[features.sub]\nq = 1\n', entries);
+  assert.equal(dotted.ok, true, dotted.error);
+  assert.equal(dotted.added.length, 2);
+  const again = mergeCodexConfig(dotted.text, entries);
+  assert.equal(again.changed, false);
+  assert.deepEqual(again.kept, [], "our own dotted keys are not the user's values");
+  assert.equal(unmergeCodexConfig(dotted.text).text, 'model = "x"\nskills.enabled = true\n\n[features.sub]\nq = 1\n');
 });
 
 test("persona TOML round-trips bodies with ''' and quotes (H6)", () => {

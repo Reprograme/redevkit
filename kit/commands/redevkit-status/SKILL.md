@@ -43,10 +43,10 @@ Collect each fact from its source; show the source when it is not obvious.
 | Active feature and phase | `.redevkit/memory/active.md` line `- Feature: specs/NNN-short-name` (or `none` / `nenhuma`); check that the path exists |
 | Task progress per phase | `tasks.md`: per `## Phase N:` heading (`## Fase N:` in pt-BR artifacts), count `- [X]`/`- [x]` over all task lines |
 | Plan approval | `active.md` › Active feature › `- Plan approved:` (date, or `no`) |
-| Last test | Latest dated run in `test-report.md`: date, verdict, failing count, run by |
+| Last test | Latest dated run in `test-report.md`: date, verdict, failing count, run by, scope; when it is not feature-wide, also the latest feature-wide run (Scope `feature`), the only kind verify reuses and deploy accepts |
 | Last verify | Latest dated run in `verification.md`: date, verdict |
 | Last debug and correction cycle | `active.md` › Last results › Debug and Correction cycle (counters, G5 reached) |
-| Code changed since last test | Recompute HEAD, working tree and both fingerprints per `{{SKILLDIR:redevkit-test}}/references/code-state.md` and compare with the latest run (read-only commands) |
+| Code changed since last test | Recompute HEAD, working tree and both fingerprints per `{{SKILLDIR:redevkit-test}}/references/code-state.md` and compare with the latest feature-wide run (read-only commands) |
 | Open bugs | `active.md` › Known issues lines `- Bug <slug>: open` (a fact; they close at the next `converged+verified` verify); also list `.redevkit/bugs/<slug>/` folders without `test.md` as interrupted debugs |
 | Pending assessments | `.redevkit/assessments/<slug>/` without `decision.md`, or with `needs-clarification` |
 | Pending interview markers | Count of `<PENDING INTERVIEW` / `<PENDENTE DE ENTREVISTA` per file in `.redevkit/memory/` |

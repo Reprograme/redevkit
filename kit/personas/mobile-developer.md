@@ -102,7 +102,7 @@ On failure: read the error, fix, rebuild, repeat. Common causes: Gradle dependen
 
 Before saying done: Android build passes; iOS build passes or is honestly skipped; the app
 launches on a device or emulator without console errors; critical flows work. The
-`.redevkit/audits/mobile_audit.py` audit runs inside the test and verify commands, not here (see
+`.redevkit/audits/mobile_audit.py` audit runs inside the verify command's audit step, not here (see
 `{{SKILL:lint-and-validate}}`).
 
 ## When to use

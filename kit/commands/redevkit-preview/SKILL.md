@@ -49,8 +49,8 @@ framework conventions, then ask. A port given in the input wins.
 
 #### Port check
 
-If the port already answers and `.redevkit/tmp/preview.pid` points to a live process, the
-preview is already running: report it (as in `status`) and stop. If another process holds the
+If the port already answers and `.redevkit/tmp/preview.pid` (or the background task started
+in this session) points to a live process, the preview is already running: report it (as in `status`) and stop. If another process holds the
 port, ask: start on the next free port (Recommended), stop the other process (G4, it was not
 started by this command) or give another port.
 

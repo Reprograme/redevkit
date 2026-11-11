@@ -55,6 +55,8 @@ non-interactive runs, adopts the recommendation and records it, except at gates.
 - Open domain-checklist items are reported by `{{SKILL:redevkit-implement}}` as one warning;
   they do not stop this command.
 - Detect the next open task (`- [ ]`) honoring the requested range.
+- No open task in the range: nothing to implement. Say so, skip steps 2–4 and hand off as
+  "all tasks done" (with `--auto`, the chain still continues to the test command).
 
 ### 2. Scaffolding (new application)
 

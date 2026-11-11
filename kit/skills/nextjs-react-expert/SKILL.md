@@ -52,7 +52,7 @@ Next.js 16+ caching and PPR                  → section 9
 
 ## Automated Check
 
-In the test and verify commands (not during implementation), run `.redevkit/audits/react_performance_checker.py <project_path>` with the Python interpreter
+In the verify command's audit step (not during implementation), when its orchestrator did not already run it, run `.redevkit/audits/react_performance_checker.py <project_path>` with the Python interpreter
 detected per `.redevkit/audits/README.md` (`--fail-on-warnings` makes advisory warnings
 blocking). Without Python, record `SKIPPED (no Python)` and review sections 1-2 by hand plus
 the framework's build output (`next build` prints route sizes). Bundle and Lighthouse audits

@@ -130,15 +130,20 @@ export const applySync = (sync, { projectDir, previousManifest = null, migrateCl
     ".redevkit/manifest.json",
   ];
   if (sync.claude.action === "migrate" && migrateClaude) touched.push("CLAUDE.md");
+  if (sync.claude.action === "create") touched.push("CLAUDE.md"); // recorded as absent: a rollback removes it
   if (sync.config.claude?.ok && sync.config.claude.changed) touched.push(CONFIG_FILES.claude);
   if (sync.config.codex?.ok && sync.config.codex.changed) touched.push(CONFIG_FILES.codex);
   if (sync.unconfig.claude) touched.push(CONFIG_FILES.claude);
   if (sync.unconfig.codex) touched.push(CONFIG_FILES.codex);
   // A forced overwrite of a user's file is always backed up, even on a first init (no manifest, no AGENTS.md).
   const forcedOverwrite = plan.actions.some((a) => String(a.reason ?? "").startsWith("forced"));
-  const needsBackup = touched.some((rel) => exists(resolveInside(projectDir, rel))) && (previousManifest || sync.claude.action === "migrate" || sync.agentsBefore !== null || forcedOverwrite);
+  // So is a user's own settings.json / config.toml that the config merge rewrites.
+  const userConfigChanged = Object.values(sync.config).some((c) => c?.ok && c.changed && c.before !== null && c.before !== undefined);
+  const needsBackup =
+    touched.some((rel) => exists(resolveInside(projectDir, rel))) &&
+    (previousManifest || sync.claude.action === "migrate" || sync.agentsBefore !== null || forcedOverwrite || userConfigChanged);
   const backupDir = backup && needsBackup
-    ? createBackup({ projectDir, files: touched, runId, reason: previousManifest ? "update" : "init", version: sync.version, manifestFiles: previousManifest ? Object.keys(previousManifest.files) : [] })
+    ? createBackup({ projectDir, files: touched, runId, reason: previousManifest ? "update" : "init", version: sync.version, manifestFiles: previousManifest ? Object.keys(previousManifest.files) : [], recordAbsent: true })
     : null;
 
   // 2. Managed files.

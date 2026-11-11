@@ -28,7 +28,7 @@ chain and never triggered by another command's handoff.
 3. **Green evidence on the current code.** Choose the reference run and compare it with the
    current code exactly as `{{SKILLDIR:redevkit-test}}/references/code-state.md` § Compare
    describes (debug pending → `BLOCKED` until the verify runs; otherwise the latest
-   `test-report.md` run, which must be `PASS`).
+   feature-wide `test-report.md` run, which must be `PASS`).
    - Same code state and a `PASS` reference → precondition status `OK`.
    - Anything else → `BLOCKED`: refuse and require `{{CMD:redevkit-verify}}` (debug pending)
      or `{{CMD:redevkit-test}}`. The only way past is `OVERRIDDEN`: the user states a reason,
@@ -64,7 +64,8 @@ is pending. Personas never ask: they return the question to you.
 
 - Environment from the input; otherwise ask: staging (Recommended when one exists),
   production, or another named environment.
-- Platform from `tech.md` › Deploy, else from files: `vercel.json`, `netlify.toml`,
+- Platform from `tech.md` (the deploy platform and environments recorded there by an
+  earlier deploy), else from files: `vercel.json`, `netlify.toml`,
   `fly.toml`, `railway.json`/`railway.toml`, `render.yaml`, `Procfile`, `Dockerfile`,
   `docker-compose.yml`, Kubernetes manifests, a deploy workflow in CI.
 

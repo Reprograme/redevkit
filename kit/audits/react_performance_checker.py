@@ -8,8 +8,11 @@ The tree is walked once per scan root; every check reads from that single
 file list. Findings are advisory WARNINGs (consecutive ``await`` statements
 may be legitimately dependent), so they block only with ``--fail-on-warnings``.
 
+Paths follow the shared exclusion policy (``audit_common.PathFilter``). The
+next/image advice is given only to Next.js projects.
+
 Usage:
-    python react_performance_checker.py <project_path> [--fail-on-warnings]
+    python react_performance_checker.py <project_path> [--fail-on-warnings] [--exclude PATTERN]
 """
 from __future__ import annotations
 
@@ -20,12 +23,13 @@ import sys
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
 
+sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audit_common import PathFilter, add_exclusion_arguments, path_filter_from_args  # noqa: E402
+
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
 
-SKIP_DIRS = {
-    ".git", ".next", ".agents", ".claude", ".codex", ".redevkit", "node_modules", "dist",
-    "build", "coverage", "out", ".turbo", ".cache", "vendor",
-}
 SOURCE_EXTENSIONS = (".ts", ".tsx", ".js", ".jsx")
 
 # A component is PascalCase with at least one lowercase letter (so constants
@@ -55,13 +59,15 @@ def find_components(content: str) -> List[str]:
 
 
 class PerformanceChecker:
-    def __init__(self, project_path: str):
+    def __init__(self, project_path: str, path_filter: Optional[PathFilter] = None):
         self.project_path = Path(project_path).resolve()
+        self.path_filter = path_filter if path_filter is not None else PathFilter(self.project_path)
         self.issues: List[Dict[str, str]] = []
         self.warnings: List[Dict[str, str]] = []
         self.passed: List[str] = []
         self.walk_count = 0
         self.is_react_project = False
+        self.is_next_project = False
         self.scan_roots = self._discover_scan_roots()
         self._files: Optional[Dict[Path, str]] = None
 
@@ -79,18 +85,17 @@ class PerformanceChecker:
             if not any(name in package_text for name in ('"next"', '"react"')):
                 continue
             self.is_react_project = True
+            self.is_next_project = self.is_next_project or '"next"' in package_text
             source = base / "src"
             candidates.append(source if source.is_dir() else base)
         return candidates or [self.project_path]
 
     def _walk_tree(self, root: Path) -> Iterable[Path]:
-        """Single os.walk of one scan root, pruning SKIP_DIRS by segment."""
+        """Single os.walk of one scan root under the shared exclusion policy."""
         self.walk_count += 1
-        for current, dirs, files in os.walk(root):
-            dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
-            for name in sorted(files):
-                if name.endswith(SOURCE_EXTENSIONS):
-                    yield Path(current) / name
+        for path in self.path_filter.walk(root):
+            if path.name.endswith(SOURCE_EXTENSIONS):
+                yield path
 
     @property
     def files(self) -> Dict[Path, str]:
@@ -189,6 +194,8 @@ class PerformanceChecker:
     def check_image_optimization(self) -> None:
         """<img> instead of next/image (Section 6)."""
         print("[*] Checking for image optimization...")
+        if not self.is_next_project:
+            return  # next/image only exists in Next.js projects
         for path, content in self._iter_files(["ts", "tsx", "js", "jsx"]):
             if "<img" in content and "next/image" not in content:
                 self._warn(path, "Using <img> instead of next/image", "Use next/image for automatic optimization",
@@ -243,12 +250,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Audit React/Next.js performance patterns")
     parser.add_argument("project_path", nargs="?", default=".")
     parser.add_argument("--fail-on-warnings", action="store_true", help="Treat advisory warnings as blocking")
+    add_exclusion_arguments(parser)
     args = parser.parse_args(argv)
 
     if not os.path.isdir(args.project_path):
         parser.error(f"Path not found: {args.project_path}")
 
-    checker = PerformanceChecker(args.project_path)
+    checker = PerformanceChecker(args.project_path, path_filter_from_args(Path(args.project_path).resolve(), args))
     if not checker.applicable():
         print("SKIPPED (not a React project: no react/next dependency and no .jsx/.tsx files)")
         return EXIT_SKIPPED

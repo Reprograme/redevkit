@@ -54,7 +54,7 @@ Before designing a schema:
 | --- | --- |
 | `schema_validator.py` | Prisma schema checks: syntax, missing relations, index recommendations, naming |
 
-In the test and verify commands (not during implementation), run `.redevkit/audits/schema_validator.py <project_path>` with the Python interpreter detected
+In the verify command's audit step (not during implementation), when its orchestrator did not already run it, run `.redevkit/audits/schema_validator.py <project_path>` with the Python interpreter detected
 per `.redevkit/audits/README.md`. If no Python is available, the audit is
 `SKIPPED (no Python)`: say so and fall back to the project's own commands (for example
 `npx prisma validate`, `npx drizzle-kit check`, the migration dry run, the test suite). Never

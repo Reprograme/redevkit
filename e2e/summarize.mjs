@@ -12,7 +12,7 @@ const details = [];
 for (const dir of dirs) {
   const file = path.join(dir, "result.json");
   if (!fs.existsSync(file)) {
-    rows.push(`| ${path.basename(dir)} | — | not run |`);
+    rows.push(`| ${path.basename(dir)} | — | not run | — |`); // 4 cells, like the header (MD056)
     continue;
   }
   const r = JSON.parse(fs.readFileSync(file, "utf8"));

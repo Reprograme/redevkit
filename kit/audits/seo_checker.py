@@ -9,50 +9,64 @@ WHAT IT CHECKS:
     - Heading hierarchy (single H1)
     - Image alt attributes
 
-Discovery uses one directory walk that prunes SKIP_DIRS by path segment
-(node_modules is never entered). Non-page files are recognised by whole words
-of the file name, not substrings (``capital.tsx`` is not an "api" file). The
-page title counts only when a real ``<title>`` element exists: a ``title=``
-attribute is not a page title. With no page files the audit is SKIPPED.
+Discovery uses one directory walk with the shared exclusion policy
+(``audit_common.PathFilter``) plus the SEO-specific directories below (tests,
+docs, examples, error and e-mail templates). Non-page files are recognised by
+whole words of the file name, not substrings (``capital.tsx`` is not an "api"
+file). Error pages (``error_404.php``, ``errors/``) are not indexable and are
+skipped. ``.php``/``.phtml`` views are checked like ``.html`` once their PHP
+blocks are masked; PHP files without markup are not pages. Head checks
+(title, description, Open Graph) run only on files that contain a ``<head>``,
+so partial views never trigger them. The page title counts only when a real
+``<title>`` element exists: a ``title=`` attribute is not a page title. With no
+page files the audit is SKIPPED.
 
 Usage:
-    python seo_checker.py <project_path>
+    python seo_checker.py <project_path> [--exclude PATTERN] [--no-gitignore]
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Sequence
 
+sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audit_common import (  # noqa: E402
+    PathFilter, add_exclusion_arguments, is_server_template_suffix, path_filter_from_args, read_markup_source,
+)
+
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
 
+# SEO-specific directories, on top of the shared exclusion defaults.
 SKIP_DIRS = {
-    "node_modules", ".next", "dist", "build", ".git", ".github", "out",
-    "__pycache__", ".vscode", ".idea", "coverage", "test", "tests",
-    "__tests__", "spec", "docs", "documentation", "examples",
-    ".agents", ".claude", ".codex", ".redevkit",
+    ".github", "test", "tests", "__tests__", "spec", "docs", "documentation", "examples",
+    "errors", "email", "emails",
 }
 
-# Whole words of a file name that mark non-page modules.
+# Whole words of a file name that mark non-page modules (and non-indexable error pages).
 SKIP_WORDS = {
     "config", "setup", "util", "utils", "helper", "helpers", "hook", "hooks", "context",
     "store", "service", "services", "api", "lib", "constant", "constants", "type", "types",
     "interface", "interfaces", "mock", "mocks", "test", "spec", "stories", "story",
+    "error", "exception", "404", "500",
 }
 PAGE_DIRS = {"pages", "app", "routes", "views", "screens"}
 PAGE_WORDS = {
     "page", "index", "home", "about", "contact", "blog", "post", "article", "product",
     "landing", "layout", "document",
 }
-PAGE_SUFFIXES = {".html", ".htm", ".jsx", ".tsx"}
+PAGE_SUFFIXES = {".html", ".htm", ".jsx", ".tsx", ".php", ".phtml"}
 MAX_PAGES = 50
 
 TITLE_ELEMENT = re.compile(r"<title\b[^>]*>", re.IGNORECASE)
+# <head> or the Next.js <Head> component; never <header> / <Header>.
+HEAD_ELEMENT = re.compile(r"<head\b", re.IGNORECASE)
 
 
 def utf8_stdio() -> None:
@@ -74,8 +88,8 @@ def is_page_file(file_path: Path, root: Optional[Path] = None) -> bool:
     words = name_words(file_path.name)
     if any(word in SKIP_WORDS for word in words):
         return False
-    if file_path.suffix.lower() in {".html", ".htm"}:
-        return True
+    if file_path.suffix.lower() in {".html", ".htm", ".php", ".phtml"}:
+        return True  # markup documents (PHP: only views with markup, see find_pages)
     try:
         rel_dirs = file_path.relative_to(root).parts[:-1] if root else file_path.parts[:-1]
     except ValueError:
@@ -85,23 +99,38 @@ def is_page_file(file_path: Path, root: Optional[Path] = None) -> bool:
     return any(word in PAGE_WORDS for word in name_words(file_path.stem))
 
 
-def find_pages(project_path: Path) -> List[Path]:
-    """Find page files to check."""
+def seo_filter(project_path: Path, args=None) -> PathFilter:
+    if args is not None:
+        return path_filter_from_args(project_path, args, extra_dirs=SKIP_DIRS)
+    return PathFilter(project_path, extra_dirs=SKIP_DIRS)
+
+
+def find_all_pages(project_path: Path, path_filter: Optional[PathFilter] = None) -> List[Path]:
+    """Every page file (no cap)."""
+    path_filter = path_filter if path_filter is not None else seo_filter(project_path)
     files: List[Path] = []
-    for current, dirs, names in os.walk(project_path):
-        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
-        for name in sorted(names):
-            path = Path(current) / name
-            if path.suffix.lower() in PAGE_SUFFIXES and is_page_file(path, project_path):
-                files.append(path)
-    return files[:MAX_PAGES]
+    for path in path_filter.walk(project_path):
+        if path.suffix.lower() not in PAGE_SUFFIXES or not is_page_file(path, project_path):
+            continue
+        if is_server_template_suffix(path):
+            try:
+                if read_markup_source(path) is None:
+                    continue  # controller, model, config: no markup
+            except OSError:
+                continue
+        files.append(path)
+    return files
+
+
+def find_pages(project_path: Path, path_filter: Optional[PathFilter] = None) -> List[Path]:
+    """Find page files to check (at most MAX_PAGES)."""
+    return find_all_pages(project_path, path_filter)[:MAX_PAGES]
 
 
 def check_content(content: str) -> List[str]:
     """Return SEO issues for one page source."""
     issues: List[str] = []
-    lowered = content.lower()
-    is_layout = "<Head" in content or "<head>" in lowered or "<head " in lowered
+    is_layout = HEAD_ELEMENT.search(content) is not None
 
     if is_layout and not TITLE_ELEMENT.search(content):
         issues.append("Missing <title> tag")
@@ -130,16 +159,17 @@ def check_content(content: str) -> List[str]:
 def check_page(file_path: Path, root: Optional[Path] = None) -> dict:
     display = file_path.relative_to(root).as_posix() if root else file_path.name
     try:
-        content = file_path.read_text(encoding="utf-8", errors="ignore")
+        content = read_markup_source(file_path)
     except OSError as exc:
         return {"file": display, "issues": [f"Error: {exc}"]}
-    return {"file": display, "issues": check_content(content)}
+    return {"file": display, "issues": check_content(content) if content is not None else []}
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     utf8_stdio()
     parser = argparse.ArgumentParser(description="Audit page sources for SEO basics")
     parser.add_argument("project", nargs="?", default=".")
+    add_exclusion_arguments(parser)
     args = parser.parse_args(argv)
     project_path = Path(args.project).resolve()
     if not project_path.is_dir():
@@ -151,15 +181,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print(f"{'=' * 60}")
     print(f"Project: {project_path}")
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    path_filter = seo_filter(project_path, args)
+    print(path_filter.describe())
     print("-" * 60)
 
-    pages = find_pages(project_path)
+    all_pages = find_all_pages(project_path, path_filter)
+    pages = all_pages[:MAX_PAGES]
     if not pages:
-        print("    Looking for: HTML, JSX, TSX in pages/app/routes directories")
+        print("    Looking for: HTML, JSX, TSX, PHP views in pages/app/routes/views directories")
         print("SKIPPED (no page files found)")
         return EXIT_SKIPPED
 
-    print(f"Found {len(pages)} page files to analyze\n")
+    if len(all_pages) > len(pages):
+        print(f"Found {len(all_pages)} page files; analyzing the first {len(pages)}\n")
+    else:
+        print(f"Found {len(pages)} page files to analyze\n")
     all_issues = [result for result in (check_page(f, project_path) for f in pages) if result["issues"]]
 
     print("=" * 60)

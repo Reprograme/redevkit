@@ -130,7 +130,7 @@ If you cannot fill the checkpoint, go back and read the reference files.
 
 ## 5. Automated Audit
 
-In the test and verify commands (not during implementation), run `.redevkit/audits/mobile_audit.py <project_path>` (add `--json` for machine output) with
+In the verify command's audit step (not during implementation), when its orchestrator did not already run it, run `.redevkit/audits/mobile_audit.py <project_path>` (add `--json` for machine output) with
 the Python interpreter detected per `.redevkit/audits/README.md`. It checks touch targets,
 list performance patterns, animation drivers, cleanup, `console.log` and navigation rules.
 Without Python, record `SKIPPED (no Python)` and walk the checklists below by hand, plus the

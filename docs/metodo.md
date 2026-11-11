@@ -290,8 +290,8 @@ Nenhum comando declara sucesso sem evidência: o comando que rodou e o resultado
   primeiro o teste de regressão que falha, aplica a menor correção e confirma. O resultado do
   bug é `verified`, `partial` ou `failed`. Qualquer que seja o resultado, o debug termina e
   segue para o verify, que é obrigatório depois de um debug.
-- **Verify** (`redevkit-verify`): começa pelos testes. Se a última execução do
-  `test-report.md` foi sobre o mesmo estado do código atual, ela é reaproveitada (um `PASS`
+- **Verify** (`redevkit-verify`): começa pelos testes. Se a última execução da feature
+  inteira (escopo `feature`) no `test-report.md` foi sobre o mesmo estado do código atual, ela é reaproveitada (um `PASS`
   segue, um `FAIL` encerra com `failed`); senão, o verify executa o procedimento do
   `redevkit-test` e grava a execução no `test-report.md`. Como o debug normalmente muda o
   código, depois dele os testes rodam de novo; se a correção não mudou nada, o `FAIL` é
@@ -300,8 +300,9 @@ Nenhum comando declara sucesso sem evidência: o comando que rodou e o resultado
   verdes, a fase `redevkit-converge` compara o código com spec, plano e tarefas, e cada lacuna
   vira uma tarefa anexada na fase de Convergência; depois vêm a execução real (build e, quando
   o Tipo de projeto tem runtime, subir a aplicação e percorrer os fluxos críticos do
-  `quickstart.md`, sem rodar a suíte de novo) e as auditorias (`verify_all.py` ou
-  `checklist.py`, ou `SKIPPED` sem Python). O veredito é `converged+verified`, `gaps` ou
+  `quickstart.md`, sem rodar a suíte de novo) e as auditorias (uma execução de
+  `verify_all.py` ou `checklist.py`, ou `SKIPPED` sem Python; achados em código de terceiros
+  ou gerado ficam fora do escopo e não viram tarefa nem `failed`). O veredito é `converged+verified`, `gaps` ou
   `failed`. Uma spec leve do enhance (sem `plan.md`) também é verificada: o contexto técnico
   vem do `tech.md`.
 

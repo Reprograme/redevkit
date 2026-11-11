@@ -59,7 +59,12 @@ export const relativeLinks = (text) => {
   for (const m of stripCode(text).matchAll(LINK)) {
     const target = m[1];
     if (/^([a-z][a-z0-9+.-]*:|#|\/)/i.test(target) || target.includes("{{")) continue;
-    out.push(decodeURIComponent(target.split("#")[0]));
+    const file = target.split("#")[0];
+    try {
+      out.push(decodeURIComponent(file));
+    } catch {
+      out.push(file); // malformed %-escape (e.g. "100%.md"): check the literal path, never crash doctor
+    }
   }
   return out.filter(Boolean);
 };

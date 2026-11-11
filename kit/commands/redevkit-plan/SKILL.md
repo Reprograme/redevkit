@@ -69,7 +69,7 @@ Follow `{{SKILL:redevkit-route}}` for each part of the feature (UI, API, data, g
 security, …). Announce the choice in one line per part (persona + skills + references). Load
 the chosen knowledge skills for the plan. Consult domain personas for their part (for example
 {{DELEGATE:database-architect}} for the data model); they return findings, never questions.
-Record the routing table in `plan.md` › Technical Context.
+Record the routing table in `plan.md` › Domain Routing.
 
 ### 3. Plan
 
@@ -100,7 +100,8 @@ If the feature has a UI (screens, components, pages, HUD, mobile views):
 3. Add the section **Design Source-of-Truth** to `plan.md` with this feature's deltas
    (tokens, components, screens, states) pointing at `DESIGN.md`.
 
-No UI: write "Design Source-of-Truth: not applicable (no UI)" in `plan.md`.
+No UI: in `plan.md` › Design Source-of-Truth, set the DESIGN.md status to the template's
+"N/A - no user interface" value (in {{LANG}}) and delete the tables.
 
 ### 5. Tasks
 

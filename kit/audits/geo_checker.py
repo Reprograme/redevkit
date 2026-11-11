@@ -13,24 +13,36 @@ WHAT IT CHECKS:
     - JSX/TSX files (React page components)
     - NOT markdown files (those are developer docs, not public content)
 
+    - PHP views (.php/.phtml) that render page content: markup after the PHP
+      blocks are masked AND an <h1>. Layouts, partials, error and e-mail
+      templates are not public pages.
+
 Path rules (app/, pages/, skipped directories) are evaluated on the path
 RELATIVE to the project, so the location of the project itself never matters.
+The shared exclusion policy (``audit_common.PathFilter``) applies first.
 With no public pages the audit is SKIPPED.
 
 Usage:
-    python geo_checker.py <project_path>
+    python geo_checker.py <project_path> [--exclude PATTERN] [--no-gitignore]
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
 from typing import List, Optional, Sequence
 
+sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audit_common import (  # noqa: E402
+    PathFilter, add_exclusion_arguments, is_server_template_suffix, path_filter_from_args, read_markup_source,
+)
+
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
+MAX_PAGES = 100
 
 
 def utf8_stdio() -> None:
@@ -41,15 +53,17 @@ def utf8_stdio() -> None:
             pass
 
 
-# Directories that never represent public source content.
+# Directories that never represent public source content (on top of the shared defaults).
 SKIP_DIRS = {
     "node_modules", ".next", "dist", "build", ".git", ".github",
     ".agents", ".claude", ".codex", ".redevkit", "__pycache__", ".vscode", ".idea", "coverage",
     "test", "tests", "__tests__", "spec", "public", "components",
+    "errors", "email", "emails", "layouts", "partials", "includes",
 }
 
-PAGE_SUFFIXES = {".html", ".htm", ".jsx", ".tsx"}
+PAGE_SUFFIXES = {".html", ".htm", ".jsx", ".tsx", ".php", ".phtml"}
 ARTICLE_SEGMENTS = {"blog", "blogs", "article", "articles", "post", "posts", "news"}
+_H1 = re.compile(r"<h1\b", re.IGNORECASE)
 
 
 def _lower_parts(file_path: Path, root: Optional[Path] = None) -> List[str]:
@@ -73,6 +87,10 @@ def is_page_file(file_path: Path, root: Optional[Path] = None) -> bool:
         return True
 
     name = file_path.stem.lower()
+    if is_server_template_suffix(file_path):
+        # A PHP view is a content page when it renders an <h1> (see find_web_pages);
+        # partials (_nav.php), layouts and error pages are not.
+        return not name.startswith("_") and not re.search(r"(?:^|[._-])(?:error|exception|404|500|layout)(?:[._-]|$)", name)
     if name.endswith((".test", ".spec")) or name.startswith(("test_", "spec_")):
         return False
 
@@ -92,16 +110,31 @@ def is_page_file(file_path: Path, root: Optional[Path] = None) -> bool:
     return "routes" in parts and name in {"page", "index"}
 
 
-def find_web_pages(project_path: Path) -> list[Path]:
+def geo_filter(project_path: Path, args=None) -> PathFilter:
+    if args is not None:
+        return path_filter_from_args(project_path, args, extra_dirs=SKIP_DIRS)
+    return PathFilter(project_path, extra_dirs=SKIP_DIRS)
+
+
+def _php_content_page(file_path: Path) -> bool:
+    try:
+        content = read_markup_source(file_path)
+    except OSError:
+        return False
+    return content is not None and _H1.search(content) is not None
+
+
+def find_web_pages(project_path: Path, path_filter: Optional[PathFilter] = None) -> list[Path]:
     """Find public-facing route source files deterministically."""
+    path_filter = path_filter if path_filter is not None else geo_filter(project_path)
     files = []
-    for current, dirs, names in os.walk(project_path):
-        dirs[:] = sorted(d for d in dirs if d.lower() not in SKIP_DIRS)
-        for name in names:
-            file_path = Path(current) / name
-            if is_page_file(file_path, project_path):
-                files.append(file_path)
-    return sorted(set(files), key=lambda item: item.as_posix())[:100]
+    for file_path in path_filter.walk(project_path):
+        if not is_page_file(file_path, project_path):
+            continue
+        if is_server_template_suffix(file_path) and not _php_content_page(file_path):
+            continue
+        files.append(file_path)
+    return sorted(set(files), key=lambda item: item.as_posix())[:MAX_PAGES]
 
 
 def _read_route_content(file_path: Path) -> str:
@@ -111,6 +144,8 @@ def _read_route_content(file_path: Path) -> str:
     localized MDX files. Static analysis must follow those imports or it scores
     a thin wrapper instead of the page users and crawlers receive.
     """
+    if is_server_template_suffix(file_path):
+        return read_markup_source(file_path) or ""
     content = file_path.read_text(encoding="utf-8", errors="ignore")
     import_paths = re.findall(r"(?:import|from)\s+(?:[^'\"]+?\s+from\s+)?['\"](\.{1,2}/[^'\"]+)['\"]", content)
     extensions = ("", ".tsx", ".ts", ".jsx", ".js", ".mdx", ".md")
@@ -138,10 +173,11 @@ def _read_route_content(file_path: Path) -> str:
 
 def check_page(file_path: Path, project_path: Path | None = None) -> dict:
     """Score a route source file without requiring article metadata on product docs."""
+    display = file_path.relative_to(project_path).as_posix() if project_path else file_path.as_posix()
     try:
         content = _read_route_content(file_path)
     except Exception as exc:
-        return {"file": str(file_path), "passed": [], "issues": [f"Error: {exc}"], "score": 0}
+        return {"file": display, "passed": [], "issues": [f"Error: {exc}"], "score": 0}
 
     issues = []
     passed = []
@@ -218,7 +254,6 @@ def check_page(file_path: Path, project_path: Path | None = None) -> dict:
 
     base_score = (required_passed / required_total * 70) if required_total else 70
     score = min(100, round(base_score + min(optional_points, 30)))
-    display = file_path.relative_to(project_path).as_posix() if project_path else file_path.as_posix()
     return {"file": display, "passed": passed, "issues": issues, "score": score}
 
 
@@ -226,6 +261,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     utf8_stdio()
     parser = argparse.ArgumentParser(description="Audit public pages for AI citation readiness")
     parser.add_argument("project", nargs="?", default=".")
+    add_exclusion_arguments(parser)
     args = parser.parse_args(argv)
     target_path = Path(args.project).resolve()
     if not target_path.is_dir():
@@ -236,13 +272,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print("  GEO CHECKER - AI Citation Readiness Audit")
     print("=" * 60)
     print(f"Project: {target_path}")
+    path_filter = geo_filter(target_path, args)
+    print(path_filter.describe())
     print("-" * 60)
-    
+
     # Find web pages only
-    pages = find_web_pages(target_path)
-    
+    pages = find_web_pages(target_path, path_filter)
+
     if not pages:
-        print("    Looking for: HTML, JSX, TSX files in pages/app directories")
+        print("    Looking for: HTML, JSX, TSX files in pages/app directories, PHP views with an <h1>")
         print("    Skipping: docs, tests, config files, node_modules")
         print("SKIPPED (no public web pages found)")
         return EXIT_SKIPPED

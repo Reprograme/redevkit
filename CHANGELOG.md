@@ -6,6 +6,37 @@ All notable changes to REDEVKIT are documented in this file. The format follows
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-11-11
+
+### Added
+
+- Audits share one exclusion policy (`kit/audits/audit_common.py`): common defaults
+  (dependency and vendor folders, build output, generated reports such as
+  `playwright-report/`, minified files), the project's `.gitignore`, and user patterns from
+  `.redevkit/audit-ignore` or `--exclude PATTERN`; `--no-gitignore` turns the second off.
+  `checklist.py` and `verify_all.py` forward both options.
+- `checklist.py` and `verify_all.py` accept `--no-tests`; `redevkit-verify` passes it, so the
+  audit step no longer runs the test suite a second time.
+- The UX, accessibility, SEO and GEO audits read server-rendered `.php`/`.phtml` views.
+- `redevkit-verify` triages audit findings: third-party and generated code is out of scope
+  and becomes neither a task nor `failed`.
+
+### Fixed
+
+- `rollback` removed every managed file the rolled-back run had not touched; it now removes
+  only the files that run created. The first `init` backs up a user `settings.json` or
+  `config.toml` it rewrites, and `rollback` uses the installed language.
+- `doctor` runs `.cmd` shims in paths with spaces and no longer crashes on a link with a
+  malformed `%` escape; usage errors exit with 2; Ctrl+C at a prompt exits with 130; the
+  Codex config merge no longer reports managed dotted keys as user values.
+- Audit scripts: a crash in `accessibility_checker.py` on any `onClick` handler, false
+  positives (`regex.exec(`, `model.eval()`, `<Header>` read as `<Head>`, labelled submit
+  inputs, purple detection by substring), crashes on BOM or non-UTF-8 files and on odd CSS
+  values, and wrong results for empty test runs and build folders without assets.
+- Kit content: `redevkit-create` defines the "no open task" state; status and deploy compare
+  with the latest feature-wide test run; wrong `tech.md` and `plan.md` section names;
+  `systematic-debugging` no longer asks for the full suite inside a debug.
+
 ## [1.0.1] - 2026-11-09
 
 ### Added

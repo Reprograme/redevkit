@@ -75,14 +75,15 @@ def detect_project_type(project_path: Path) -> Dict[str, Any]:
     if package_json.exists():
         result["type"] = "node"
         try:
-            pkg = json.loads(package_json.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+            pkg = json.loads(package_json.read_text(encoding="utf-8-sig"))  # npm accepts a BOM
+        except (OSError, ValueError):  # ValueError: invalid JSON or invalid UTF-8
             pkg = {}
         scripts = pkg.get("scripts", {}) if isinstance(pkg, dict) else {}
         deps: Dict[str, Any] = {}
         if isinstance(pkg, dict):
-            deps.update(pkg.get("dependencies", {}) or {})
-            deps.update(pkg.get("devDependencies", {}) or {})
+            for section in ("dependencies", "devDependencies"):
+                if isinstance(pkg.get(section), dict):
+                    deps.update(pkg[section])
 
         if isinstance(scripts, dict) and "lint" in scripts:
             npm = which("npm")

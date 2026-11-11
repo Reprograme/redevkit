@@ -9,9 +9,9 @@ type: test-report
 
 <!--
 Append-only. Add one "Run" section at the end of this file for each execution.
-Never edit or delete a past run. The latest run is the one redevkit-verify (step 1) may reuse
-and the reference redevkit-deploy compares with the current code; both compare code states as
-redevkit-test/references/code-state.md describes.
+Never edit or delete a past run. Only feature-wide runs (Scope: feature) count: the latest one
+is the run redevkit-verify (step 1) may reuse, and the deploy reference is chosen as
+redevkit-test/references/code-state.md § Compare describes; both compare code states there.
 Keep these tokens in English: PASS, FAIL, SKIPPED, MISSING, clean, dirty.
 -->
 

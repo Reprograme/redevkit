@@ -225,7 +225,8 @@ Os gates G1–G7 estão descritos em [metodo.md](metodo.md#gates).
   convergência fica `SKIPPED (no feature spec)`, nada é gravado em relatório e o `--auto` não
   continua. G5 atingido para a feature ativa e sem resposta → apresenta a pergunta de novo.
 - **Passos principais:**
-  1. Testes: compara o estado do código atual com o da última execução do `test-report.md`.
+  1. Testes: compara o estado do código atual com o da última execução da feature inteira
+     (Escopo `feature`) do `test-report.md`.
      `PASS` sobre o mesmo código → reaproveita, sem rodar de novo. `FAIL` sobre o mesmo código
      → reaproveita e o veredito é `failed`. Qualquer outro caso (por exemplo, depois de um
      debug) → executa o procedimento do `redevkit-test` e grava a execução no
@@ -235,9 +236,12 @@ Os gates G1–G7 estão descritos em [metodo.md](metodo.md#gates).
   3. Execução: build e, quando o Tipo de projeto tem runtime, subir a aplicação em segundo
      plano, percorrer os fluxos críticos do `quickstart.md` e parar; para correções de bug,
      reproduzir o cenário original. A suíte não roda de novo: a evidência é a do passo 1.
-  4. Auditorias: `verify_all.py` ou `checklist.py` conforme o Tipo de projeto
-     (`--no-runtime` quando não há app rodando). Sem Python: `SKIPPED (no Python
-     interpreter)` mais o lint e a checagem de tipos do projeto.
+  4. Auditorias: uma execução de `verify_all.py` ou `checklist.py` conforme o Tipo de
+     projeto (`--no-runtime` quando não há app rodando; sempre `--no-tests`, pois o passo 1
+     já é a evidência dos testes). Caminhos fora do escopo vão em `.redevkit/audit-ignore`
+     ou `--exclude`. Sem Python: `SKIPPED (no Python
+     interpreter)` mais o lint e a checagem de tipos do projeto. Achados em código de
+     terceiros ou gerado ficam fora do escopo: não viram tarefa nem `failed`.
   5. Relatório com o veredito `converged+verified`, `gaps` ou `failed`.
   6. Ciclo de correção em `active.md` (regras em [metodo.md](metodo.md#ciclo-de-correção-e-g5)).
 - **Grava:** `specs/NNN-nome/verification.md` (somente acréscimo); `test-report.md` e testes
@@ -284,8 +288,8 @@ Os gates G1–G7 estão descritos em [metodo.md](metodo.md#gates).
   2. Memória inicializada.
   3. Evidência verde sobre o código atual, pela regra de
      [Estado do código](metodo.md#estado-do-código): com debug pendente, `BLOCKED` até rodar
-     o verify; senão, a última execução do `test-report.md` precisa ser `PASS` e ter o mesmo
-     estado do código atual. A única saída é `OVERRIDDEN`, com o seu motivo registrado.
+     o verify; senão, a última execução da feature inteira no `test-report.md` precisa ser
+     `PASS` e ter o mesmo estado do código atual. A única saída é `OVERRIDDEN`, com o seu motivo registrado.
   4. Se há um verify mais novo que esse test e ele terminou em `gaps` ou `failed`, mostra o
      resultado e pergunta se você quer corrigir antes (recomendado); se não há verify mais
      novo que o test, pergunta se você quer rodar o verify antes (recomendado).
@@ -321,7 +325,7 @@ Os gates G1–G7 estão descritos em [metodo.md](metodo.md#gates).
 - **Handoff:** sugere um próximo comando a partir dos fatos, na ordem de uma tabela em que a
   primeira linha que se aplica vale (por exemplo: sem memória → `redevkit-new`; G5 sem
   resposta → responder ao G5; tarefas abertas → `redevkit-create`; debug sem verify depois →
-  `redevkit-verify`; o resultado mais novo entre test e verify é vermelho, ou há bug aberto →
+  `redevkit-verify`; o resultado mais novo entre test e verify é vermelho →
   `redevkit-debug`).
 
 ## redevkit-memanager

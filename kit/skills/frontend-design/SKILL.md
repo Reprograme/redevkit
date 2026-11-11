@@ -157,7 +157,7 @@ Before delivering a page, run every box of the [pre-flight check](references/pre
 | `ux_audit.py` | UX and design-psychology heuristics over the built UI |
 | `accessibility_checker.py` | Static accessibility checks for HTML, JSX and TSX |
 
-In the test and verify commands (not during implementation), run `.redevkit/audits/ux_audit.py <project_path>` and
+In the verify command's audit step (not during implementation), when its orchestrator did not already run it, run `.redevkit/audits/ux_audit.py <project_path>` and
 `.redevkit/audits/accessibility_checker.py <project_path>` with the Python interpreter detected
 per `.redevkit/audits/README.md`. If no Python is available, both audits are
 `SKIPPED (no Python)`: say so and fall back to the project's own commands (lint with

@@ -1,5 +1,5 @@
 // redevkitCLI entry (commander). Exit codes: 0 ok, 1 error, 2 usage, 130 interrupted.
-import { Command } from "commander";
+import { Command, CommanderError } from "commander";
 import { runDoctor } from "./commands/doctor.js";
 import { runInit } from "./commands/init.js";
 import { runRollback } from "./commands/rollback.js";
@@ -29,7 +29,10 @@ export const buildProgram = () => {
     .name("redevkit")
     .description("REDEVKIT: Markdown-first kit for Claude Code and Codex (spec-driven process, personas, quality, memory).")
     .version(packageVersion(), "-v, --version")
-    .showHelpAfterError();
+    .showHelpAfterError()
+    // Parse errors throw instead of exiting with commander's code 1, so main() can map them to
+    // exit code 2 (usage). Set before the subcommands are added: they inherit it.
+    .exitOverride();
 
   program
     .command("init [dir]")
@@ -119,6 +122,12 @@ export const main = async (argv = process.argv) => {
   try {
     await buildProgram().parseAsync(argv);
   } catch (err) {
+    if (err instanceof CommanderError) {
+      // commander already printed the error (or the help/version text): 0 for --help and
+      // --version, 2 for every usage error (unknown option or command, missing argument...).
+      process.exitCode = err.exitCode === 0 ? 0 : 2;
+      return;
+    }
     process.stderr.write(`${err.message}\n`);
     process.exitCode = err.exitCode ?? 1;
   }

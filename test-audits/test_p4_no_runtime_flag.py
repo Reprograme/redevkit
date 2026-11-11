@@ -37,7 +37,9 @@ class TestP4NoRuntimeFlag(unittest.TestCase):
                                 sys.stderr = stderr
         self.assertEqual(
             option_strings(validation_runner.build_parser("a")),
-            {"-h", "--help", "--url", "--no-runtime", "--stop-on-fail", "--report"},
+            # --no-tests, --exclude and --no-gitignore: see test_s11_exclusions / test_s12_runner_options
+            {"-h", "--help", "--url", "--no-runtime", "--no-tests", "--stop-on-fail", "--report",
+             "--exclude", "--no-gitignore"},
         )
 
     def test_no_runtime_drops_url_checks_in_both_suites(self):

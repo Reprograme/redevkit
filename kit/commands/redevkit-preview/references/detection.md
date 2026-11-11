@@ -4,7 +4,7 @@ Use the first source that answers; state which one was used.
 
 ## 1. Memory
 
-`.redevkit/memory/tech.md` › Development environment: dev command and preview port.
+`.redevkit/memory/tech.md` › Dev environment: dev command and preview port.
 
 ## 2. Package scripts (Node)
 

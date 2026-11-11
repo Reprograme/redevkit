@@ -22,7 +22,8 @@ Fill every field; mark unknowns as `NEEDS CLARIFICATION`:
 
 - Language/version, primary dependencies, storage, testing framework, target platform,
   performance goals, constraints, scale/scope.
-- **Routing:** table part → persona → skills (+ references) from step 2.
+- **Domain Routing** (its own section, after Technical Context): table part → persona →
+  skills (+ references) from step 2.
 - **Project Type**, one of: `web` (frontend only), `fullstack`, `api`, `mobile`, `game`,
   `cli`, `library`, `desktop`, `other`. The verify command chooses audits from it.
 - **New application:** follow the `app-builder` skill to choose the stack and the scaffolding

@@ -23,25 +23,14 @@ import sys
 from pathlib import Path
 from typing import Any, List, Optional, Sequence
 
+sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audit_common import PathFilter, add_exclusion_arguments, path_filter_from_args  # noqa: E402
+
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
 TSC_TIMEOUT = 180
-
-SKIP_DIRS = {
-    ".git",
-    ".next",
-    ".venv",
-    "build",
-    "coverage",
-    "dist",
-    "node_modules",
-    "out",
-    "venv",
-    "__pycache__",
-    ".agents",
-    ".claude",
-    ".codex",
-    ".redevkit",
-}
+# Directory exclusion: the shared policy of audit_common.PathFilter.
 
 
 def utf8_stdio() -> None:
@@ -52,17 +41,15 @@ def utf8_stdio() -> None:
             pass
 
 
-def _walk(project: Path):
-    """Yield files, pruning SKIP_DIRS by segment relative to the project."""
-    for current, dirs, files in os.walk(project):
-        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
-        for name in sorted(files):
-            yield Path(current) / name
+def _walk(project: Path, path_filter: Optional[PathFilter] = None):
+    """Yield non-excluded files (shared policy, by segment relative to the project)."""
+    path_filter = path_filter if path_filter is not None else PathFilter(project)
+    yield from path_filter.walk(project)
 
 
-def _source_files(project: Path, suffixes: set[str]) -> list[Path]:
+def _source_files(project: Path, suffixes: set[str], path_filter: Optional[PathFilter] = None) -> list[Path]:
     files: list[Path] = []
-    for path in _walk(project):
+    for path in _walk(project, path_filter):
         if path.suffix.lower() not in suffixes:
             continue
         if path.name.endswith(".d.ts"):
@@ -81,9 +68,9 @@ def _local_tsc(tsconfig: Path) -> Path | None:
     return None
 
 
-def _run_typescript_compilers(project: Path) -> list[dict[str, Any]]:
+def _run_typescript_compilers(project: Path, path_filter: Optional[PathFilter] = None) -> list[dict[str, Any]]:
     runs: list[dict[str, Any]] = []
-    tsconfigs = [path for path in _walk(project) if path.name == "tsconfig.json"]
+    tsconfigs = [path for path in _walk(project, path_filter) if path.name == "tsconfig.json"]
     for tsconfig in sorted(tsconfigs):
         compiler = _local_tsc(tsconfig)
         if compiler is None:
@@ -117,10 +104,10 @@ def _run_typescript_compilers(project: Path) -> list[dict[str, Any]]:
     return runs
 
 
-def check_typescript_coverage(project_path: Path) -> dict[str, Any]:
+def check_typescript_coverage(project_path: Path, path_filter: Optional[PathFilter] = None) -> dict[str, Any]:
     issues: list[str] = []
     passed: list[str] = []
-    files = _source_files(project_path, {".ts", ".tsx"})
+    files = _source_files(project_path, {".ts", ".tsx"}, path_filter)
     stats: dict[str, Any] = {
         "any_count": 0,
         "suppression_count": 0,
@@ -163,7 +150,7 @@ def check_typescript_coverage(project_path: Path) -> dict[str, Any]:
     else:
         passed.append("[OK] No @ts-ignore or @ts-nocheck suppressions found")
 
-    stats["compiler_runs"] = _run_typescript_compilers(project_path)
+    stats["compiler_runs"] = _run_typescript_compilers(project_path, path_filter)
     failed_runs = [run for run in stats["compiler_runs"] if run["status"] == "failed"]
     completed_runs = [run for run in stats["compiler_runs"] if run["status"] == "passed"]
     if failed_runs:
@@ -187,10 +174,10 @@ def _annotation_complete(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     return args_typed and varargs_typed and kwargs_typed and node.returns is not None
 
 
-def check_python_coverage(project_path: Path) -> dict[str, Any]:
+def check_python_coverage(project_path: Path, path_filter: Optional[PathFilter] = None) -> dict[str, Any]:
     issues: list[str] = []
     passed: list[str] = []
-    files = _source_files(project_path, {".py"})
+    files = _source_files(project_path, {".py"}, path_filter)
     stats = {"typed_functions": 0, "untyped_functions": 0, "any_count": 0, "parse_errors": 0}
 
     if not files:
@@ -199,7 +186,7 @@ def check_python_coverage(project_path: Path) -> dict[str, Any]:
     for file_path in files:
         try:
             tree = ast.parse(file_path.read_text("utf-8", errors="ignore"), filename=str(file_path))
-        except SyntaxError:
+        except (SyntaxError, ValueError):  # ValueError: null bytes (Python < 3.12)
             stats["parse_errors"] += 1
             continue
         for node in ast.walk(tree):
@@ -240,6 +227,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     utf8_stdio()
     parser = argparse.ArgumentParser(description="Check TypeScript and Python type safety")
     parser.add_argument("project", nargs="?", default=".")
+    add_exclusion_arguments(parser)
     args = parser.parse_args(argv)
     project_path = Path(args.project).resolve()
     if not project_path.is_dir():
@@ -248,13 +236,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     print("\n" + "=" * 60)
     print("  TYPE SAFETY CHECKER")
-    print("=" * 60 + "\n")
+    print("=" * 60)
+    path_filter = path_filter_from_args(project_path, args)
+    print(path_filter.describe() + "\n")
 
     results = [
         result
         for result in (
-            check_typescript_coverage(project_path),
-            check_python_coverage(project_path),
+            check_typescript_coverage(project_path, path_filter),
+            check_python_coverage(project_path, path_filter),
         )
         if result["files"] > 0
     ]

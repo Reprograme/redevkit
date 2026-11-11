@@ -25,7 +25,9 @@ atualiza com merge em 3 vias. Serve tanto para projeto novo quanto para projeto 
 - **Constituição** do projeto com Test-First por padrão e emendas versionadas.
 - **Verificação por execução**: nenhum comando declara sucesso sem o comando executado e o
   resultado observado.
-- **Auditorias Python opcionais** em `.redevkit/audits/`.
+- **Auditorias Python opcionais** em `.redevkit/audits/`. Elas ignoram dependências, saída de
+  build, relatórios gerados e o que o `.gitignore` ignora; outros caminhos entram em
+  `.redevkit/audit-ignore` (veja o [README das auditorias](kit/audits/README.md)).
 
 ## Requisitos
 

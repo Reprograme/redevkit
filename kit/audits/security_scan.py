@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 import io
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -25,6 +24,11 @@ import tokenize
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+
+sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audit_common import PathFilter, add_exclusion_arguments, path_filter_from_args  # noqa: E402
 
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
 NPM_AUDIT_TIMEOUT = 90
@@ -55,9 +59,11 @@ SECRET_PATTERNS: Tuple[Tuple[str, str, str], ...] = (
 
 # Applied to code with strings AND comments removed, so text inside string
 # literals (documentation, error messages) never triggers them.
+# eval/exec are flagged as calls of the builtin only: a method or member call
+# (``regex.exec(``, ``model.eval()``, ``$pdo->exec(``, ``Foo::exec(``) is not one.
 DANGEROUS_PATTERNS: Tuple[Tuple[str, str, str, str], ...] = (
-    (r"\beval\s*\(", "eval() usage", "critical", "Code injection risk"),
-    (r"\bexec\s*\(", "exec() usage", "critical", "Code injection risk"),
+    (r"(?<![.$>:])\beval\s*\(", "eval() usage", "critical", "Code injection risk"),
+    (r"(?<![.$>:])\bexec\s*\(", "exec() usage", "critical", "Code injection risk"),
     (r"new\s+Function\s*\(", "Function constructor", "high", "Code injection risk"),
     (r"child_process\.exec\s*\(", "child_process.exec", "high", "Command injection risk"),
     (r"subprocess\.(?:call|run|Popen)\s*\([^\n]*shell\s*=\s*True", "subprocess shell=True", "high", "Command injection risk"),
@@ -100,11 +106,8 @@ SQL_PATTERNS: Tuple[Tuple["re.Pattern[str]", str, str, str], ...] = (
 )
 
 SEVERITY_RANK = {"none": 99, "low": 1, "medium": 2, "high": 3, "critical": 4}
-SKIP_DIRS = {
-    "node_modules", ".git", "dist", "build", "__pycache__", ".venv", "venv",
-    ".next", ".agents", ".claude", ".codex", ".redevkit", ".tox", ".mypy_cache",
-    ".pytest_cache", "coverage", ".coverage", "vendor",
-}
+# Directory exclusion is the shared policy of audit_common.PathFilter
+# (defaults + .gitignore + .redevkit/audit-ignore + --exclude).
 CODE_EXTENSIONS = {".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".py", ".go", ".java", ".rb", ".php"}
 CONFIG_EXTENSIONS = {".json", ".yaml", ".yml", ".toml", ".env", ".ini", ".conf"}
 PLACEHOLDER_MARKERS = (
@@ -123,15 +126,16 @@ def _new_result(tool: str, status: str) -> Dict[str, Any]:
     return {"tool": tool, "findings": [], "status": status, "scanned_files": 0, "skipped": []}
 
 
-def _iter_files(project: Path, extensions: set):
-    for root, dirs, files in os.walk(project):
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
-        for filename in files:
-            path = Path(root) / filename
-            if path.resolve() == SELF_PATH:
-                continue
-            if path.suffix.lower() in extensions or filename.startswith(".env"):
-                yield path
+def _filter_for(project: Path, path_filter: Optional[PathFilter]) -> PathFilter:
+    return path_filter if path_filter is not None else PathFilter(project)
+
+
+def _iter_files(project: Path, extensions: set, path_filter: Optional[PathFilter] = None):
+    for path in _filter_for(project, path_filter).walk(project):
+        if path.resolve() == SELF_PATH:
+            continue
+        if path.suffix.lower() in extensions or path.name.startswith(".env"):
+            yield path
 
 
 def _relative(path: Path, project: Path) -> str:
@@ -193,15 +197,19 @@ def _python_views(text: str) -> Tuple[str, str]:
     return "".join("".join(line) for line in no_comments), "".join("".join(line) for line in no_strings)
 
 
-def _generic_views(text: str) -> Tuple[str, str]:
-    """C-family sources: return (without comments, without comments and strings)."""
+def _generic_views(text: str, hash_comments: bool = False) -> Tuple[str, str]:
+    """C-family sources: return (without comments, without comments and strings).
+
+    ``hash_comments`` also treats ``#`` as a line comment (PHP, Ruby), except
+    PHP 8 attributes ``#[...]``.
+    """
     no_comments: List[str] = []
     no_strings: List[str] = []
     i, n = 0, len(text)
     while i < n:
         two = text[i:i + 2]
         char = text[i]
-        if two == "//":
+        if two == "//" or (hash_comments and char == "#" and two != "#["):
             end = text.find("\n", i)
             end = n if end == -1 else end
             chunk = _blank(text[i:end])
@@ -242,7 +250,7 @@ def _generic_views(text: str) -> Tuple[str, str]:
 def code_views(text: str, suffix: str) -> Tuple[str, str]:
     if suffix.lower() == ".py":
         return _python_views(text)
-    return _generic_views(text)
+    return _generic_views(text, hash_comments=suffix.lower() in {".php", ".rb"})
 
 
 def find_sql_injection(text_without_comments: str) -> List[Tuple[int, str, str, str]]:
@@ -311,7 +319,8 @@ def _npm_audit(project: Path, result: Dict[str, Any]) -> None:
             })
 
 
-def scan_dependencies(project_path: str) -> Dict[str, Any]:
+def scan_dependencies(project_path: str, path_filter: Optional[PathFilter] = None) -> Dict[str, Any]:
+    """Root manifests and lock files; ``path_filter`` is accepted for a uniform signature."""
     project = Path(project_path)
     result = _new_result("dependency_scanner", "[OK] Supply chain checks passed")
 
@@ -325,6 +334,8 @@ def scan_dependencies(project_path: str) -> Dict[str, Any]:
     for name, (manifests, locks) in ecosystems.items():
         if name == "node" and not _node_has_dependencies(project):
             continue  # nothing to lock: a package.json without dependencies needs no lock file
+        if name == "python" and not _python_has_dependencies(project):
+            continue  # a pyproject.toml that only configures tools (ruff, pytest, ...) locks nothing
         if any((project / f).exists() for f in manifests) and not any((project / f).exists() for f in locks):
             result["findings"].append({
                 "type": "Missing lock file",
@@ -344,12 +355,12 @@ def scan_dependencies(project_path: str) -> Dict[str, Any]:
     return result
 
 
-def scan_secrets(project_path: str) -> Dict[str, Any]:
+def scan_secrets(project_path: str, path_filter: Optional[PathFilter] = None) -> Dict[str, Any]:
     project = Path(project_path).resolve()
     result = _new_result("secret_scanner", "[OK] No secrets detected")
     counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
 
-    for path in _iter_files(project, CODE_EXTENSIONS | CONFIG_EXTENSIONS):
+    for path in _iter_files(project, CODE_EXTENSIONS | CONFIG_EXTENSIONS, path_filter):
         result["scanned_files"] += 1
         try:
             content = path.read_text("utf-8", errors="ignore")
@@ -379,7 +390,7 @@ def scan_secrets(project_path: str) -> Dict[str, Any]:
     return result
 
 
-def scan_code_patterns(project_path: str) -> Dict[str, Any]:
+def scan_code_patterns(project_path: str, path_filter: Optional[PathFilter] = None) -> Dict[str, Any]:
     project = Path(project_path).resolve()
     result = _new_result("pattern_scanner", "[OK] No dangerous patterns")
     by_category: Dict[str, int] = {}
@@ -393,7 +404,7 @@ def scan_code_patterns(project_path: str) -> Dict[str, Any]:
         })
         by_category[category] = by_category.get(category, 0) + 1
 
-    for path in _iter_files(project, CODE_EXTENSIONS):
+    for path in _iter_files(project, CODE_EXTENSIONS, path_filter):
         result["scanned_files"] += 1
         try:
             text = path.read_text("utf-8", errors="ignore")
@@ -430,11 +441,48 @@ def _node_has_dependencies(project: Path) -> bool:
     if not manifest.exists():
         return False
     try:
-        data = json.loads(manifest.read_text("utf-8"))
+        data = json.loads(manifest.read_text("utf-8-sig"))
     except (OSError, ValueError):
         return True
-    keys = ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies")
+    if not isinstance(data, dict):
+        return True
+    keys =("dependencies", "devDependencies", "optionalDependencies", "peerDependencies")
     return any(isinstance(data.get(k), dict) and data.get(k) for k in keys)
+
+
+def _python_has_dependencies(project: Path) -> bool:
+    """False only when the sole Python manifest is a pyproject.toml declaring no dependency."""
+    if any((project / name).exists() for name in ("setup.py", "setup.cfg", "requirements.in")):
+        return True
+    manifest = project / "pyproject.toml"
+    if not manifest.exists():
+        return False
+    try:
+        text = manifest.read_text("utf-8-sig")
+    except (OSError, ValueError):
+        return True
+    try:
+        import tomllib  # Python 3.11+
+    except ImportError:
+        tomllib = None  # type: ignore[assignment]
+    if tomllib is None:
+        return bool(
+            re.search(r"^\s*(?:dependencies|optional-dependencies|dev-dependencies)\s*=\s*[\[{]\s*[^\]}\s]", text, re.MULTILINE)
+            or re.search(r"^\s*\[(?:tool\.poetry\.(?:dev-)?dependencies|tool\.poetry\.group\.|dependency-groups)", text, re.MULTILINE)
+        )
+    try:
+        data = tomllib.loads(text)
+    except ValueError:  # tomllib.TOMLDecodeError
+        return True
+    table = data.get("project") if isinstance(data.get("project"), dict) else {}
+    if table.get("dependencies") or table.get("optional-dependencies") or data.get("dependency-groups"):
+        return True
+    tool = data.get("tool") if isinstance(data.get("tool"), dict) else {}
+    poetry = tool.get("poetry") if isinstance(tool.get("poetry"), dict) else {}
+    poetry_deps = poetry.get("dependencies") if isinstance(poetry.get("dependencies"), dict) else {}
+    if any(key.lower() != "python" for key in poetry_deps) or poetry.get("dev-dependencies") or poetry.get("group"):
+        return True
+    return False
 
 
 WEB_FRAMEWORKS = {"next", "nuxt", "vite", "@angular/core", "react-dom", "vue", "svelte", "astro", "express", "fastify", "koa", "hono", "@nestjs/core"}
@@ -454,8 +502,10 @@ def _looks_like_web_project(project: Path) -> bool:
     manifest = project / "package.json"
     if manifest.exists():
         try:
-            data = json.loads(manifest.read_text("utf-8"))
+            data = json.loads(manifest.read_text("utf-8-sig"))
         except (OSError, ValueError):
+            return False
+        if not isinstance(data, dict):
             return False
         deps = {}
         for key in ("dependencies", "devDependencies"):
@@ -465,7 +515,7 @@ def _looks_like_web_project(project: Path) -> bool:
     return False
 
 
-def scan_configuration(project_path: str) -> Dict[str, Any]:
+def scan_configuration(project_path: str, path_filter: Optional[PathFilter] = None) -> Dict[str, Any]:
     project = Path(project_path).resolve()
     result = _new_result("config_scanner", "[OK] Configuration checks passed")
     checks: Dict[str, Any] = {}
@@ -484,24 +534,22 @@ def scan_configuration(project_path: str) -> Dict[str, Any]:
         re.IGNORECASE,
     )
     has_security_headers = False
-    for root, dirs, files in os.walk(project):
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
-        for filename in files:
-            path = Path(root) / filename
-            if path.resolve() == SELF_PATH:
-                continue
-            if path.suffix.lower() not in CONFIG_EXTENSIONS and filename not in extra_names and not filename.startswith(".env"):
-                continue
-            result["scanned_files"] += 1
-            try:
-                content = path.read_text("utf-8", errors="ignore")
-            except OSError:
-                continue
-            if filename in header_files and header_pattern.search(content):
-                has_security_headers = True
-            for pattern, issue, severity in patterns:
-                if re.search(pattern, content, re.IGNORECASE):
-                    result["findings"].append({"file": _relative(path, project), "issue": issue, "severity": severity})
+    for path in _filter_for(project, path_filter).walk(project):
+        filename = path.name
+        if path.resolve() == SELF_PATH:
+            continue
+        if path.suffix.lower() not in CONFIG_EXTENSIONS and filename not in extra_names and not filename.startswith(".env"):
+            continue
+        result["scanned_files"] += 1
+        try:
+            content = path.read_text("utf-8", errors="ignore")
+        except OSError:
+            continue
+        if filename in header_files and header_pattern.search(content):
+            has_security_headers = True
+        for pattern, issue, severity in patterns:
+            if re.search(pattern, content, re.IGNORECASE):
+                result["findings"].append({"file": _relative(path, project), "issue": issue, "severity": severity})
 
     if _looks_like_web_project(project):
         checks["security_headers_config"] = has_security_headers
@@ -524,8 +572,9 @@ def scan_configuration(project_path: str) -> Dict[str, Any]:
     return result
 
 
-def run_full_scan(project_path: str, scan_type: str = "all") -> Dict[str, Any]:
+def run_full_scan(project_path: str, scan_type: str = "all", path_filter: Optional[PathFilter] = None) -> Dict[str, Any]:
     project = str(Path(project_path).resolve())
+    path_filter = _filter_for(Path(project), path_filter)
     report: Dict[str, Any] = {
         "project": project,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -536,7 +585,7 @@ def run_full_scan(project_path: str, scan_type: str = "all") -> Dict[str, Any]:
             "skipped": [], "overall_status": "[OK] SECURE",
         },
     }
-    scanners: Dict[str, Tuple[str, Callable[[str], Dict[str, Any]]]] = {
+    scanners: Dict[str, Tuple[str, Callable[..., Dict[str, Any]]]] = {
         "deps": ("dependencies", scan_dependencies),
         "secrets": ("secrets", scan_secrets),
         "patterns": ("code_patterns", scan_code_patterns),
@@ -545,7 +594,7 @@ def run_full_scan(project_path: str, scan_type: str = "all") -> Dict[str, Any]:
     for key, (name, scanner) in scanners.items():
         if scan_type not in {"all", key}:
             continue
-        scan_result = scanner(project)
+        scan_result = scanner(project, path_filter)
         report["scans"][name] = scan_result
         report["summary"]["skipped"].extend(scan_result.get("skipped", []))
         findings = scan_result.get("findings", [])
@@ -586,16 +635,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--fail-on", choices=["none", "low", "medium", "high", "critical"], default="high",
         help="Return exit code 1 when a finding at or above this severity exists (default: high)",
     )
+    add_exclusion_arguments(parser)
     args = parser.parse_args(argv)
     project = Path(args.project_path).resolve()
     if not project.is_dir():
         print(json.dumps({"error": f"Directory not found: {project}"}))
         return EXIT_USAGE
 
-    report = run_full_scan(str(project), args.scan_type)
+    path_filter = path_filter_from_args(project, args)
+    report = run_full_scan(str(project), args.scan_type, path_filter)
+    report["excluded"] = path_filter.describe()
     if args.output == "summary":
         summary = report["summary"]
         print(f"\n{'=' * 60}\nSecurity Scan: {report['project']}\n{'=' * 60}")
+        print(path_filter.describe())
         print(f"Status: {summary['overall_status']}")
         print(f"Total Findings: {summary['total_findings']}")
         print(f"  Critical: {summary['critical']}\n  High: {summary['high']}\n  Medium: {summary['medium']}\n  Low: {summary['low']}")

@@ -83,11 +83,18 @@ const runStep = (runtime, workDir, step, logFile, timeoutMs) =>
     child.stdout.pipe(out, { end: false });
     child.stderr.pipe(out, { end: false });
     const timer = setTimeout(() => child.kill(), timeoutMs);
-    child.on("close", (code) => {
+    let finished = false;
+    const finish = (code, error) => {
+      if (finished) return; // 'close' may follow 'error'
+      finished = true;
       clearTimeout(timer);
-      out.end();
-      resolve({ id: step.id, code, seconds: Math.round((Date.now() - started) / 1000) });
-    });
+      out.end(error ? `\n# spawn error: ${error}\n` : undefined);
+      resolve({ id: step.id, code, ...(error ? { error } : {}), seconds: Math.round((Date.now() - started) / 1000) });
+    };
+    // Without this listener a spawn failure (ENOENT, EACCES…) is an uncaught 'error' event that
+    // kills the runner instead of being recorded as a failed step.
+    child.on("error", (err) => finish(null, err.message));
+    child.on("close", (code) => finish(code));
   });
 
 const git = (cwd, args) => spawnSync("git", args, { cwd, encoding: "utf8" });

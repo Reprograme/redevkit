@@ -6,25 +6,27 @@ Validates OpenAPI specs, response formats, and common issues.
 Usage:
     python api_validator.py <project_path>
 
-Files are found with one directory walk that prunes SKIP_DIRS by path segment
-(never by substring, so ``app-builder/`` or ``capital.ts`` are not confused
-with ``build`` or ``api``). With no API files the audit is SKIPPED.
+Files are found with one directory walk under the shared exclusion policy
+(``audit_common.PathFilter``), by path segment, never by substring, so
+``app-builder/`` or ``capital.ts`` are not confused with ``build`` or ``api``.
+Only files NAMED as OpenAPI/Swagger specs are validated as specs. With no API
+files the audit is SKIPPED.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
 from typing import List, Optional, Sequence
 
+sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audit_common import PathFilter, add_exclusion_arguments, path_filter_from_args, read_text  # noqa: E402
+
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
-SKIP_DIRS = {
-    "node_modules", ".git", "dist", "build", "out", ".next", "coverage", "__pycache__",
-    ".venv", "venv", "vendor", ".agents", ".claude", ".codex", ".redevkit",
-}
 CODE_SUFFIXES = {".ts", ".js", ".py"}
 API_DIRS = {"routes", "controllers", "endpoints", "api"}
 SPEC_NAMES = {"swagger.json", "swagger.yaml", "swagger.yml", "openapi.json", "openapi.yaml", "openapi.yml"}
@@ -41,9 +43,14 @@ def utf8_stdio() -> None:
             pass
 
 
+def is_spec_file(path: Path) -> bool:
+    name = path.name.lower()
+    return name in SPEC_NAMES or name.endswith((".openapi.json", ".openapi.yaml", ".openapi.yml"))
+
+
 def is_api_file(path: Path, root: Path) -> bool:
     name = path.name.lower()
-    if name in SPEC_NAMES or name.endswith((".openapi.json", ".openapi.yaml", ".openapi.yml")):
+    if is_spec_file(path):
         return True
     if path.suffix.lower() not in CODE_SUFFIXES or name.endswith(".d.ts"):
         return False
@@ -53,16 +60,10 @@ def is_api_file(path: Path, root: Path) -> bool:
     return bool(API_NAME.search(path.stem))
 
 
-def find_api_files(project_path: Path) -> List[Path]:
+def find_api_files(project_path: Path, path_filter: Optional[PathFilter] = None) -> List[Path]:
     """Find API-related files, never entering node_modules or build output."""
-    files: List[Path] = []
-    for current, dirs, names in os.walk(project_path):
-        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
-        for name in sorted(names):
-            path = Path(current) / name
-            if is_api_file(path, project_path):
-                files.append(path)
-    return files
+    path_filter = path_filter if path_filter is not None else PathFilter(project_path)
+    return [path for path in path_filter.walk(project_path) if is_api_file(path, project_path)]
 
 
 def check_openapi_spec(file_path: Path) -> dict:
@@ -71,9 +72,9 @@ def check_openapi_spec(file_path: Path) -> dict:
     passed = []
     
     try:
-        content = file_path.read_text(encoding='utf-8')
-        
-        if file_path.suffix == '.json':
+        content = read_text(file_path)
+
+        if file_path.suffix.lower() == '.json':
             spec = json.loads(content)
         else:
             # Basic YAML check
@@ -128,8 +129,8 @@ def check_api_code(file_path: Path) -> dict:
     passed = []
     
     try:
-        content = file_path.read_text(encoding='utf-8')
-        
+        content = read_text(file_path)
+
         # Check for error handling
         error_patterns = [
             r'try\s*{', r'try:', r'\.catch\(',
@@ -195,6 +196,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     utf8_stdio()
     parser = argparse.ArgumentParser(description="Check API code and OpenAPI specs for best practices")
     parser.add_argument("project", nargs="?", default=".")
+    add_exclusion_arguments(parser)
     args = parser.parse_args(argv)
     project_path = Path(args.project).resolve()
     if not project_path.is_dir():
@@ -203,9 +205,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     print("\n" + "=" * 60)
     print("  API VALIDATOR - Endpoint Best Practices Check")
-    print("=" * 60 + "\n")
+    print("=" * 60)
+    path_filter = path_filter_from_args(project_path, args)
+    print(path_filter.describe() + "\n")
 
-    api_files = find_api_files(project_path)
+    api_files = find_api_files(project_path, path_filter)
     if not api_files:
         print("   Looking for: routes/, controllers/, endpoints/, api/, *api*.ts|js|py, openapi/swagger specs")
         print("SKIPPED (no API files found)")
@@ -213,7 +217,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     results = []
     for file_path in api_files[:MAX_FILES]:
-        if "openapi" in file_path.name.lower() or "swagger" in file_path.name.lower():
+        if is_spec_file(file_path):  # not "openapi" as a substring: openapi-client.ts is code
             result = check_openapi_spec(file_path)
         else:
             result = check_api_code(file_path)

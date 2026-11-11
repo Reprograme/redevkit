@@ -93,7 +93,9 @@ export const mergeCodexConfig = (existing, entries) => {
   for (const { table, key, value } of entries) {
     const current = getPath(parsed, table, key);
     if (current !== undefined) {
-      const ours = lines.some((l) => l.includes(MARK) && new RegExp(`^\\s*${key}\\s*=`).test(l));
+      // Ours under its [table] header, or as the dotted `table.key = ...` line added for tables
+      // defined through dotted keys (see below).
+      const ours = lines.some((l) => l.includes(MARK) && new RegExp(`^\\s*(?:${table.replace(/\./g, "\\.")}\\.)?${key}\\s*=`).test(l));
       if (!ours) kept.push({ table, key, userValue: current });
       continue;
     }

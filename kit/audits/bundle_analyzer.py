@@ -2,19 +2,26 @@
 """Analyze built JavaScript/CSS asset sizes without external dependencies.
 
 Only known build-output roots are scanned, and SKIP_DIRS (node_modules, ...)
-is pruned by path segment inside them. Without build output the audit is
-SKIPPED: build the project first.
+is pruned by path segment inside them. Build output is what this audit
+measures, so the shared defaults and .gitignore (which exclude dist/ and
+build/) do not apply here; the user's patterns (.redevkit/audit-ignore and
+--exclude) do. Without build output, or with build output that holds no
+JavaScript or CSS asset, the audit is SKIPPED: build the project first.
 """
 from __future__ import annotations
 
 import argparse
 import gzip
 import json
-import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Sequence
+
+sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audit_common import PathFilter, add_exclusion_arguments  # noqa: E402
 
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
 SKIP_DIRS = {"node_modules", ".git", ".agents", ".claude", ".codex", ".redevkit", ".venv", "venv", "__pycache__"}
@@ -30,12 +37,15 @@ def utf8_stdio() -> None:
             pass
 
 
-def iter_build_files(build_root: Path):
+def bundle_filter(root: Path, user_patterns: Sequence[str] = ()) -> PathFilter:
+    """SKIP_DIRS + the user's patterns; never the shared defaults or .gitignore."""
+    return PathFilter(root, extra_dirs=SKIP_DIRS, user_patterns=user_patterns, defaults=False, gitignore=False)
+
+
+def iter_build_files(build_root: Path, path_filter: Optional[PathFilter] = None):
     """Walk one build root, pruning SKIP_DIRS by segment."""
-    for current, dirs, files in os.walk(build_root):
-        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
-        for name in sorted(files):
-            yield Path(current) / name
+    path_filter = path_filter if path_filter is not None else bundle_filter(build_root)
+    yield from path_filter.walk(build_root)
 
 
 def human_bytes(value: int) -> str:
@@ -48,14 +58,16 @@ def human_bytes(value: int) -> str:
     return f"{value} B"
 
 
-def analyze(root: Path, file_warn_kib: int, file_fail_kib: int, total_fail_kib: int) -> dict[str, Any]:
+def analyze(root: Path, file_warn_kib: int, file_fail_kib: int, total_fail_kib: int,
+            path_filter: Optional[PathFilter] = None) -> dict[str, Any]:
+    path_filter = path_filter if path_filter is not None else bundle_filter(root)
     assets: list[dict[str, Any]] = []
     seen: set[Path] = set()
     for relative in BUILD_ROOTS:
         build_root = root / relative
         if not build_root.is_dir():
             continue
-        for path in iter_build_files(build_root):
+        for path in iter_build_files(build_root, path_filter):
             if path.suffix.lower() not in {".js", ".mjs", ".css"}:
                 continue
             resolved = path.resolve()
@@ -120,13 +132,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--file-fail-kib", type=int, default=750)
     parser.add_argument("--total-js-fail-kib", type=int, default=2048)
     parser.add_argument("--fail-on", choices=list(SEVERITY), default="high")
+    add_exclusion_arguments(parser)  # --no-gitignore is accepted and has no effect here
     args = parser.parse_args(argv)
     root = Path(args.project).resolve()
     if not root.is_dir():
         parser.error(f"Project directory does not exist: {root}")
-    report = analyze(root, args.file_warn_kib, args.file_fail_kib, args.total_js_fail_kib)
+    report = analyze(root, args.file_warn_kib, args.file_fail_kib, args.total_js_fail_kib,
+                     bundle_filter(root, args.exclude))
+    reason = ""
     if not report["build_roots_checked"]:
         reason = "no build output found (" + ", ".join(BUILD_ROOTS) + "); build the project first"
+    elif not report["asset_count"]:
+        reason = "no JavaScript or CSS asset in " + ", ".join(report["build_roots_checked"]) + "; nothing to measure"
+    if reason:
         if args.output == "json":
             report.update({"status": "skipped", "reason": reason})
             print(json.dumps(report, indent=2, ensure_ascii=False))

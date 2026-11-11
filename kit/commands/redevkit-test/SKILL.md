@@ -69,9 +69,10 @@ reason.
 
 1. Detect a Python interpreter as `.redevkit/audits/README.md` describes (try `python`, then
    `py -3` on Windows, then `python3`; each validated by running `--version`).
-2. Python found → run `.redevkit/audits/test_runner.py` with the arguments the README gives
-   (exit `3` means SKIPPED, never PASS: fall back to the project command). No Python, or the runner cannot drive this project → run the project test command from
-   `tech.md` › Development environment. If `tech.md` has none, detect it (`package.json`
+2. Python found → run `<PY> .redevkit/audits/test_runner.py .` from the project root (add
+   `--coverage` to collect coverage; exit `3` means SKIPPED, never PASS: fall back to the
+   project command). No Python, or the runner cannot drive this project → run the project test command from
+   `tech.md` › Dev environment. If `tech.md` has none, detect it (`package.json`
    `scripts.test`, `pytest`, `go test ./...`, `cargo test`, `dotnet test`, …) and record it.
 3. Include the end-to-end tests when the project has them. Collect coverage when the tool
    provides it.
