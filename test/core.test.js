@@ -9,8 +9,9 @@ import { ask } from "../src/core/prompt.js";
 import { relativeLinks } from "../src/core/validate.js";
 import { appendMigratedNotes, isPointer, migratableContent, removeAgentsBlock, upsertAgentsBlock, BEGIN, END } from "../src/core/context-files.js";
 import { asList, parseFrontmatter, stringifyFrontmatter } from "../src/core/frontmatter.js";
-import { atomicWrite, cleanupPendingTemps, crossesLink, isSafeRelative, pendingTempCount, removeInside, writeInside } from "../src/core/fsutil.js";
-import { applyPlan, createBackup, createPlan, listBackups, nextManifestFiles, restoreBackup } from "../src/core/managed-tree.js";
+import { atomicWrite, cleanupPendingTemps, contentHash, crossesLink, hashFileIfExists, isBinary, isSafeRelative, normalizeEol, pendingTempCount, removeInside, sha256, writeInside } from "../src/core/fsutil.js";
+import { isPipelineCore } from "../src/core/install.js";
+import { applyPlan, createBackup, createPlan, listBackups, missingAfterPlan, nextManifestFiles, restoreBackup, RESTORED } from "../src/core/managed-tree.js";
 import { loadManifest, newManifest, writeManifest } from "../src/core/manifest.js";
 import { mergeClaudeSettings, mergeCodexConfig, unmergeClaudeSettings, unmergeCodexConfig } from "../src/core/runtime-config.js";
 import { compare } from "../src/core/semver.js";
@@ -187,6 +188,142 @@ test("restore removes only files the run created; untouched managed files stay",
   } finally {
     rm(dir);
   }
+});
+
+test("content hash: LF and CRLF copies of a text file hash the same; binary content is hashed raw", () => {
+  const dir = tmpProject();
+  try {
+    const lf = "# Title\n\nação\nlast line\n";
+    const crlf = lf.replace(/\n/g, "\r\n");
+    assert.equal(contentHash(crlf), contentHash(lf));
+    assert.equal(contentHash(Buffer.from(crlf, "utf8")), contentHash(lf), "strings and buffers agree");
+    assert.equal(contentHash(lf), sha256(Buffer.from(lf, "utf8")), "an LF file hashes as its raw bytes: manifests written by 1.0.3 stay valid");
+    assert.notEqual(contentHash("a\rb\n"), contentHash("a\nb\n"), "a lone CR is content, not a line ending");
+    // Binary sniff: a NUL byte. CRLF bytes inside binary content are left alone.
+    const bin = Buffer.from([0x89, 0x50, 0x00, 0x0d, 0x0a, 0x1a]);
+    assert.equal(isBinary(bin), true);
+    assert.equal(isBinary(crlf), false);
+    assert.deepEqual(normalizeEol(bin), bin);
+    assert.equal(contentHash(bin), sha256(bin));
+    assert.equal(normalizeEol(crlf).toString("utf8"), lf);
+    // On disk.
+    write(dir, "lf.md", lf);
+    write(dir, "crlf.md", crlf);
+    assert.equal(hashFileIfExists(path.join(dir, "crlf.md")), hashFileIfExists(path.join(dir, "lf.md")));
+    assert.equal(hashFileIfExists(path.join(dir, "absent.md")), undefined);
+    // A manifest written by CLI <= 1.0.3 from content that had CRLF holds a raw-byte hash:
+    // while the bytes on disk still match it, the file is unchanged.
+    const legacy = sha256(Buffer.from(crlf, "utf8"));
+    assert.notEqual(legacy, contentHash(crlf));
+    assert.equal(hashFileIfExists(path.join(dir, "crlf.md"), legacy), legacy);
+    assert.equal(hashFileIfExists(path.join(dir, "lf.md"), legacy), contentHash(lf), "other bytes: the content hash");
+  } finally {
+    rm(dir);
+  }
+});
+
+test("managed tree: a CRLF checkout is not a local change, and an update still applies", () => {
+  const dir = tmpProject();
+  try {
+    const h = (s) => sha256(Buffer.from(s, "utf8")); // what 1.0.3 recorded for LF content
+    write(dir, "same.md", "v1 line\r\nmore\r\n");
+    write(dir, "upstream.md", "v1 line\r\nmore\r\n");
+    write(dir, "both.md", "v1 line\r\nedited by the user\r\n");
+    const previous = { "same.md": h("v1 line\nmore\n"), "upstream.md": h("v1 line\nmore\n"), "both.md": h("v1 line\nmore\n") };
+    const incoming = new Map([
+      ["same.md", "v1 line\nmore\n"],
+      ["upstream.md", "v2 line\nmore\n"],
+      ["both.md", "v2 line\nmore\n"],
+    ]);
+    const plan = createPlan({ projectDir: dir, incoming, previous, hasManifest: true });
+    assert.deepEqual(plan.unchanged, ["same.md"]);
+    assert.deepEqual(plan.actions.map((a) => `${a.type} ${a.file}`), ["update upstream.md"]);
+    assert.deepEqual(plan.conflicts.map((c) => c.file), ["both.md"], "a real edit is still a conflict");
+    assert.deepEqual(plan.preserved, []);
+  } finally {
+    rm(dir);
+  }
+});
+
+test("managed tree: a legacy raw-byte baseline of CRLF content is still recognized", () => {
+  const dir = tmpProject();
+  try {
+    // CLI <= 1.0.3 run from a kit whose files had CRLF: the manifest holds the raw-byte hash.
+    const v1 = "v1 line\r\nmore\r\n";
+    const legacy = sha256(Buffer.from(v1, "utf8"));
+    write(dir, "kept.md", v1); // bytes as installed
+    write(dir, "relf.md", "v1 line\nmore\n"); // same content, checked out with LF
+    write(dir, "next.md", v1);
+    const previous = { "kept.md": legacy, "relf.md": legacy, "next.md": legacy };
+    const incoming = new Map([
+      ["kept.md", v1],
+      ["relf.md", v1],
+      ["next.md", "v2 line\r\nmore\r\n"],
+    ]);
+    const plan = createPlan({ projectDir: dir, incoming, previous, hasManifest: true });
+    assert.deepEqual(plan.unchanged, ["kept.md", "relf.md"], "same version: nothing to do");
+    assert.deepEqual(plan.actions.map((a) => `${a.type} ${a.file}`), ["update next.md"], "unchanged locally, changed upstream: updated");
+    assert.deepEqual(plan.conflicts, []);
+    const files = nextManifestFiles(plan, previous);
+    assert.equal(files["kept.md"], contentHash(v1), "the manifest moves to content hashes");
+    assert.equal(files["next.md"], contentHash("v2 line\nmore\n"));
+  } finally {
+    rm(dir);
+  }
+});
+
+test("managed tree: restore re-adds only the missing managed files", () => {
+  const dir = tmpProject();
+  try {
+    const h = (s) => contentHash(s);
+    write(dir, "edited.md", "mine");
+    write(dir, "both.md", "mine");
+    const previous = { "deleted.md": h("v1"), "deleted-changed.md": h("v1"), "edited.md": h("v1"), "both.md": h("v1") };
+    const incoming = new Map([
+      ["deleted.md", "v1"],
+      ["deleted-changed.md", "v2"],
+      ["edited.md", "v1"],
+      ["both.md", "v2"],
+    ]);
+    // Plain update: a deletion is honoured.
+    const plain = createPlan({ projectDir: dir, incoming, previous, hasManifest: true });
+    assert.deepEqual(plain.actions, []);
+    assert.deepEqual(missingAfterPlan(plain), ["deleted-changed.md", "deleted.md"]);
+    assert.equal(nextManifestFiles(plain, previous)["deleted.md"], previous["deleted.md"], "a deleted file stays managed");
+    // --restore: both missing files come back; local edits and conflicts are left alone.
+    const plan = createPlan({ projectDir: dir, incoming, previous, hasManifest: true, restore: true });
+    assert.deepEqual(plan.actions.map((a) => `${a.type} ${a.file} ${a.reason}`), [`add deleted-changed.md ${RESTORED}`, `add deleted.md ${RESTORED}`]);
+    assert.deepEqual(plan.preserved.map((p) => p.file), ["edited.md"]);
+    assert.deepEqual(plan.conflicts.map((c) => c.file), ["both.md"]);
+    assert.deepEqual(missingAfterPlan(plan), []);
+    applyPlan({ projectDir: dir, plan, incoming, runId: "r1" });
+    assert.equal(read(dir, "deleted.md"), "v1");
+    assert.equal(read(dir, "deleted-changed.md"), "v2", "restored at the new version");
+    assert.equal(read(dir, "edited.md"), "mine");
+    assert.equal(read(dir, "both.md"), "mine");
+    assert.equal(nextManifestFiles(plan, previous)["deleted-changed.md"], h("v2"));
+  } finally {
+    rm(dir);
+  }
+});
+
+test("pipeline core files: redevkit-* skills, audits and templates; knowledge skills and personas are optional", () => {
+  for (const rel of [
+    ".claude/skills/redevkit-plan/SKILL.md",
+    ".claude/skills/redevkit-plan/references/plan-stage.md",
+    ".agents/skills/redevkit-memanager/SKILL.md",
+    ".agents/skills/redevkit-deploy/agents/openai.yaml",
+    ".redevkit/audits/checklist.py",
+    ".redevkit/templates/memory/active.md",
+  ]) assert.equal(isPipelineCore(rel), true, rel);
+  for (const rel of [
+    ".claude/skills/clean-code/SKILL.md",
+    ".agents/skills/api-patterns/references/rest.md",
+    ".claude/skills/debugger/SKILL.md",
+    ".claude/agents/debugger.md",
+    ".codex/agents/debugger.toml",
+    ".redevkit/.gitignore",
+  ]) assert.equal(isPipelineCore(rel), false, rel);
 });
 
 test("ask(): Ctrl+C exits 130, end of input cancels, an answer is trimmed", async () => {

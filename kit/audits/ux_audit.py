@@ -137,7 +137,7 @@ def _float(value: str) -> Optional[float]:
 def utf8_stdio() -> None:
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+            stream.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)  # type: ignore[union-attr]
         except (AttributeError, ValueError, OSError):
             pass
 

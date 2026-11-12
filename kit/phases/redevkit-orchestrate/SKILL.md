@@ -63,7 +63,7 @@ ask per step 6). A task without `@persona` is routed per `{{SKILL:redevkit-route
 | Attempts per task | 2 (the first try plus one corrected brief) |
 | Delegation depth | 1 (personas never delegate) |
 | No progress | Stop a task when an attempt produces no new change and no new evidence, or repeats the same failure |
-| Blocked tasks | Mark blocked, skip its dependents in any phase, continue independent work (step 7) |
+| Blocked tasks | Mark `[!]` with a `BLOCKED` note, skip its dependents in any phase, continue independent work (step 7) |
 
 The constitution or the caller may set other limits; theirs win. Never allow open-ended retry or
 self-delegation loops.
@@ -125,8 +125,11 @@ For each returned result:
 3. **Pass:** mark the task `[X]` in `tasks.md` right away.
 4. **Fail:** write a corrected, more specific brief (what failed, the output, what to change) and
    try again within the budget, continuing the same subagent when the runtime supports it.
-5. **No progress or budget spent:** leave the task `[ ]`, record it as blocked with the evidence,
-   skip tasks that depend on it, and continue with independent work only.
+5. **No progress or budget spent:** mark the task `[!]` in `tasks.md` and add its note line
+   (`- BLOCKED YYYY-MM-DD: reason; needs: what unblocks it`, indented under the task), keep the
+   evidence for the report, skip tasks that depend on it, and continue with independent work
+   only. A blocked task is retried only when the caller asks for it; on success it becomes
+   `[X]` and the note stays as history.
 
 After each parallel batch, run the affected tests once on the integrated tree: separate green
 results do not prove the combination works. A conflict between outputs is resolved with the order

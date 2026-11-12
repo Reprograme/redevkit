@@ -11,8 +11,9 @@ type: test-report
 Append-only. Add one "Run" section at the end of this file for each execution.
 Never edit or delete a past run. Only feature-wide runs (Scope: feature) count: the latest one
 is the run redevkit-verify (step 1) may reuse, and the deploy reference is chosen as
-redevkit-test/references/code-state.md § Compare describes; both compare code states there.
-Keep these tokens in English: PASS, FAIL, SKIPPED, MISSING, clean, dirty.
+redevkit-test/references/code-state.md describes; both compare code states there.
+Keep these tokens in English: PASS, FAIL, SKIPPED, MISSING, clean, dirty, and the failure
+classes product-defect, not-implemented, test-defect, environment.
 -->
 
 ## Run [YYYY-MM-DD HH:MM] — [PASS | FAIL]
@@ -28,12 +29,12 @@ Keep these tokens in English: PASS, FAIL, SKIPPED, MISSING, clean, dirty.
 | Branch | `[BRANCH]` |
 | Working tree | clean / dirty |
 | Changed files | [none, or the `git status --porcelain` list] |
-| Status fingerprint | `[HASH]` |
-| Diff fingerprint | `[HASH]` |
+| Tree fingerprint | `sha256:[HASH]` or `n/a (no Python interpreter)` |
 
 <!--
-Record these values right after the suite with the commands in
-redevkit-test/references/code-state.md (same shell type as the deploy will use).
+Record these values right after the suite with `code_state.py`, as
+redevkit-test/references/code-state.md describes. Two runs are on the same code when their
+Tree fingerprint is equal.
 -->
 
 ### Commands executed
@@ -45,8 +46,9 @@ redevkit-test/references/code-state.md (same shell type as the deploy will use).
 ### Results
 
 - **Total**: [N] · **Passed**: [N] · **Failed**: [N] · **Skipped**: [N]
-- **Failures**:
-  - `[TEST ID]` — [assertion or error excerpt]
+- **Failures** (one line each, with its class):
+  - `[TEST ID]` — [product-defect | not-implemented | test-defect | environment] — [assertion or error excerpt]
+- **Failure class** (all that remain on a FAIL run; none on PASS): [product-defect | not-implemented | test-defect | environment | none]
 
 ```text
 [SHORT OUTPUT EXCERPT: final summary lines or the failing assertion]
@@ -59,6 +61,7 @@ redevkit-test/references/code-state.md (same shell type as the deploy will use).
 | [US1 / Scenario 1 — Given, When, Then summary] | `[path/to/test::name]` | PASS / FAIL / SKIPPED ([REASON]) / MISSING |
 
 - **Tests generated in this run**: [list, or none]
+- **Tests corrected in this run** (test-defect, with the spec scenario or the error that proves it): [list, or none]
 - **Scenarios still without a test**: [list, or none]
 - **Not verified** (cannot be automated here; never counted as PASS): [scenario — manual check
   needed, or none]
@@ -77,4 +80,4 @@ scenario maps to a passing test. Anything else is FAIL. Scenarios that cannot be
 here go to Not verified: they do not make the run FAIL and are never PASS.
 -->
 
-- **Next step**: [redevkit-deploy, suggesting redevkit-verify first | redevkit-debug | inside redevkit-verify: the verification continues (PASS) or stops as failed (FAIL)]
+- **Next step**: [PASS: redevkit-verify when a verify is pending, otherwise redevkit-deploy, suggesting redevkit-verify first | FAIL, by class: environment → fix it and run again; not-implemented → redevkit-create; product-defect → redevkit-debug | inside redevkit-verify: the verification continues (PASS) or stops as failed (FAIL)]

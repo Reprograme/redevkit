@@ -18,25 +18,26 @@ import math
 import os
 import re
 import shutil
-import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any, List, Optional, Sequence
 
 sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-from audit_common import PathFilter, add_exclusion_arguments, path_filter_from_args  # noqa: E402
+from audit_common import PathFilter, add_exclusion_arguments, path_filter_from_args, run_external  # noqa: E402
 
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
-TSC_TIMEOUT = 180
+TSC_TIMEOUT = 180  # per tsconfig.json
+TSC_TOTAL_BUDGET = 240  # all compiler runs together: stays under the orchestrators' limit for this audit
 # Directory exclusion: the shared policy of audit_common.PathFilter.
 
 
 def utf8_stdio() -> None:
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+            stream.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)  # type: ignore[union-attr]
         except (AttributeError, ValueError, OSError):
             pass
 
@@ -71,27 +72,29 @@ def _local_tsc(tsconfig: Path) -> Path | None:
 def _run_typescript_compilers(project: Path, path_filter: Optional[PathFilter] = None) -> list[dict[str, Any]]:
     runs: list[dict[str, Any]] = []
     tsconfigs = [path for path in _walk(project, path_filter) if path.name == "tsconfig.json"]
+    deadline = time.monotonic() + TSC_TOTAL_BUDGET
     for tsconfig in sorted(tsconfigs):
         compiler = _local_tsc(tsconfig)
         if compiler is None:
             runs.append({"config": str(tsconfig), "status": "skipped", "reason": "local tsc not installed"})
             continue
-        try:
-            proc = subprocess.run(
-                [str(compiler), "--noEmit", "--pretty", "false", "-p", str(tsconfig)],
-                cwd=str(tsconfig.parent),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=False,
-                timeout=TSC_TIMEOUT,
-            )
-        except subprocess.TimeoutExpired:
-            runs.append({"config": str(tsconfig), "status": "skipped", "reason": f"tsc timed out after {TSC_TIMEOUT}s"})
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            runs.append({"config": str(tsconfig), "status": "skipped",
+                         "reason": f"tsc not run: the {TSC_TOTAL_BUDGET}s budget of this audit is spent"})
             continue
+        limit = min(TSC_TIMEOUT, remaining)
+        try:
+            proc = run_external(
+                [str(compiler), "--noEmit", "--pretty", "false", "-p", str(tsconfig)],
+                cwd=tsconfig.parent,
+                timeout=limit,
+            )
         except OSError as exc:
             runs.append({"config": str(tsconfig), "status": "skipped", "reason": f"tsc could not start: {exc}"})
+            continue
+        if proc.timed_out:
+            runs.append({"config": str(tsconfig), "status": "skipped", "reason": f"tsc timed out after {limit:.0f}s"})
             continue
         runs.append(
             {

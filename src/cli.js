@@ -42,7 +42,7 @@ export const buildProgram = () => {
     .option("--lang <lang>", "artifact language: pt-BR | en")
     .option("--dry-run", "show what would change, write nothing")
     .option("-y, --yes", "accept defaults and confirmations (required without a TTY)")
-    .option("--force", "overwrite conflicting files (after backup)")
+    .option("--force", "overwrite conflicting files and restore missing managed files (after backup)")
     .option("--verbose", "list every file action")
     .action((dir, opts) => runInit(dir, opts));
 
@@ -51,6 +51,7 @@ export const buildProgram = () => {
     .description("three-way update of managed files (memory, specs and DESIGN.md are never touched)")
     .option("--dry-run", "show what would change, write nothing")
     .option("--no-backup", "skip the backup")
+    .option("--restore", "re-add managed files that are missing locally (local changes are kept)")
     .option("--conflict-report <file>", "write a JSON report of actions and conflicts")
     .option("--verbose", "list every file action")
     .action((opts) => runUpdate(opts));

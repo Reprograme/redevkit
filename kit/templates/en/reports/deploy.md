@@ -21,22 +21,22 @@ failed, rolled-back, aborted, clean, dirty.
 
 | Check | Reference (from report) | Current | Result |
 | --- | --- | --- | --- |
-| Debug pending | [no / yes: bug slug, YYYY-MM-DD HH:MM] | — | OK / BLOCKED |
+| Verify pending | [no / yes: debug <slug>, gaps or failed] | — | OK / BLOCKED |
 | Reference run | [test-report.md, run YYYY-MM-DD HH:MM, run by redevkit-test / redevkit-verify (step 1)] | — | — |
 | Reference verdict | [PASS] | — | OK / BLOCKED |
-| Commit (HEAD) | `[SHA]` | `[SHA]` | OK / BLOCKED |
-| Working tree | [clean / dirty] | [clean / dirty] | OK / BLOCKED |
-| Status fingerprint | `[HASH]` | `[HASH]` | OK / BLOCKED |
-| Diff fingerprint | `[HASH]` | `[HASH]` | OK / BLOCKED |
+| Tree fingerprint | `sha256:[HASH]` | `sha256:[HASH]` | OK / BLOCKED |
+| Commit (HEAD) | `[SHA]` | `[SHA]` | — |
+| Working tree | [clean / dirty] | [clean / dirty] | — |
 
 - **Precondition status**: OK / BLOCKED / OVERRIDDEN
-- **Verify suggested**: [not needed (a converged+verified verify is newer than the reference) / suggested, user chose: verify first or deploy now / a newer verify is gaps or failed, user chose: fix first or deploy anyway]
+- **Verify suggested**: [not needed (the latest verify is converged+verified on this same code) / suggested, user chose: verify first or deploy now]
 - **Override reason**: [required when OVERRIDDEN, written in the user's words; otherwise none]
 
 <!--
-Reference run and comparison: redevkit-test/references/code-state.md § Compare (the
-single definition). BLOCKED when a debug is pending, when there is no reference, when the
-latest feature-wide test run is not PASS, or when the code changed after it.
+Reference run and comparison: redevkit-test/references/code-state.md (the single
+definition). BLOCKED when a verify is pending, when there is no reference, when the latest
+feature-wide test run is not PASS, when the Tree fingerprint differs (the code changed after
+it) or when the code state cannot be computed. Commit and working tree are context only.
 -->
 
 ## Deploy plan

@@ -7,7 +7,8 @@
   works = O que funciona, What's left = O que falta, Next steps = Próximos passos, Known issues
   = Problemas conhecidos, Last results = Últimos resultados, Workflow preferences =
   Preferências de fluxo. Line labels stay in English in every language: `- Feature:`,
-  `- Plan approved:`, `- Test:`, `- Verify:`, `- Debug:`, `- Correction cycle:`, `- Bug <slug>:`.
+  `- Plan approved:`, `- Test:`, `- Verify:`, `- Debug:`, `- Verify pending:`,
+  `- Correction cycle:`, `- Bug <slug>:`.
 - `project.md`: scope, out of scope. `system.md`: architecture, conventions, invariants.
 - `tech.md`: stack, commands, preview port. `user.md`: environment, style, feedback.
 - Other themes: `topics/<topic>.md`, plus one `MEMORY.md` line `- [type] summary → file.md`.

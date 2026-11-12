@@ -11,6 +11,25 @@ export const toPosix = (value) => value.split(path.sep).join("/").replace(/\\/g,
 
 export const sha256 = (data) => crypto.createHash("sha256").update(data).digest("hex");
 
+const toBuffer = (data) => (Buffer.isBuffer(data) ? data : Buffer.from(String(data), "utf8"));
+
+/** Binary sniff: a NUL byte anywhere means the content is not text (same idea as git). */
+export const isBinary = (data) => toBuffer(data).includes(0);
+
+/** Text content with CRLF turned into LF; binary content is returned untouched. */
+export const normalizeEol = (data) => {
+  const buf = toBuffer(data);
+  if (!buf.includes(13) || isBinary(buf)) return buf;
+  return Buffer.from(buf.toString("latin1").replace(/\r\n/g, "\n"), "latin1"); // latin1 keeps every byte
+};
+
+/**
+ * Hash of a managed file's content, the same for LF and CRLF copies of a text file. A checkout
+ * with `core.autocrlf=true` (the Git for Windows default) rewrites every text file with CRLF;
+ * that must not count as a local modification.
+ */
+export const contentHash = (data) => sha256(normalizeEol(data));
+
 /** Files that must never break or be counted by any command (Y12). */
 export const JUNK_FILES = new Set(["desktop.ini", "thumbs.db", ".ds_store"]);
 export const isJunk = (name) => JUNK_FILES.has(name.toLowerCase());
@@ -160,12 +179,21 @@ export const listFiles = (root, { skipDirs = new Set(["node_modules", ".git", "_
   return out;
 };
 
-export const hashFileIfExists = (abs) => {
+/**
+ * Content hash of a file (see contentHash), "symlink", "not-a-file", or undefined when absent.
+ * `recorded` is the hash the manifest holds for the file. A manifest written by CLI <= 1.0.3 holds
+ * raw-byte hashes: when the bytes on disk still match one, the file is unchanged and the recorded
+ * hash is returned as is.
+ */
+export const hashFileIfExists = (abs, recorded = null) => {
   try {
     const st = fs.lstatSync(abs);
     if (st.isSymbolicLink()) return "symlink";
     if (!st.isFile()) return "not-a-file";
-    return sha256(fs.readFileSync(abs));
+    const buf = fs.readFileSync(abs);
+    const hash = contentHash(buf);
+    if (recorded && recorded !== hash && sha256(buf) === recorded) return recorded;
+    return hash;
   } catch {
     return undefined;
   }

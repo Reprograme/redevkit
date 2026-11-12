@@ -26,18 +26,19 @@ chain and never triggered by another command's handoff.
 1. **Invoked by the user** in this turn. If you reached this file any other way, stop.
 2. Memory initialized. If not, suggest `{{CMD:redevkit-new}}` and stop.
 3. **Green evidence on the current code.** Choose the reference run and compare it with the
-   current code exactly as `{{SKILLDIR:redevkit-test}}/references/code-state.md` § Compare
-   describes (debug pending → `BLOCKED` until the verify runs; otherwise the latest
-   feature-wide `test-report.md` run, which must be `PASS`).
+   current code exactly as `{{SKILLDIR:redevkit-test}}/references/code-state.md` describes
+   (verify pending → `BLOCKED` until a verify ends in `converged+verified`; otherwise the
+   latest feature-wide `test-report.md` run, which must be `PASS` and have the Tree
+   fingerprint of the current code).
    - Same code state and a `PASS` reference → precondition status `OK`.
-   - Anything else → `BLOCKED`: refuse and require `{{CMD:redevkit-verify}}` (debug pending)
-     or `{{CMD:redevkit-test}}`. The only way past is `OVERRIDDEN`: the user states a reason,
-     recorded in their words in the report; the run still stops at G6.
-4. **Verify suggested.** Compare with the latest run of the feature's `verification.md`:
-   - it is newer than the reference test run and `converged+verified` → nothing to ask;
-   - it is newer and `gaps` or `failed` → show it and ask: fix first (Recommended) or deploy
-     anyway;
-   - none is newer → ask: run `{{CMD:redevkit-verify}}` first (Recommended) or deploy now.
+   - Anything else → `BLOCKED`: refuse and require `{{CMD:redevkit-verify}}` (verify pending)
+     or `{{CMD:redevkit-test}}`; when the code state cannot be computed, say so instead of
+     asking for another test run. The only way past is `OVERRIDDEN`: the user states a
+     reason, recorded in their words in the report; the run still stops at G6.
+4. **Verify suggested.** Look at the latest run of the feature's `verification.md`:
+   - it is `converged+verified` and its Tree fingerprint is the current one → nothing to ask;
+   - otherwise (no run, or the code changed after it) → ask: run `{{CMD:redevkit-verify}}`
+     first (Recommended) or deploy now.
 
    Record the choice in the report.
 5. Templates resolve per T10: `.redevkit/templates/overrides/reports/deploy.md` if it exists,
@@ -88,8 +89,9 @@ the answer and stop. No report is written, because nothing was deployed.
 
 Write `.redevkit/deploys/YYYY-MM-DD-<environment>.md` from the template (if that file already
 exists, add `-2`, `-3`, … before `.md`; never overwrite a report): Preconditions table
-(reference run, HEAD, working tree, both fingerprints, `OK`/`BLOCKED`/`OVERRIDDEN`, verify
-suggested, override reason), deploy plan, rollback plan. Never write secrets.
+(verify pending, reference run, Tree fingerprint, HEAD, working tree,
+`OK`/`BLOCKED`/`OVERRIDDEN`, verify suggested, override reason), deploy plan, rollback plan.
+Never write secrets.
 
 ### 4. Confirm (G6)
 
@@ -156,7 +158,8 @@ and current values side by side. A skipped check is `SKIPPED (reason)`, never `P
 - `succeeded` → `{{CMD:redevkit-status}}` to review, or `{{CMD:redevkit-plan}}` for the next
   feature.
 - `failed` or `rolled-back` → `{{CMD:redevkit-debug}}` with the failing step and its output.
-- `BLOCKED` → `{{CMD:redevkit-verify}}` when a debug is pending, otherwise
-  `{{CMD:redevkit-test}}`.
+- `BLOCKED` → `{{CMD:redevkit-verify}}` when a verify is pending, otherwise
+  `{{CMD:redevkit-test}}`; with the code state unavailable, the fix named in the code-state
+  reference.
 - `aborted` → nothing changed; run `{{CMD:redevkit-deploy}}` again when ready.
 - Never chained by `--auto`.

@@ -29,6 +29,8 @@ possa ser construída, testada e entregue sozinha.
 - **@persona**: quem executa a tarefa
 - **VERIFY**: a checagem observável que prova que a tarefa está pronta
 - Tarefas concluídas ficam `- [X]`
+- Uma tarefa que não pôde ser concluída dentro do limite de tentativas fica `- [!]`, com uma
+  linha recuada abaixo dela: `- BLOCKED AAAA-MM-DD: motivo; needs: o que a desbloqueia`
 
 <!--
   ============================================================================
@@ -168,5 +170,6 @@ Cada história agrega valor sem quebrar as anteriores.
 
 - `[P]` = arquivos disjuntos e nenhuma dependência dentro da fase.
 - Marque uma tarefa `[X]` só depois de observar o VERIFY dela.
+- Uma tarefa bloqueada `[!]` é pulada até que o que ela precisa seja resolvido; nunca é apagada.
 - Nunca renumere tarefas; trabalho novo entra como uma nova fase no fim.
 - Commits só quando o usuário pedir.

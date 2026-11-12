@@ -100,7 +100,7 @@ redevkit init meu-app
 | --- | --- |
 | Ver a versão publicada mais recente | `redevkit version --check` ou `npm view redevkit version` |
 | Atualizar a CLI global | `npm install -g redevkit@latest` |
-| Usar uma versão específica sem instalar | `npx redevkit@1.0.3 init --here` |
+| Usar uma versão específica sem instalar | `npx redevkit@1.1.0 init --here` |
 | Remover a CLI global | `npm uninstall -g redevkit` |
 
 Atualizar a CLI não altera os seus projetos; rode `redevkit update` em cada um (ver
@@ -118,12 +118,13 @@ Num terminal interativo, o `init` pergunta o alvo (padrão `both`) e o idioma do
 | `--lang <idioma>` | Idioma dos artefatos: `pt-BR` ou `en` |
 | `--dry-run` | Mostra o que mudaria, sem gravar nada |
 | `-y, --yes` | Aceita padrões e confirmações, inclusive a migração de um `CLAUDE.md` existente (obrigatório sem terminal interativo) |
-| `--force` | Sobrescreve arquivos em conflito (depois do backup) |
+| `--force` | Sobrescreve arquivos em conflito e restaura arquivos gerenciados ausentes (depois do backup) |
 | `--verbose` | Lista cada ação por arquivo |
 
 Rodar o `init` de novo num projeto já instalado reaproveita os alvos e o idioma do manifesto,
 sem perguntar, e funciona como um `redevkit update`; `--target` ou `--lang` trocam esses
-valores, e `--force` resolve os conflitos depois do backup.
+valores, e `--force` resolve os conflitos e restaura os arquivos gerenciados ausentes, depois
+do backup.
 
 ### 2. Comece no agente
 
@@ -156,7 +157,9 @@ flowchart TD
     CR --> TS["test"]
     EN --> TS
     TS -->|PASS| DONE["revisar; verify sugerido"]
-    TS -->|FAIL| DB["debug"]
+    TS -->|"PASS · verify pendente"| VF
+    TS -->|"FAIL · bug"| DB["debug"]
+    TS -->|"FAIL · ainda não construído"| CR
     DB --> VF["verify · obrigatório após debug<br/>roda os testes de novo, convergência,<br/>execução, auditorias"]
     DONE -.-> VF
     VF -->|gaps| KIND
@@ -169,9 +172,12 @@ flowchart TD
 O `redevkit-status` mostra os fatos a qualquer momento; o `redevkit-preview` sobe, para ou
 checa o servidor de desenvolvimento local sob demanda.
 
-Com `--auto`, a cadeia segue sozinha: new → plan → create/enhance → test e, no teste vermelho,
-debug → verify (que roda os testes de novo sobre o código corrigido). Ela sempre para nos
-gates, e o deploy nunca faz parte da cadeia:
+Com `--auto`, a cadeia segue sozinha: new → plan → create/enhance → test. O teste vermelho vai
+para onde a classe da falha indica: um bug vai para debug → verify (que roda os testes de novo
+sobre o código corrigido), um comportamento que não foi construído volta para o create, e um
+problema de ambiente ou uma tarefa bloqueada param a cadeia. Depois de um debug, ou de um
+verify que terminou em `gaps` ou `failed`, o teste verde segue para o verify, e o laço se fecha
+sozinho. Ela sempre para nos gates, e o deploy nunca faz parte da cadeia:
 
 | Gate | Quando a cadeia para |
 | --- | --- |
@@ -285,7 +291,7 @@ Confiança no projeto:
 | Comando | Opções | O que faz |
 | --- | --- | --- |
 | `redevkit init [dir]` | `--here`, `--target`, `--lang`, `--dry-run`, `--yes`, `--force`, `--verbose` | Instala o kit: renderiza os alvos, grava o bloco do `AGENTS.md`, migra o `CLAUDE.md`, faz merge da config e cria o manifesto |
-| `redevkit update` | `--dry-run`, `--no-backup`, `--conflict-report <arq>`, `--verbose` | Atualização em 3 vias dos arquivos gerenciados (ver [Atualização e recuperação](#atualização-e-recuperação)). Nunca toca memória, specs ou `DESIGN.md` |
+| `redevkit update` | `--dry-run`, `--no-backup`, `--restore`, `--conflict-report <arq>`, `--verbose` | Atualização em 3 vias dos arquivos gerenciados (ver [Atualização e recuperação](#atualização-e-recuperação)); `--restore` recria os arquivos gerenciados que estão ausentes. Nunca toca memória, specs ou `DESIGN.md` |
 | `redevkit rollback` | `--backup <id>`, `--list`, `--dry-run` | Restaura um backup, salvando antes o estado atual |
 | `redevkit status` | `--quiet`, `--json` | Versão instalada, alvos, idioma e arquivos gerenciados alterados ou ausentes; funciona offline |
 | `redevkit doctor` | `--json` | Confere ferramentas, instalação, `AGENTS.md`, `CLAUDE.md`, memória, numeração de `specs/`, config e confiança no Codex; sai com código diferente de zero se houver erro |
@@ -316,7 +322,14 @@ redevkit doctor
 
 O merge em 3 vias compara a base instalada, a sua cópia e o kit novo. Um arquivo que só você
 alterou é preservado. Um arquivo alterado por você e pelo kit é um conflito: o seu fica e a
-versão nova vai para `.redevkit/conflicts/<id>/`.
+versão nova vai para `.redevkit/conflicts/<id>/`. Fim de linha não é alteração: um checkout
+que regrava os arquivos com CRLF (`core.autocrlf=true`) não aparece como alterado.
+
+Um arquivo gerenciado que você apagou continua apagado: o `update` diz quantos estão ausentes e
+o `redevkit update --restore` (ou o `init --force`) os traz de volta sem tocar nos arquivos que
+você alterou. O `redevkit doctor` trata como erro a falta de um arquivo do pipeline (uma skill
+`redevkit-*`, uma auditoria ou um template) e como aviso a falta de uma skill de conhecimento
+ou de uma persona.
 
 `init`, `update`, `target` e `uninstall` fazem backup dos arquivos que vão mudar em
 `.redevkit/backups/<id>/`:

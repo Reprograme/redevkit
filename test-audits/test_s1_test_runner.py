@@ -20,12 +20,16 @@ test_runner = load_audit("test_runner")
 
 
 def make_fake_npm(folder) -> None:
-    """A fake npm on PATH: npm.cmd on Windows, an executable script elsewhere."""
+    """A fake npm on PATH: npm.cmd on Windows, an executable script elsewhere.
+
+    It prints a test summary: a command whose output shows no test result is SKIPPED (S17).
+    """
     if os.name == "nt":
-        (folder / "npm.cmd").write_text("@echo off\r\necho s1-tests-ok\r\nexit /b 0\r\n", encoding="utf-8")
+        (folder / "npm.cmd").write_text(
+            "@echo off\r\necho s1-tests-ok\r\necho Tests  2 passed (2)\r\nexit /b 0\r\n", encoding="utf-8")
     else:
         script = folder / "npm"
-        script.write_text("#!/bin/sh\necho s1-tests-ok\nexit 0\n", encoding="utf-8")
+        script.write_text("#!/bin/sh\necho s1-tests-ok\necho 'Tests  2 passed (2)'\nexit 0\n", encoding="utf-8")
         script.chmod(script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 

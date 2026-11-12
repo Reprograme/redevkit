@@ -149,8 +149,8 @@ Follow `{{SKILL:redevkit-constitution}}` to write `.redevkit/memory/constitution
 ### 9. Index and state
 
 - `active.md` (only after a bootstrap in step 4): `- Feature: none` (pt-BR:
-  `- Feature: nenhuma`), `- Plan approved: no`, `- Correction cycle:` with both counters at
-  0; Next steps. In `--auto`,
+  `- Feature: nenhuma`), `- Plan approved: no`, `- Verify pending: no`, `- Correction cycle:`
+  with both counters at 0; Next steps. In `--auto`,
   record the input description as the first MVP feature (`MVP: <description>`) for the
   plan.
 - `MEMORY.md`: regenerate the index through `{{SKILL:redevkit-memanager}}` (entries

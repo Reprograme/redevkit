@@ -16,6 +16,7 @@ PROJECT_AUDITS = (
 )
 EXPECTED_SCRIPTS = set(PROJECT_AUDITS) | {
     "security_scan", "lighthouse_audit", "playwright_runner", "checklist", "verify_all", "validation_runner",
+    "code_state",  # code-state fingerprints for the test and verify commands (test_c1_code_state.py)
 }
 HELPER_MODULES = {"audit_common"}  # imported by the audits, never run directly
 

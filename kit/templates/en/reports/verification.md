@@ -23,11 +23,10 @@ failed, PASS, FAIL, SKIPPED, clean, dirty.
 | Branch | `[BRANCH]` |
 | Working tree | clean / dirty |
 | Changed files | [none, or the `git status --porcelain` list] |
-| Status fingerprint | `[HASH]` |
-| Diff fingerprint | `[HASH]` |
+| Tree fingerprint | `sha256:[HASH]` or `n/a (no Python interpreter)` |
 
 <!--
-Same commands as the test report: redevkit-test/references/code-state.md.
+Same script as the test report: redevkit-test/references/code-state.md.
 -->
 
 ### Test evidence
@@ -36,7 +35,8 @@ Same commands as the test report: redevkit-test/references/code-state.md.
 | --- | --- |
 | Test run | `test-report.md`, run [YYYY-MM-DD HH:MM] — [PASS \| FAIL] |
 | Source | [ran in step 1 \| reused: same code state as the current code] |
-| Debug since the previous verify | [bug slug, YYYY-MM-DD HH:MM \| none] |
+| Failure class (FAIL run) | [product-defect \| not-implemented \| environment \| none] |
+| Verify pending at the start | [no \| debug <slug> \| gaps \| failed] |
 
 <!--
 A FAIL test run ends the verification here: verdict failed, and the Convergence, Execution
@@ -76,7 +76,12 @@ and Audits sections are SKIPPED (test run FAIL).
 
 | Audit | Command | Result | Notes |
 | --- | --- | --- | --- |
-| [AUDIT NAME] | `[COMMAND]` | PASS / FAIL / SKIPPED ([REASON]) | [FINDINGS SUMMARY] |
+| [AUDIT NAME] | `[COMMAND]` | PASS / FAIL / SKIPPED ([REASON]) | [in scope: N findings; baseline (pre-existing): N findings in N files; out of scope (third-party/generated): paths] |
+
+<!--
+Only in-scope findings (files this feature created or changed) become tasks or failed.
+Baseline and out-of-scope findings are listed in Notes and never change the verdict.
+-->
 
 ### Not verified
 
@@ -92,11 +97,12 @@ and Audits sections are SKIPPED (test run FAIL).
 
 <!--
 converged+verified: test run PASS; no convergence gaps; build and critical flows pass; no audit
-FAIL with in-scope findings (findings in third-party or generated code are listed in Notes as
-out of scope and never become tasks).
+FAIL with in-scope findings (baseline findings in files this feature did not touch and findings
+in third-party or generated code are listed in Notes and never become tasks).
 gaps: test run PASS and execution passes, but convergence or non-critical audits appended tasks.
 failed: the test run is FAIL, or the build, a critical flow or a blocking audit fails.
 -->
 
 - **Correction cycle** (after this run): failed after debug [N]/2 · rounds without convergence [N]/3
-- **Next step**: [redevkit-deploy | redevkit-create or redevkit-enhance (gaps) | redevkit-debug (failed) | G5 reached: waiting for the user]
+- **Verify pending** (after this run): [no | gaps | failed]
+- **Next step**: [redevkit-deploy | redevkit-create or redevkit-enhance (gaps) | redevkit-debug (failed) | redevkit-create (failed: not-implemented) | fix the environment and run redevkit-verify again (failed: environment) | G5 reached: waiting for the user]

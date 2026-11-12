@@ -29,6 +29,8 @@ delivered on its own.
 - **@persona**: who executes the task
 - **VERIFY**: the observable check that proves the task is done
 - Done tasks are marked `- [X]`
+- A task that could not be finished within the retry budget is marked `- [!]`, with an
+  indented line below it: `- BLOCKED YYYY-MM-DD: reason; needs: what unblocks it`
 
 <!--
   ============================================================================
@@ -168,5 +170,6 @@ adds value without breaking the previous ones.
 
 - `[P]` = disjoint files and no dependency inside the phase.
 - Mark a task `[X]` only after its VERIFY was observed.
+- A blocked task `[!]` is skipped until what it needs is resolved; it is never deleted.
 - Never renumber tasks; new work is appended as a new phase.
 - Commits only when the user asks.

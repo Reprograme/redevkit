@@ -8,17 +8,18 @@ and nothing said so.
 from __future__ import annotations
 
 import json
-import subprocess
 import unittest
 from unittest import mock
 
 from audit_helpers import TempProject, load_audit, run_main
 
 security_scan = load_audit("security_scan")
+audit_common = load_audit("audit_common")
 
 
-def completed(stdout: str, returncode: int = 0) -> subprocess.CompletedProcess:
-    return subprocess.CompletedProcess(args=["npm"], returncode=returncode, stdout=stdout, stderr="")
+def completed(stdout: str, returncode: int = 0, timed_out: bool = False):
+    """What audit_common.run_external returns (npm audit runs through it since S14)."""
+    return audit_common.CommandResult(returncode, stdout, "", timed_out)
 
 
 class TestS2NpmAudit(unittest.TestCase):
@@ -27,7 +28,7 @@ class TestS2NpmAudit(unittest.TestCase):
         audit_json = json.dumps({"metadata": {"vulnerabilities": {"critical": 0, "high": 2, "moderate": 0, "low": 0}}})
         with TempProject("S2") as project, \
                 mock.patch.object(security_scan.shutil, "which", return_value=fake), \
-                mock.patch.object(security_scan.subprocess, "run", return_value=completed(audit_json, 1)) as run:
+                mock.patch.object(security_scan, "run_external", return_value=completed(audit_json, 1)) as run:
             result = security_scan.scan_dependencies(str(project.root))
         command = run.call_args.args[0]
         self.assertEqual(command, [fake, "audit", "--json"])
@@ -47,7 +48,7 @@ class TestS2NpmAudit(unittest.TestCase):
     def test_subprocess_failure_is_skipped_not_swallowed(self):
         cases = {
             "oserror": mock.Mock(side_effect=OSError("access denied")),
-            "timeout": mock.Mock(side_effect=subprocess.TimeoutExpired(cmd="npm", timeout=90)),
+            "timeout": mock.Mock(return_value=completed("", 1, timed_out=True)),
             "not-json": mock.Mock(return_value=completed("npm ERR! something broke", 1)),
             "error-json": mock.Mock(return_value=completed(json.dumps({"error": {"code": "ENOLOCK", "summary": "requires a lockfile"}}), 1)),
             "empty": mock.Mock(return_value=completed("", 1)),
@@ -55,7 +56,7 @@ class TestS2NpmAudit(unittest.TestCase):
         for label, fake_run in cases.items():
             with self.subTest(label), TempProject("S2") as project, \
                     mock.patch.object(security_scan.shutil, "which", return_value="npm"), \
-                    mock.patch.object(security_scan.subprocess, "run", fake_run):
+                    mock.patch.object(security_scan, "run_external", fake_run):
                 result = security_scan.scan_dependencies(str(project.root))
                 report = security_scan.run_full_scan(str(project.root), "deps")
             self.assertEqual(len(result["skipped"]), 1, label)

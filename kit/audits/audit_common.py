@@ -28,13 +28,33 @@ their PHP blocks are removed (controllers, models and config are pure code).
 with ``{...}``, the same "dynamic value" marker the JSX-aware checks already
 understand, so ``alt="<?= $alt ?>"`` is a non-empty value and
 ``<img src="<?= $x ?>">`` no longer ends the tag at the ``?>``.
+
+External commands
+-----------------
+Every audit starts external tools (``npm``, ``tsc``, ``lighthouse``, the
+project's test command, the other audit scripts) through ``run_external``:
+
+* the command never reads the terminal: its stdin is the null device, and the
+  environment says ``CI=1`` (kept when the caller already set ``CI``),
+  ``NO_COLOR=1`` and ``FORCE_COLOR=0``, so test runners run once instead of
+  entering watch mode, nothing prompts and the output carries no colour codes;
+* the command runs in its own process group; when the time limit expires the
+  WHOLE process tree is killed (on Windows ``npm.cmd`` is a ``cmd.exe`` that
+  starts ``node``: killing only the first process leaves ``node`` running and
+  holding the output pipes);
+* the output is read incrementally, so what was printed before a timeout is
+  kept, and no wait on the pipes is unbounded.
 """
 from __future__ import annotations
 
 import os
 import re
+import signal
+import subprocess
+import threading
+import time
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, Iterator, List, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 DEFAULT_EXCLUDED_DIRS: Tuple[str, ...] = (
     # version control, editors and agent folders
@@ -147,7 +167,7 @@ def glob_to_regex(pattern: str) -> str:
 
 
 def compile_pattern(line: str) -> Optional[Rule]:
-    """Compile one ``.gitignore`` line; None for blank lines and comments."""
+    """Compile one ``.gitignore`` line; None for blank lines, comments and patterns ``re`` rejects."""
     text = line.rstrip("\r\n")
     if not text.endswith("\\ "):  # trailing spaces are ignored unless escaped
         text = text.rstrip(" \t")
@@ -170,7 +190,13 @@ def compile_pattern(line: str) -> Optional[Rule]:
     body = glob_to_regex(text)
     if not anchored:
         body = "(?:.*/)?" + body
-    return Rule(original, re.compile(f"^{body}$", re.IGNORECASE | re.DOTALL), negate, dir_only)
+    try:
+        regex = re.compile(f"^{body}$", re.IGNORECASE | re.DOTALL)
+    except re.error:
+        # A pattern git accepts but ``re`` does not (for example the reversed
+        # range in ``*.[a-Z]``): ignore the rule instead of crashing the audit.
+        return None
+    return Rule(original, regex, negate, dir_only)
 
 
 def compile_patterns(lines: Iterable[str]) -> List[Rule]:
@@ -460,3 +486,197 @@ def read_markup_source(path: Path | str) -> Optional[str]:
         return text
     masked = mask_server_code(text)
     return masked if has_markup(masked) else None
+
+
+# --------------------------------------------------------------------------
+# External commands
+# --------------------------------------------------------------------------
+
+PIPE_GRACE_SECONDS = 5   # bounded wait for the output pipes once the process ended or was killed
+TREE_KILL_SECONDS = 20   # bounded wait for the tool that kills the process tree
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
+_CMD_METACHARACTERS = frozenset("&|<>^()")
+
+
+class CommandResult(NamedTuple):
+    """Outcome of ``run_external``. ``returncode`` is None only when a killed process could not be reaped."""
+
+    returncode: Optional[int]
+    stdout: str
+    stderr: str
+    timed_out: bool
+
+
+def strip_ansi(text: str) -> str:
+    """Remove terminal colour and cursor sequences (some tools colour piped output on Windows)."""
+    return _ANSI_ESCAPE.sub("", text)
+
+
+def command_env(extra: Optional[Mapping[str, str]] = None) -> Dict[str, str]:
+    """Environment of every external command: non-interactive and without colours."""
+    env = dict(os.environ)
+    if not env.get("CI"):
+        env["CI"] = "1"  # vitest, jest, react-scripts, npx: run once, no watch mode, no prompt
+    env["NO_COLOR"] = "1"
+    env["FORCE_COLOR"] = "0"
+    if extra:
+        env.update(extra)
+    return env
+
+
+def windows_command_line(args: Sequence[str]) -> str:
+    """Command line for a ``.cmd``/``.bat`` shim: also quotes arguments holding cmd.exe metacharacters.
+
+    ``subprocess.list2cmdline`` quotes only white space, so ``http://host/?a=1&b=2`` given to
+    ``lighthouse.cmd`` was cut at the ``&`` by cmd.exe, which then ran ``b=2 ...`` as a command.
+    """
+    parts: List[str] = []
+    for arg in args:
+        quoted = subprocess.list2cmdline([arg])
+        if quoted == arg and _CMD_METACHARACTERS.intersection(arg):
+            trailing = len(arg) - len(arg.rstrip("\\"))
+            quoted = '"' + arg + "\\" * trailing + '"'
+        parts.append(quoted)
+    return " ".join(parts)
+
+
+def _descendant_pids(pid: int) -> List[int]:
+    """POSIX: every descendant of ``pid``, read from ``ps`` (best effort; [] when ps is missing)."""
+    try:
+        listing = subprocess.run(
+            ["ps", "-A", "-o", "pid=", "-o", "ppid="], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, timeout=5, check=False,
+        ).stdout.decode("ascii", "replace")
+    except (OSError, subprocess.SubprocessError):
+        return []
+    children: Dict[int, List[int]] = {}
+    for line in listing.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            children.setdefault(int(parts[1]), []).append(int(parts[0]))
+    found: List[int] = []
+    queue = [pid]
+    while queue:
+        for child in children.get(queue.pop(), []):
+            if child not in found:
+                found.append(child)
+                queue.append(child)
+    return found
+
+
+def kill_process_tree(proc: "subprocess.Popen[bytes]") -> None:
+    """Kill ``proc`` and every process it started. Call it only while ``proc`` is not reaped."""
+    if os.name == "nt":
+        root = os.environ.get("SystemRoot") or os.environ.get("WINDIR") or r"C:\Windows"
+        taskkill = os.path.join(root, "System32", "taskkill.exe")
+        try:
+            subprocess.run(
+                [taskkill if os.path.isfile(taskkill) else "taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=TREE_KILL_SECONDS, check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            pass
+    else:
+        # The command leads its own session: its group covers the usual tree. A nested
+        # run_external (an audit started by an orchestrator) leads another session, so the
+        # descendants are also killed one by one.
+        descendants = _descendant_pids(proc.pid)
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        for pid in descendants:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
+    try:
+        proc.kill()
+    except OSError:
+        pass
+
+
+def _pump(stream, sink: List[bytes]) -> None:
+    """Reader thread: collect a pipe chunk by chunk (so a timeout keeps what was printed)."""
+    try:
+        descriptor = stream.fileno()
+        while True:
+            chunk = os.read(descriptor, 65536)
+            if not chunk:
+                break
+            sink.append(chunk)
+    except (OSError, ValueError):
+        pass
+    finally:
+        try:
+            stream.close()
+        except OSError:
+            pass
+
+
+def _decode_output(chunks: List[bytes]) -> str:
+    text = b"".join(list(chunks)).decode("utf-8", errors="replace")
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def run_external(
+    cmd: Union[Sequence[str], str],
+    cwd: Union[Path, str, None] = None,
+    timeout: Optional[float] = None,
+    env: Optional[Mapping[str, str]] = None,
+    merge_stderr: bool = False,
+) -> CommandResult:
+    """Run an external command without a shell, never interactive, with a real time limit.
+
+    ``env`` holds extra variables added to ``command_env()``. With ``merge_stderr`` the two
+    streams are read as one (in the order the tool wrote them) and ``stderr`` is empty.
+    On timeout the whole process tree is killed and the result has ``timed_out`` True and
+    the output produced so far. ``OSError`` (``FileNotFoundError`` included) is raised when
+    the command cannot start.
+    """
+    options: Dict[str, object] = {}
+    if os.name == "nt":
+        options["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    else:
+        options["start_new_session"] = True
+    proc = subprocess.Popen(  # an argument list (or a quoted Windows command line), never a shell
+        cmd if isinstance(cmd, str) else [str(part) for part in cmd],
+        cwd=str(cwd) if cwd is not None else None,
+        env=command_env(env),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT if merge_stderr else subprocess.PIPE,
+        **options,  # type: ignore[arg-type]
+    )
+    sinks: Dict[str, List[bytes]] = {"stdout": [], "stderr": []}
+    readers: List[threading.Thread] = []
+    for name in ("stdout", "stderr"):
+        stream = getattr(proc, name)
+        if stream is not None:
+            reader = threading.Thread(target=_pump, args=(stream, sinks[name]), daemon=True)
+            reader.start()
+            readers.append(reader)
+
+    timed_out = False
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        kill_process_tree(proc)
+    except BaseException:  # Ctrl+C and the like: never leave the command running
+        kill_process_tree(proc)
+        raise
+
+    # A process that outlived the command and still holds a pipe must not block the audit.
+    # The reader of a pipe that is still held goes on alone and closes it when it ends.
+    deadline = time.monotonic() + PIPE_GRACE_SECONDS
+    for reader in readers:
+        reader.join(max(0.0, deadline - time.monotonic()))
+    returncode = proc.poll()
+    if returncode is None:
+        try:
+            returncode = proc.wait(timeout=PIPE_GRACE_SECONDS)
+        except subprocess.TimeoutExpired:
+            returncode = None
+    return CommandResult(returncode, _decode_output(sinks["stdout"]), _decode_output(sinks["stderr"]), timed_out)

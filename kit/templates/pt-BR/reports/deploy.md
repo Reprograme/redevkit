@@ -21,22 +21,23 @@ failed, rolled-back, aborted, clean, dirty.
 
 | Verificação | Referência (do relatório) | Atual | Resultado |
 | --- | --- | --- | --- |
-| Debug pendente | [não / sim: slug do bug, AAAA-MM-DD HH:MM] | — | OK / BLOCKED |
+| Verify pending | [não / sim: debug <slug>, gaps ou failed] | — | OK / BLOCKED |
 | Execução de referência | [test-report.md, execução AAAA-MM-DD HH:MM, executada por redevkit-test / redevkit-verify (passo 1)] | — | — |
 | Veredito da referência | [PASS] | — | OK / BLOCKED |
-| Commit (HEAD) | `[SHA]` | `[SHA]` | OK / BLOCKED |
-| Árvore de trabalho | [clean / dirty] | [clean / dirty] | OK / BLOCKED |
-| Impressão digital do status | `[HASH]` | `[HASH]` | OK / BLOCKED |
-| Impressão digital do diff | `[HASH]` | `[HASH]` | OK / BLOCKED |
+| Tree fingerprint | `sha256:[HASH]` | `sha256:[HASH]` | OK / BLOCKED |
+| Commit (HEAD) | `[SHA]` | `[SHA]` | — |
+| Árvore de trabalho | [clean / dirty] | [clean / dirty] | — |
 
 - **Status das pré-condições**: OK / BLOCKED / OVERRIDDEN
-- **Verify sugerido**: [não necessário (há um verify converged+verified mais novo que a referência) / sugerido, o usuário escolheu: verify antes ou deploy agora / um verify mais novo é gaps ou failed, o usuário escolheu: corrigir antes ou fazer o deploy assim mesmo]
+- **Verify sugerido**: [não necessário (o último verify é converged+verified sobre este mesmo código) / sugerido, o usuário escolheu: verify antes ou deploy agora]
 - **Motivo do override**: [obrigatório quando OVERRIDDEN, nas palavras do usuário; senão, nenhum]
 
 <!--
-Execução de referência e comparação: redevkit-test/references/code-state.md § Compare (a
-definição única). BLOCKED quando há debug pendente, quando não há referência, quando a última
-execução de testes da feature inteira não é PASS ou quando o código mudou depois dela.
+Execução de referência e comparação: redevkit-test/references/code-state.md (a definição
+única). BLOCKED quando há um verify pendente, quando não há referência, quando a última
+execução de testes da feature inteira não é PASS, quando o Tree fingerprint difere (o código
+mudou depois dela) ou quando o estado do código não pode ser calculado. Commit e árvore de
+trabalho são só contexto.
 -->
 
 ## Plano de deploy

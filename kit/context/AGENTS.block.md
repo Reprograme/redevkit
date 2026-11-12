@@ -43,8 +43,10 @@ In Codex invoke them as `$redevkit-<name>`.
 | `redevkit-status` | Show facts: active feature, progress, last test and verify |
 
 Every command ends with a handoff: the next command and why. With `--auto` the chain
-new → plan → create/enhance → test runs on its own; on red it continues debug → verify, and
-the verify runs the tests again on the fixed code. It always stops at the gates: G1
+new → plan → create/enhance → test runs on its own. A red test goes where its failure class
+says: a bug to debug → verify, unbuilt behavior back to create; an environment problem or a
+blocked task stops the chain. While a verify is pending (after a debug, or a verify that
+ended in `gaps` or `failed`), a green test goes on to verify. It always stops at the gates: G1
 constitution creation or amendment, G2 plan approval, G3 constitution violation, G4
 destructive or irreversible action, G5 correction cycle without convergence (rules in
 `redevkit-verify` step 6), G6 deploy (user only), G7 legacy memory choice. Outside the gates, questions are answered with
@@ -70,7 +72,10 @@ Subagents never ask the user; they return questions to the caller.
   default (no purple/violet as primary color) unless `DESIGN.md` or the brand says otherwise.
 - Clean code: small functions, clear names, no dead code, no speculative abstractions; follow the
   conventions in `.redevkit/memory/system.md`.
-- Never invent facts about the code, the tools or the results. Read before you write.
+- Never invent facts about the code, the tools or the results. Read before you write. Dates
+  and times written to artifacts come from the system clock.
+- Test suites, builds and audits run non-interactively and bounded: never watch mode or a
+  prompt, and a timeout above the expected duration (or a background run you wait for).
 - Write every file as UTF-8. Prefer the file-editing tool; on Windows never write artifacts through
   shell redirection without an explicit UTF-8 encoding (accents get corrupted).
 

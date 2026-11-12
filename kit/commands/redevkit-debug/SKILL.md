@@ -84,6 +84,16 @@ handoff to verify. Memory: only `- Bug <slug>: open` in Known issues, no `- Debu
 Verdict `invalid` (expected behavior, misuse, duplicate): stop. Write no `- Debug:` or
 `- Bug` line, report the reason and suggest `{{CMD:redevkit-status}}`; no handoff to verify.
 
+Not a bug in the code (decide it here, before any fix, and write no `- Debug:` or `- Bug`
+line):
+
+- **The test is wrong** (it contradicts the spec, or fails by its own error): stop and hand
+  off to `{{CMD:redevkit-test}}` with the evidence; that command corrects test defects.
+- **The behavior was never built** (it belongs to an open `[ ]` or blocked `[!]` task of
+  `tasks.md`): stop and hand off to `{{CMD:redevkit-create}}`.
+- **The suite cannot run** (missing dependency or tool, timeout, port in use): stop and name
+  what must be fixed in the environment.
+
 ### 3. Fix
 
 Follow `{{SKILL:redevkit-bug-fix}}`:
@@ -123,8 +133,10 @@ full verification: the verify command runs the full test procedure and the rest 
 ## Memory phase 3
 
 Save per `{{SKILL:redevkit-memanager}}`: `active.md` › Last results › Debug (active feature, bug
-slug, date and time, `test.md` result, link to the bug folder; the verify command uses it to know that it
-follows a debug) and Known issues (`- Bug <slug>: open — .redevkit/bugs/<slug>/`; only a `converged+verified`
+slug, date and time read from the system clock, `test.md` result, link to the bug folder),
+`- Verify pending: specs/NNN-short-name — debug <slug>` whenever this run changed code or
+tests (rule in `{{CMD:redevkit-verify}}` step 6: the verify uses it to know that it follows a
+debug, and the deploy stays blocked until that verify ends in `converged+verified`) and Known issues (`- Bug <slug>: open — .redevkit/bugs/<slug>/`; only a `converged+verified`
 verify of that feature closes it; a bug debugged with no active feature is closed by the user
 through `{{SKILL:redevkit-memanager}}`), `changelog.md`
 (Unreleased › Fixed, only when `test.md` says `verified`), `system.md` when the root cause
@@ -141,6 +153,9 @@ cause without a test that confirms it.
 
 - Cannot reproduce or `invalid` (step 2) → no handoff; the run ends with the question or the
   reason.
+- Not a bug in the code (step 2) → `{{CMD:redevkit-test}}` for a wrong test,
+  `{{CMD:redevkit-create}}` for behavior never built, no command for an environment problem;
+  `--auto` continues to those commands and stops on the environment problem.
 - Otherwise always → `{{CMD:redevkit-verify}}` (mandatory after a debug, whatever `test.md` says): it
   runs the test procedure on the fixed code, then the full verification, and decides whether
   the code can go to deploy.

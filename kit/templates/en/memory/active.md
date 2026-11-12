@@ -43,9 +43,10 @@ updated: "YYYY-MM-DD"
 
 ## Last results
 
-- Test: [PASS | FAIL] — [YYYY-MM-DD HH:MM] — [run by redevkit-test | redevkit-verify (step 1)] — [command] — [report path]
+- Test: [PASS | FAIL (failure classes)] — [YYYY-MM-DD HH:MM] — [run by redevkit-test | redevkit-verify (step 1)] — [command] — [report path]
 - Verify: [converged+verified | gaps | failed] — [YYYY-MM-DD HH:MM] — [report path]
 - Debug: [specs/NNN-name] — [bug slug] — [YYYY-MM-DD HH:MM] — [verified | partial | failed] — [.redevkit/bugs/slug/]
+- Verify pending: [no | specs/NNN-name — debug <slug> | gaps | failed]
 - Correction cycle: [specs/NNN-name] — failed after debug [N]/2 · rounds without convergence [N]/3 [· G5 reached YYYY-MM-DD HH:MM, waiting for the user]
 
 ## Workflow preferences

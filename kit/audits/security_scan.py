@@ -14,11 +14,11 @@ says ``SKIPPED (<reason>)`` for it; a failure is never silently swallowed.
 from __future__ import annotations
 
 import argparse
+import bisect
 import io
 import json
 import re
 import shutil
-import subprocess
 import sys
 import tokenize
 from datetime import datetime, timezone
@@ -28,7 +28,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-from audit_common import PathFilter, add_exclusion_arguments, path_filter_from_args  # noqa: E402
+from audit_common import PathFilter, add_exclusion_arguments, path_filter_from_args, run_external  # noqa: E402
 
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
 NPM_AUDIT_TIMEOUT = 90
@@ -37,7 +37,7 @@ NPM_AUDIT_TIMEOUT = 90
 def utf8_stdio() -> None:
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+            stream.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)  # type: ignore[union-attr]
         except (AttributeError, ValueError, OSError):
             pass
 
@@ -85,12 +85,18 @@ _SQL_KEYWORD = (
     r"|(?i:\binsert\s+into\b|\bupdate\s+[\w.\"`\[\]]+\s+set\b|\bdelete\s+from\b"
     r"|\bselect\s+(?:\*|[\w.]+(?:\s*,\s*[\w.]+)*)\s+from\b))"
 )
-_OPERAND = r"[A-Za-z_$][\w$.\[\]()]*"
+# "SQL string concatenation" is ``<keyword> ... + operand`` or ``operand + ... <keyword>`` on
+# one line, where an operand is ``[A-Za-z_$][\w$.\[\]()]*``. It is not a single regex: that
+# regex rescanned the rest of the line from every ``x +`` and was quadratic in the line
+# length (87 s for a 400 KB single-line bundle). ``_sql_concatenation_lines`` reads each
+# line once.
+SQL_CONCATENATION = ("SQL string concatenation", "critical", "SQL injection risk")
+_SQL_KEYWORD_RE = re.compile(_SQL_KEYWORD)
+_PLUS_OPERAND = re.compile(r"\+\s*[A-Za-z_$]")
+_OPERAND_START = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$")
+_OPERAND_PUNCTUATION = frozenset("_$.[]()")
+_OPERAND_GAP = 200  # white space (line breaks included) accepted between "+" and its operand
 SQL_PATTERNS: Tuple[Tuple["re.Pattern[str]", str, str, str], ...] = (
-    (
-        re.compile(_SQL_KEYWORD + r"[^\n]*?\+\s*" + _OPERAND + "|" + _OPERAND + r"\s*\+[^\n]*?" + _SQL_KEYWORD),
-        "SQL string concatenation", "critical", "SQL injection risk",
-    ),
     (
         re.compile(r"\b(?:[fF][rR]?|[rR][fF])[\"'][^\n]*?" + _SQL_KEYWORD + r"[^\n]*?\{"),
         "SQL f-string", "critical", "SQL injection risk",
@@ -253,13 +259,72 @@ def code_views(text: str, suffix: str) -> Tuple[str, str]:
     return _generic_views(text, hash_comments=suffix.lower() in {".php", ".rb"})
 
 
+def _operand_before(text: str, plus: int) -> Optional[int]:
+    """Index of the last character of the operand that precedes the ``+`` at ``plus``, or None."""
+    index = plus - 1
+    floor = max(0, plus - _OPERAND_GAP)
+    while index >= floor and text[index].isspace():
+        index -= 1
+    end = index
+    while index >= 0 and (text[index].isalnum() or text[index] in _OPERAND_PUNCTUATION):
+        if text[index] in _OPERAND_START:
+            return end  # an identifier starts inside the run that ends right before the "+"
+        index -= 1
+    return None
+
+
+def _sql_concatenation_lines(text: str) -> List[int]:
+    """Lines (1-based) where a SQL keyword and a ``+ operand`` / ``operand +`` share a line.
+
+    Linear in the size of the text: per line that holds a keyword, one search after the
+    first keyword and one pass over the ``+`` signs before the last keyword.
+    """
+    line_starts = [0]
+    position = text.find("\n")
+    while position != -1:
+        line_starts.append(position + 1)
+        position = text.find("\n", position + 1)
+
+    def line_of(index: int) -> int:
+        return bisect.bisect_right(line_starts, index)
+
+    keywords: Dict[int, Tuple[int, int]] = {}  # line -> (end of its first keyword, start of its last keyword)
+    for match in _SQL_KEYWORD_RE.finditer(text):
+        line = line_of(match.start())
+        first_end = keywords[line][0] if line in keywords else match.end()
+        keywords[line] = (first_end, match.start())
+
+    lines: List[int] = []
+    for line, (first_end, last_start) in keywords.items():
+        line_start = line_starts[line - 1]
+        line_end = line_starts[line] - 1 if line < len(line_starts) else len(text)
+        # <keyword> ... + operand (the operand may be on the next line)
+        after = _PLUS_OPERAND.search(text, first_end, min(len(text), line_end + _OPERAND_GAP))
+        if after and after.start() <= line_end:
+            lines.append(line)
+        # operand + ... <keyword> (the operand may be on the previous line)
+        plus = text.find("+", line_start, last_start)
+        while plus != -1:
+            operand_end = _operand_before(text, plus)
+            if operand_end is not None:
+                lines.append(line_of(operand_end))
+                break
+            plus = text.find("+", plus + 1, last_start)
+    return sorted(set(lines))
+
+
 def find_sql_injection(text_without_comments: str) -> List[Tuple[int, str, str, str]]:
     """Return (line, name, severity, category) for SQL built from variables."""
-    found: List[Tuple[int, str, str, str]] = []
+    found: List[Tuple[int, str, str, str]] = [
+        (line, *SQL_CONCATENATION) for line in _sql_concatenation_lines(text_without_comments)
+    ]
+    line_starts: Optional[List[int]] = None
     seen = set()
     for pattern, name, severity, category in SQL_PATTERNS:
         for match in pattern.finditer(text_without_comments):
-            line = text_without_comments.count("\n", 0, match.start()) + 1
+            if line_starts is None:
+                line_starts = [0] + [m.end() for m in re.finditer("\n", text_without_comments)]
+            line = bisect.bisect_right(line_starts, match.start())
             if (line, name) in seen:
                 continue
             seen.add((line, name))
@@ -277,15 +342,12 @@ def _npm_audit(project: Path, result: Dict[str, Any]) -> None:
         _skip(result, "npm audit: npm not found on PATH")
         return
     try:
-        proc = subprocess.run(
-            [npm, "audit", "--json"], cwd=str(project), capture_output=True,
-            text=True, encoding="utf-8", errors="replace", timeout=NPM_AUDIT_TIMEOUT, check=False,
-        )
-    except subprocess.TimeoutExpired:
-        _skip(result, f"npm audit: timed out after {NPM_AUDIT_TIMEOUT}s")
-        return
+        proc = run_external([npm, "audit", "--json"], cwd=project, timeout=NPM_AUDIT_TIMEOUT)
     except OSError as exc:
         _skip(result, f"npm audit: could not start npm ({exc})")
+        return
+    if proc.timed_out:
+        _skip(result, f"npm audit: timed out after {NPM_AUDIT_TIMEOUT}s")
         return
 
     raw = (proc.stdout or "").strip() or (proc.stderr or "").strip()
@@ -611,7 +673,28 @@ def run_full_scan(project_path: str, scan_type: str = "all", path_filter: Option
         summary["overall_status"] = "[!] HIGH RISK ISSUES"
     elif summary["total_findings"]:
         summary["overall_status"] = "[?] REVIEW RECOMMENDED"
+    elif _nothing_scanned(report):
+        # No file of a kind this scanner reads and no dependency manifest: nothing was
+        # checked, so the result is SKIPPED (exit 3), never "[OK] SECURE".
+        summary["nothing_scanned"] = True
+        summary["overall_status"] = f"SKIPPED ({NOTHING_TO_SCAN})"
     return report
+
+
+DEPENDENCY_MANIFESTS = (
+    "package.json", "pyproject.toml", "setup.py", "setup.cfg", "requirements.in", "requirements.txt",
+    "Gemfile", "Cargo.toml", "go.mod",
+)
+NOTHING_TO_SCAN = "no source, configuration or dependency file to scan"
+
+
+def _nothing_scanned(report: Dict[str, Any]) -> bool:
+    project = Path(report["project"])
+    return (
+        not report["summary"]["skipped"]
+        and all(scan.get("scanned_files", 0) == 0 for scan in report["scans"].values())
+        and not any((project / name).exists() for name in DEPENDENCY_MANIFESTS)
+    )
 
 
 def _should_fail(report: Dict[str, Any], threshold: str) -> bool:
@@ -663,6 +746,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 print(f"  - {finding}")
     else:
         print(json.dumps(report, indent=2, ensure_ascii=False))
+    if report["summary"].get("nothing_scanned"):
+        return EXIT_SKIPPED
     return EXIT_FAIL if _should_fail(report, args.fail_on) else EXIT_PASS
 
 

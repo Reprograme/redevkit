@@ -23,11 +23,10 @@ inglês: converged+verified, gaps, failed, PASS, FAIL, SKIPPED, clean, dirty.
 | Branch | `[BRANCH]` |
 | Árvore de trabalho | clean / dirty |
 | Arquivos alterados | [nenhum, ou a lista do `git status --porcelain`] |
-| Impressão digital do status | `[HASH]` |
-| Impressão digital do diff | `[HASH]` |
+| Tree fingerprint | `sha256:[HASH]` ou `n/a (no Python interpreter)` |
 
 <!--
-Mesmos comandos do relatório de testes: redevkit-test/references/code-state.md.
+Mesmo script do relatório de testes: redevkit-test/references/code-state.md.
 -->
 
 ### Evidência de testes
@@ -36,7 +35,8 @@ Mesmos comandos do relatório de testes: redevkit-test/references/code-state.md.
 | --- | --- |
 | Execução de testes | `test-report.md`, execução [AAAA-MM-DD HH:MM] — [PASS \| FAIL] |
 | Origem | [executada no passo 1 \| reaproveitada: mesmo estado do código atual] |
-| Debug desde o verify anterior | [slug do bug, AAAA-MM-DD HH:MM \| nenhum] |
+| Classe da falha (execução FAIL) | [product-defect \| not-implemented \| environment \| nenhuma] |
+| Verify pending no início | [no \| debug <slug> \| gaps \| failed] |
 
 <!--
 Uma execução de testes FAIL encerra a verificação aqui: veredito failed, e as seções
@@ -76,7 +76,12 @@ Convergência, Evidência de execução e Auditorias ficam SKIPPED (test run FAI
 
 | Auditoria | Comando | Resultado | Observações |
 | --- | --- | --- | --- |
-| [NOME DA AUDITORIA] | `[COMANDO]` | PASS / FAIL / SKIPPED ([MOTIVO]) | [RESUMO DOS ACHADOS] |
+| [NOME DA AUDITORIA] | `[COMANDO]` | PASS / FAIL / SKIPPED ([MOTIVO]) | [no escopo: N achados; linha de base (preexistentes): N achados em N arquivos; fora do escopo (terceiros/gerado): caminhos] |
+
+<!--
+Só os achados no escopo (arquivos que esta feature criou ou alterou) viram tarefas ou failed.
+Achados de linha de base e fora do escopo ficam em Observações e nunca mudam o veredito.
+-->
 
 ### Não verificado
 
@@ -92,8 +97,9 @@ Convergência, Evidência de execução e Auditorias ficam SKIPPED (test run FAI
 
 <!--
 converged+verified: execução de testes PASS; nenhuma lacuna de convergência; build e fluxos
-críticos passam; nenhuma auditoria com FAIL por achados no escopo (achados em código de
-terceiros ou gerado vão para Observações como fora do escopo e nunca viram tarefas).
+críticos passam; nenhuma auditoria com FAIL por achados no escopo (achados de linha de base,
+em arquivos que esta feature não tocou, e achados em código de terceiros ou gerado vão para
+Observações e nunca viram tarefas).
 gaps: execução de testes PASS e a execução passa, mas a convergência ou auditorias não
 críticas anexaram tarefas.
 failed: a execução de testes é FAIL, ou o build, um fluxo crítico ou uma auditoria
@@ -101,4 +107,5 @@ bloqueante falha.
 -->
 
 - **Ciclo de correção** (depois desta execução): failed após debug [N]/2 · rodadas sem convergir [N]/3
-- **Próximo passo**: [redevkit-deploy | redevkit-create ou redevkit-enhance (gaps) | redevkit-debug (failed) | G5 atingido: aguardando o usuário]
+- **Verify pending** (depois desta execução): [no | gaps | failed]
+- **Próximo passo**: [redevkit-deploy | redevkit-create ou redevkit-enhance (gaps) | redevkit-debug (failed) | redevkit-create (failed: not-implemented) | corrigir o ambiente e rodar o redevkit-verify de novo (failed: environment) | G5 atingido: aguardando o usuário]

@@ -45,7 +45,7 @@ LOCALE_NAME = re.compile(r"^(?P<lang>[A-Za-z]{2,3})(?:[-_](?:[A-Za-z]{4}|[A-Za-z
 def utf8_stdio() -> None:
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+            stream.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)  # type: ignore[union-attr]
         except (AttributeError, ValueError, OSError):
             pass
 

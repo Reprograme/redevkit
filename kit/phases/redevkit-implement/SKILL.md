@@ -17,7 +17,8 @@ phases of that format (T4).
 ## Input (from the calling command)
 
 - Feature directory (default: the active feature in `.redevkit/memory/active.md`).
-- Scope: all unchecked tasks (default), one phase, or a list of task IDs.
+- Scope: all unchecked tasks (default), one phase, or a list of task IDs. Blocked `[!]`
+  tasks are in scope only when the caller says to retry them.
 - `--auto` flag, if the command runs in auto mode.
 
 ## Prerequisites
@@ -49,8 +50,8 @@ Never change checklist markers.
 ### 2. Parse `tasks.md`
 
 Phases in file order: Setup, Foundational, US1..n, Polish, then any appended phase
-(Enhancement, Convergence). For each task: ID, `[P]`, `[USn]`, paths, persona, VERIFY, done
-or not. Read whether TDD is required (`**TDD**` line in the constitution).
+(Enhancement, Convergence). For each task: ID, `[P]`, `[USn]`, paths, persona, VERIFY and
+state: open `[ ]`, done `[X]` or blocked `[!]` (with its `BLOCKED` note). Read whether TDD is required (`**TDD**` line in the constitution).
 
 ### 3. Ignore files
 
@@ -61,8 +62,8 @@ and the linter or formatter ignore settings that exist. Append missing essential
 
 ### 4. Execute phase by phase
 
-Finish a phase before starting the next (blocked tasks and their dependents aside, step 7).
-Within a phase:
+A phase starts when every task of the previous one is `[X]` or blocked `[!]`; tasks that
+depend on a blocked task are skipped and stay `[ ]` (step 7). Within a phase:
 
 - Delegate each task to its `@persona` through `{{SKILL:redevkit-orchestrate}}`. Pass the
   task line, the spec and plan excerpts it needs, the files it touches and its VERIFY
@@ -92,9 +93,12 @@ Change `- [ ]` to `- [X]` for a task only after its VERIFY criterion was observe
 ### 7. Failures
 
 Retries and blocked tasks follow `{{SKILL:redevkit-orchestrate}}`: at most 2 attempts per
-task (the first try plus one corrected brief); then the task stays `[ ]` and is recorded as
-blocked with its evidence, the tasks that depend on it are skipped, and independent work
-continues. Report every blocked task with the error, context and suggested next step. A
+task (the first try plus one corrected brief); then the task is marked `[!]` in `tasks.md`
+with its `BLOCKED` note (format in `{{SKILLDIR:redevkit-tasks}}/references/task-format.md`),
+the tasks that depend on it are skipped, and independent work continues. Report every
+blocked task with the error, context and what it needs. A run that completes no task and
+leaves only blocked tasks and their dependents ends with that report: the caller never hands
+off to itself. A
 detected violation of a constitution MUST principle is gate G3: stop and report. Destructive or
 irreversible actions (deleting data, rewriting history, dropping tables) are gate G4: ask
 the user first. Never commit.
@@ -112,7 +116,7 @@ summary, or `SKIPPED (reason)`; never `PASS` without a command that ran.
 
 ## Report to the caller
 
-- Tasks completed per phase (`[X]`/total) and the tasks left.
+- Tasks completed per phase (`[X]`/total), the tasks left and the blocked tasks (`[!]`).
 - TDD evidence per story: failing run, then passing run (commands and summaries).
 - Light verification table with evidence.
 - Files changed, personas used, blockers and gates hit.

@@ -11,7 +11,7 @@ export const managedDrift = (projectDir, manifest) => {
   const modified = [];
   const missing = [];
   for (const [rel, hash] of Object.entries(manifest.files)) {
-    const cur = hashFileIfExists(resolveInside(projectDir, rel));
+    const cur = hashFileIfExists(resolveInside(projectDir, rel), hash); // line endings do not count as a change
     if (cur === undefined) missing.push(rel);
     else if (cur !== hash) modified.push(rel);
   }

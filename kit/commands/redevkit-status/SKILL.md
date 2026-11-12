@@ -41,12 +41,12 @@ Collect each fact from its source; show the source when it is not obvious.
 | --- | --- |
 | Last memory entry | `updated` in the frontmatter of the memory files (latest date) |
 | Active feature and phase | `.redevkit/memory/active.md` line `- Feature: specs/NNN-short-name` (or `none` / `nenhuma`); check that the path exists |
-| Task progress per phase | `tasks.md`: per `## Phase N:` heading (`## Fase N:` in pt-BR artifacts), count `- [X]`/`- [x]` over all task lines |
+| Task progress per phase | `tasks.md`: per `## Phase N:` heading (`## Fase N:` in pt-BR artifacts), count `- [X]`/`- [x]` over all task lines; list blocked `- [!]` tasks with their `BLOCKED` note |
 | Plan approval | `active.md` › Active feature › `- Plan approved:` (date, or `no`) |
-| Last test | Latest dated run in `test-report.md`: date, verdict, failing count, run by, scope; when it is not feature-wide, also the latest feature-wide run (Scope `feature`), the only kind verify reuses and deploy accepts |
+| Last test | Latest dated run in `test-report.md`: date, verdict, failure classes on `FAIL`, failing count, run by, scope; when it is not feature-wide, also the latest feature-wide run (Scope `feature`), the only kind verify reuses and deploy accepts |
 | Last verify | Latest dated run in `verification.md`: date, verdict |
-| Last debug and correction cycle | `active.md` › Last results › Debug and Correction cycle (counters, G5 reached) |
-| Code changed since last test | Recompute HEAD, working tree and both fingerprints per `{{SKILLDIR:redevkit-test}}/references/code-state.md` and compare with the latest feature-wide run (read-only commands) |
+| Last debug, verify pending and correction cycle | `active.md` › Last results › Debug, Verify pending (reason) and Correction cycle (counters, G5 reached) |
+| Code changed since last test | Compare the Tree fingerprint of the latest feature-wide run with the current code per `{{SKILLDIR:redevkit-test}}/references/code-state.md` § Compare (read-only script); `unknown (reason)` when it cannot be computed |
 | Open bugs | `active.md` › Known issues lines `- Bug <slug>: open` (a fact; they close at the next `converged+verified` verify); also list `.redevkit/bugs/<slug>/` folders without `test.md` as interrupted debugs |
 | Pending assessments | `.redevkit/assessments/<slug>/` without `decision.md`, or with `needs-clarification` |
 | Pending interview markers | Count of `<PENDING INTERVIEW` / `<PENDENTE DE ENTREVISTA` per file in `.redevkit/memory/` |
@@ -91,9 +91,11 @@ Suggest one next command from the facts, with the reason. The first row that mat
 | No active feature, pending assessment | `{{CMD:redevkit-brainstorm}}` |
 | No active feature | `{{CMD:redevkit-plan}}` |
 | Plan not approved | `{{CMD:redevkit-plan}}` |
-| Open tasks (any phase, including Enhancement and Convergence) | `{{CMD:redevkit-create}}` |
-| Debug done, no verify after it | `{{CMD:redevkit-verify}}` |
-| The newer of the last test and the last verify is `FAIL` or `failed` | `{{CMD:redevkit-debug}}` |
-| All tasks done, no test on the current code | `{{CMD:redevkit-test}}` |
+| Open `[ ]` tasks that can run (any phase, including Enhancement and Convergence) | `{{CMD:redevkit-create}}` |
+| Only blocked `[!]` tasks and their dependents remain | Resolve what each blocked task needs, then `{{CMD:redevkit-create}}` `--retry-blocked`; or `{{CMD:redevkit-plan}}` |
+| Latest test on the current code is `FAIL` | By its failure class: `environment` → fix it, then `{{CMD:redevkit-test}}`; `not-implemented` → `{{CMD:redevkit-create}}`; `product-defect` → `{{CMD:redevkit-debug}}` |
+| Latest verify is `failed` and the code did not change after it | The next step that run recorded (usually `{{CMD:redevkit-debug}}`) |
+| Verify pending (after a debug, or a verify that ended in `gaps` or `failed`) | `{{CMD:redevkit-verify}}` |
+| No test on the current code | `{{CMD:redevkit-test}}` |
 | `converged+verified` on the current code | `{{CMD:redevkit-deploy}}` (user-triggered) |
 | `PASS` on the current code | `{{CMD:redevkit-deploy}}` (user-triggered), suggesting `{{CMD:redevkit-verify}}` first |

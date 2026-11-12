@@ -56,7 +56,8 @@ previous run, `tasks.md` items marked `[X]` since then, the bug folder after a d
 
    Always add `--no-tests`: step 1 already ran or reused the test suite, so the orchestrator
    reports its Test Runner check as `SKIPPED` instead of running the suite again. Other
-   arguments follow the README.
+   arguments follow the README. An orchestrator run can take minutes: give the call a timeout
+   above that, or run it in the background and wait for it.
 3. One orchestrator run is the audit suite. `checklist.py` runs security, lint, types,
    schema, UX, accessibility, SEO and (with `--url`) the runtime checks;
    `verify_all.py` adds dependencies, GEO, bundle, React, mobile, i18n and API. Never run an
@@ -68,13 +69,22 @@ previous run, `tasks.md` items marked `[X]` since then, the bug folder after a d
    such.
 5. Report each audit as `PASS`, `FAIL` or `SKIPPED (reason)`. A tool that is missing is
    `SKIPPED`, never `PASS` and never `FAIL`.
-6. Triage every finding by its file before the fix policy below. Code the project does not
-   own is out of scope: installed dependencies, vendored or third-party libraries, framework
-   core files kept in the repository, generated, minified or build output, and files the
-   project's `.gitignore` ignores. Out-of-scope findings become neither tasks nor `failed`:
-   keep the audit's real result in the table and list them in its Notes as
-   `out of scope (third-party/generated): <paths>`. An audit whose findings are all out of
-   scope does not count as an audit `FAIL` for the verdict. The audits already skip
+6. Triage every finding by its file before the fix policy below. The verification judges
+   the code this feature wrote, not the debt the project already had:
+
+   | Bucket | Files | Effect |
+   | --- | --- | --- |
+   | In scope | Files this feature created or changed: the paths of its `tasks.md` tasks, the files changed by its bug fixes (`fix.md` of its bugs), the tests listed as generated or corrected in its `test-report.md` and, in a git repository, the files `git status` and `git diff` show as changed | The fix policy below applies |
+   | Baseline | Any other file the project owns | Never a task, never `failed`. Notes: `baseline (pre-existing): N findings in M files` |
+   | Out of scope | Code the project does not own: installed dependencies, vendored or third-party libraries, framework core files kept in the repository, generated, minified or build output, and files the project's `.gitignore` ignores | Never a task, never `failed`. Notes: `out of scope (third-party/generated): <paths>` |
+
+   Keep the audit's real result (`PASS`, `FAIL`) in the table. An audit whose findings are
+   all baseline or out of scope does not count as an audit `FAIL` for the verdict. A baseline
+   finding of high or critical severity from the Security Scan is also listed under **Not
+   verified** as a pre-existing risk, with the suggestion to treat it in its own feature
+   (`redevkit-enhance`); it still does not block this one. An in-scope finding that an open
+   `[ ]` or blocked `[!]` Convergence task already covers is cited with that task ID, not
+   appended again. The audits already skip
    dependency folders, build output, generated reports, minified files and what `.gitignore`
    ignores; for any other out-of-scope path (prototypes, framework stock pages), suggest
    that the user add a gitignore-style pattern to `.redevkit/audit-ignore` (one per line),
@@ -87,20 +97,22 @@ Lighthouse/E2E.
 ## Fix policy
 
 The verify command does not edit application code. Failures (for audits, in-scope findings
-only: Audits step 6) become either:
+only: Audits step 6; baseline and out-of-scope findings never count) become either:
 
 - **gaps** — non-critical audit findings and missing behavior: appended as tasks to this
   run's `## Phase N: Convergence` (the one step 2 appended, otherwise a new one), same
   grammar as the other tasks; or
 - **failed** — a `FAIL` test run (step 1), build failure, application that does not start,
-  broken critical flow, or a Security or Lint failure of error severity: handed to the debug
+  broken critical flow, or a Security or Lint failure of error severity. The handoff follows
+  the cause: a test run that failed by `environment` is fixed outside the code, one that
+  failed by `not-implemented` goes to the create command, everything else to the debug
   command.
 
 ## Verdict
 
 | Verdict | When |
 | --- | --- |
-| `converged+verified` | Test run `PASS`, no convergence gaps, every executed step passed, no audit `FAIL` with in-scope findings |
+| `converged+verified` | Test run `PASS`, no convergence gaps, every executed step passed, no audit `FAIL` with in-scope findings (baseline and out-of-scope findings do not count) |
 | `gaps` | Test run `PASS` and execution passed, but convergence or non-critical audits appended tasks |
 | `failed` | Any condition listed under **failed** above |
 

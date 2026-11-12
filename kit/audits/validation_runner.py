@@ -21,6 +21,14 @@ Exit-code contract of the orchestrators (``run_suite``):
 * ``2`` - usage error (argparse, missing project directory)
 * ``3`` - SKIPPED: every check was skipped, nothing was verified; the summary
   prints ``SKIPPED (<reason>)``
+
+Time limits: every audit runs through ``audit_common.run_external`` with the
+limit of its ``CheckSpec``; when it expires the audit and everything it
+started are killed and the check is an ``error`` ("timed out after Ns") that
+keeps the output printed so far. An audit that runs external tools has its own
+shorter limits, so the limit here is always the audit's worst case plus
+``TIMEOUT_MARGIN``: the audit reports its own timeout (with the evidence)
+before the orchestrator has to kill it.
 """
 from __future__ import annotations
 
@@ -28,12 +36,17 @@ import argparse
 import json
 import os
 import re
-import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from urllib.parse import urlparse
+
+sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audit_common import run_external  # noqa: E402
 
 EXIT_PASS = 0
 EXIT_FAIL = 1
@@ -42,13 +55,21 @@ EXIT_SKIPPED = 3
 
 AUDITS_DIR = Path(__file__).resolve().parent
 SKIP_LINE = re.compile(r"SKIPPED \((?P<reason>[^\n]*)\)")
+TIMEOUT_LINE = re.compile(r"^[ \t]*\[TIMEOUT\][ \t]+(?P<reason>[^\n]+)$", re.MULTILINE)
+
+# Limits of the checks whose audit has its own time limits (see the module docstring).
+TIMEOUT_MARGIN = 60
+DEFAULT_CHECK_TIMEOUT = 300
+TEST_CHECK_TIMEOUT = 300 + TIMEOUT_MARGIN        # test_runner.py: TIMEOUT_SECONDS (its --timeout default)
+LINT_CHECK_TIMEOUT = 4 * 120 + TIMEOUT_MARGIN    # lint_runner.py: MAX_LINTERS * TIMEOUT_SECONDS
+LIGHTHOUSE_CHECK_TIMEOUT = 180 + TIMEOUT_MARGIN  # lighthouse_audit.py: --timeout default
 
 
 def utf8_stdio() -> None:
     """Force UTF-8 on stdout/stderr when the stream supports it."""
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+            stream.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)  # type: ignore[union-attr]
         except (AttributeError, ValueError, OSError):
             pass
 
@@ -61,7 +82,7 @@ class CheckSpec:
     target: str = "project"  # "project" | "url" | "none"
     required: bool = False
     args: Tuple[str, ...] = ()
-    timeout: int = 300
+    timeout: int = DEFAULT_CHECK_TIMEOUT
     excludes: bool = False  # the script walks the project: forward --exclude / --no-gitignore
     tests: bool = False  # runs the project's test suite: SKIPPED with --no-tests
 
@@ -114,11 +135,22 @@ class Console:
 CONSOLE = Console()
 
 
+def valid_url(value: str) -> str:
+    """``--url`` must be a usable http(s) URL: a bad one is a usage error (exit 2) of the
+    orchestrator, not a failure of each runtime check."""
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise argparse.ArgumentTypeError("URL must start with http:// or https://")
+    if any(char in value for char in '"\r\n\t '):
+        raise argparse.ArgumentTypeError("URL must not contain quotes or white space (percent-encode them)")
+    return value
+
+
 def build_parser(description: str) -> argparse.ArgumentParser:
     """Single CLI definition shared by checklist.py and verify_all.py (P4)."""
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("project", nargs="?", default=".", help="Project path to validate")
-    parser.add_argument("--url", help="Running application URL for Lighthouse and Playwright")
+    parser.add_argument("--url", type=valid_url, help="Running application URL for Lighthouse and Playwright")
     parser.add_argument(
         "--no-runtime",
         action="store_true",
@@ -178,11 +210,9 @@ def _skip_notes(stdout: str) -> List[str]:
     return notes
 
 
-def _child_env() -> dict:
-    env = dict(os.environ)
-    env["PYTHONIOENCODING"] = "utf-8"
-    env["PYTHONDONTWRITEBYTECODE"] = "1"
-    return env
+def _child_env() -> Dict[str, str]:
+    """Variables added to the environment run_external gives every audit script."""
+    return {"PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
 
 
 def run_check(spec: CheckSpec, audits_dir: Path, project: Path, url: Optional[str],
@@ -203,26 +233,9 @@ def run_check(spec: CheckSpec, audits_dir: Path, project: Path, url: Optional[st
         return CheckResult(spec.name, spec.category, "skipped", spec.required, reason=reason)
 
     started = datetime.now(timezone.utc)
+    CONSOLE.info(f"[RUN]  {spec.name} (time limit {spec.timeout}s)")
     try:
-        proc = subprocess.run(
-            command,
-            cwd=str(project),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=spec.timeout,
-            check=False,
-            env=_child_env(),
-        )
-    except subprocess.TimeoutExpired as exc:
-        duration = (datetime.now(timezone.utc) - started).total_seconds()
-        result = CheckResult(
-            spec.name, spec.category, "error", spec.required, duration, command,
-            _decode(exc.stdout), _decode(exc.stderr), f"timed out after {spec.timeout}s",
-        )
-        CONSOLE.failed(f"{spec.name}: {result.reason}")
-        return result
+        proc = run_external(command, cwd=project, timeout=spec.timeout, env=_child_env())
     except OSError as exc:
         duration = (datetime.now(timezone.utc) - started).total_seconds()
         result = CheckResult(spec.name, spec.category, "error", spec.required, duration, command, reason=str(exc))
@@ -231,6 +244,15 @@ def run_check(spec: CheckSpec, audits_dir: Path, project: Path, url: Optional[st
 
     duration = (datetime.now(timezone.utc) - started).total_seconds()
     stdout = proc.stdout or ""
+    if proc.timed_out:
+        # The audit and everything it started were killed; what it printed so far is kept.
+        result = CheckResult(
+            spec.name, spec.category, "error", spec.required, duration, command,
+            stdout, proc.stderr or "", f"timed out after {spec.timeout}s",
+        )
+        CONSOLE.failed(f"{spec.name}: {result.reason}")
+        _print_failure_output(result)
+        return result
     notes = _skip_notes(stdout)
     if proc.returncode == EXIT_PASS:
         status, reason = "passed", ""
@@ -240,6 +262,9 @@ def run_check(spec: CheckSpec, audits_dir: Path, project: Path, url: Optional[st
         notes = []
     else:
         status, reason = "failed", f"exit code {proc.returncode}"
+        timeout_line = TIMEOUT_LINE.search(stdout)
+        if timeout_line:  # the audit hit its own time limit (test_runner.py, lint_runner.py)
+            reason += f"; {timeout_line.group('reason').strip()}"
     result = CheckResult(
         spec.name, spec.category, status, spec.required, duration,
         command, stdout, proc.stderr or "", reason=reason, notes=notes,
@@ -254,14 +279,6 @@ def run_check(spec: CheckSpec, audits_dir: Path, project: Path, url: Optional[st
         CONSOLE.failed(f"{spec.name} ({duration:.1f}s, exit {proc.returncode})")
         _print_failure_output(result)
     return result
-
-
-def _decode(value: object) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return str(value)
 
 
 def _print_failure_output(result: CheckResult, limit: int = 1600) -> None:

@@ -6,12 +6,12 @@ verify command already ran the suite in its step 1) is covered at the end.
 from __future__ import annotations
 
 import json
-import subprocess
 import unittest
 from unittest import mock
 
 from audit_helpers import TempProject, load_audit, run_main
 
+audit_common = load_audit("audit_common")
 security_scan = load_audit("security_scan")
 a11y = load_audit("accessibility_checker")
 seo = load_audit("seo_checker")
@@ -209,8 +209,8 @@ class TestTestRunner(unittest.TestCase):
 
     def test_zero_tests_with_exit_zero_is_skipped(self):
         # unittest before Python 3.12 exits 0 with "Ran 0 tests": nothing was verified.
-        done = subprocess.CompletedProcess(["py"], 0, stdout="", stderr="\nRan 0 tests in 0.000s\n\nOK\n")
-        with TempProject() as project, mock.patch.object(test_runner.subprocess, "run", return_value=done):
+        done = audit_common.CommandResult(0, "", "\nRan 0 tests in 0.000s\n\nOK\n", False)
+        with TempProject() as project, mock.patch.object(test_runner, "run_external", return_value=done):
             result = test_runner.run_tests(["py", "-m", "unittest"], project.root)
         self.assertEqual((result["status"], result["error"]), ("skipped", "no tests found"))
 
@@ -236,7 +236,7 @@ class TestRunnerNoTests(unittest.TestCase):
         for suite in (checklist.SUITE, verify_all.SUITE):
             self.assertEqual([spec.script for spec in suite if spec.tests], ["test_runner.py"])
         spec = next(spec for spec in checklist.SUITE if spec.tests)
-        with TempProject() as project, mock.patch.object(validation_runner.subprocess, "run") as run, \
+        with TempProject() as project, mock.patch.object(validation_runner, "run_external") as run, \
                 mock.patch("sys.stdout"):
             skipped = validation_runner.run_check(spec, validation_runner.AUDITS_DIR, project.root, None, no_tests=True)
         run.assert_not_called()
@@ -246,8 +246,8 @@ class TestRunnerNoTests(unittest.TestCase):
 
     def test_default_still_runs_the_tests(self):
         spec = next(spec for spec in verify_all.SUITE if spec.tests)
-        done = subprocess.CompletedProcess(["x"], 0, stdout="ok", stderr="")
-        with TempProject() as project, mock.patch.object(validation_runner.subprocess, "run", return_value=done) as run, \
+        done = audit_common.CommandResult(0, "ok", "", False)
+        with TempProject() as project, mock.patch.object(validation_runner, "run_external", return_value=done) as run, \
                 mock.patch("sys.stdout"):
             result = validation_runner.run_check(spec, validation_runner.AUDITS_DIR, project.root, None)
         run.assert_called_once()

@@ -9,7 +9,8 @@ argument-hint: "[--auto] [task range, e.g. T001-T020]"
 
 **Input:** {{ARGS}}
 
-Flags: `--auto` continues to the test command at the end. Optional task range or phase name
+Flags: `--auto` continues to the test command at the end, unless a task is blocked.
+`--retry-blocked` tries the blocked `[!]` tasks again. Optional task range or phase name
 limits the run; default is every open task. Write artifacts in {{LANG}}; answer the user in
 the user's language.
 
@@ -54,9 +55,15 @@ non-interactive runs, adopts the recommendation and records it, except at gates.
 
 - Open domain-checklist items are reported by `{{SKILL:redevkit-implement}}` as one warning;
   they do not stop this command.
-- Detect the next open task (`- [ ]`) honoring the requested range.
-- No open task in the range: nothing to implement. Say so, skip steps 2–4 and hand off as
-  "all tasks done" (with `--auto`, the chain still continues to the test command).
+- Detect the next open task (`- [ ]`) honoring the requested range. Blocked tasks (`- [!]`)
+  and the tasks that depend on them are skipped: a blocked task runs again only with
+  `--retry-blocked`, when the input names it, or when the user says what it needed is
+  resolved.
+- No open task in the range and none blocked: nothing to implement. Say so, skip steps 2–4
+  and hand off as "all tasks done" (with `--auto`, the chain still continues to the test
+  command).
+- Nothing can run because only blocked tasks and their dependents remain: do not start.
+  Report each blocked task with its `BLOCKED` note and hand off as "blocked".
 
 ### 2. Scaffolding (new application)
 
@@ -69,7 +76,8 @@ scaffold would overwrite existing files, stop for confirmation (G4).
 Follow `{{SKILL:redevkit-implement}}`, which drives `{{SKILL:redevkit-orchestrate}}`:
 
 - Order: Setup → Foundational → US1..n → Polish, then the appended phases (Enhancement,
-  Convergence) in file order. A phase starts only when the previous one is done.
+  Convergence) in file order. A phase starts when every task of the previous one is `[X]` or
+  blocked `[!]`; tasks that depend on a blocked task are skipped and stay `[ ]`.
 - Each task goes to the persona in its `@persona` field, for example
   {{DELEGATE:backend-specialist}} for a `@backend-specialist` task. The orchestrator passes
   the task line, the relevant spec and plan excerpts and the files involved; it never
@@ -81,7 +89,9 @@ Follow `{{SKILL:redevkit-implement}}`, which drives `{{SKILL:redevkit-orchestrat
   retry budget of `{{SKILL:redevkit-orchestrate}}` (blocked tasks follow its policy). Skip only when the
   constitution waives TDD by amendment.
 - UI tasks build against the tokens and components in `DESIGN.md`.
-- Mark a task `[X]` only after its `VERIFY:` criterion was observed (command and result).
+- Mark a task `[X]` only after its `VERIFY:` criterion was observed (command and result). A
+  task still failing when its retry budget is spent is marked `[!]` with its `BLOCKED` note
+  (`{{SKILL:redevkit-orchestrate}}` step 7); it is never left as a plain `[ ]`.
 - A task that would violate the constitution stops the run (G3). A destructive or
   irreversible action (deleting files or data, dropping tables, rewriting history) needs
   explicit confirmation (G4).
@@ -100,7 +110,7 @@ recorded in `active.md` › Known issues and left for the test command. This is 
 ### 5. Summary
 
 Report tasks done per phase (`[X]`/total), files changed, light verification results, open
-tasks and assumptions taken.
+tasks, blocked tasks (ID, reason, what each needs) and assumptions taken.
 
 ## Gates that apply
 
@@ -112,7 +122,8 @@ tasks and assumptions taken.
 ## Artifacts
 
 - Application code and tests at the paths named in the tasks.
-- `tasks.md` with completed tasks marked `[X]` and notes on assumptions.
+- `tasks.md` with completed tasks marked `[X]`, blocked tasks marked `[!]` with their note,
+  and notes on assumptions.
 
 ## Memory phase 3
 
@@ -130,5 +141,12 @@ task as done because the code "should work".
 ## Handoff
 
 - All tasks done → `{{CMD:redevkit-test}}` to map scenarios to tests and run the full suite.
-- Tasks still open → `{{CMD:redevkit-create}}` again (or the remaining range).
-- `--auto`: continue with `{{CMD:redevkit-test}}` `--auto` automatically.
+- Open tasks that can still run (a range was given, or the run was interrupted) →
+  `{{CMD:redevkit-create}}` again (or the remaining range).
+- Blocked tasks → no command repeats on its own. Ask, with the blocked list as evidence:
+  resolve what a task needs and run `{{CMD:redevkit-create}}` `--retry-blocked`
+  (Recommended when the need is concrete), revise the plan with `{{CMD:redevkit-plan}}`, or
+  go on to `{{CMD:redevkit-test}}` knowing those behaviors will fail as `not-implemented`.
+  Never hand off to this command again while nothing changed.
+- `--auto`: no blocked task → continue with `{{CMD:redevkit-test}}` `--auto`. Any blocked
+  task → the chain stops here with the blocked list; it needs the user.

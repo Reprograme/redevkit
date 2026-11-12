@@ -1,6 +1,7 @@
 # E2E com agentes reais
 
-Dois cenários × dois runtimes, com o `claude -p` e o `codex exec` de verdade. Exige o
+Cinco cenários × dois runtimes, com o `claude -p` e o `codex exec` de verdade. A e B são os
+cenários de aceite; C, D e E exercitam as rotas entre create, test, debug e verify. Exige o
 Claude Code e o Codex CLI instalados e autenticados; cada run consome uso real das contas e
 levou de 15 a 63 minutos nas execuções registradas em [RESULTS.md](RESULTS.md). Cada passo do
 pipeline é uma invocação separada: o estado entre passos fica só nos arquivos do projeto
@@ -11,10 +12,13 @@ node e2e/run.mjs --scenario A --runtime claude
 node e2e/run.mjs --scenario A --runtime codex
 node e2e/run.mjs --scenario B --runtime claude
 node e2e/run.mjs --scenario B --runtime codex
+node e2e/run.mjs --scenario C --runtime claude   # idem para D e E, e para o codex
 ```
 
 Opções: `--out <dir>` (padrão `e2e/runs/<data>/<cenário>-<runtime>/`), `--work <dir>`
-(padrão: pasta temporária com espaço no caminho), `--timeout-min <n>` por passo (padrão 45) e
+(padrão: pasta temporária com espaço no caminho), `--timeout-min <n>` por passo (padrão 45; os
+passos que seguem a cadeia `--auto` inteira, nos cenários D e E, têm limite próprio de 90 e
+120 minutos) e
 `--check <workDir>` para reaplicar só as verificações (também exige `--scenario` e `--runtime`;
 com `--resume debug,verify,test` continua o pipeline na mesma pasta antes de verificar).
 
@@ -24,6 +28,9 @@ com `--resume debug,verify,test` continua o pipeline na mesma pasta antes de ver
 | --- | --- | --- |
 | A | Diretório vazio | `init --target both --lang pt-BR --yes` → `redevkit-new` (jogo de nave 2D para web) → `redevkit-plan --auto "mover, atirar, pontuar"` → `redevkit-create` → `redevkit-test` |
 | B | [fixtures/api-b](fixtures/api-b/): API Node sem dependências, com testes, `memory-bank/` (7 arquivos), `CLAUDE.md` com conteúdo e um bug latente no `/about` | `init` (migra o `CLAUDE.md`) → `redevkit-new` (existente; importar e arquivar) → `redevkit-enhance "GET /health"` → `redevkit-test` (vermelho) → `redevkit-debug` → `redevkit-verify` |
+| C | O mesmo fixture, com `git init` mas **sem commit**: todo arquivo fica não rastreado | Os mesmos passos do B. Prova que o verify roda os testes de novo depois que o debug corrige um arquivo não rastreado (o estado do código antigo não via a mudança) |
+| D | O mesmo fixture, commitado | `redevkit-new` → `redevkit-enhance` → `redevkit-test` (verde) → o harness anexa ao `tasks.md` uma tarefa marcada `[X]` cuja entrega não existe → `redevkit-verify --auto`. Prova o laço `gaps` → create → test → verify fechando sozinho |
+| E | O mesmo fixture, commitado | `redevkit-new` → `redevkit-enhance --auto`, uma única invocação que segue a cadeia inteira: test vermelho → debug → verify |
 
 O fixture B é commitado num repositório git temporário antes do primeiro passo, para que os
 relatórios registrem o HEAD e para que o harness confirme que nenhum commit foi criado.
@@ -44,7 +51,7 @@ próprio prompt, porque o gate continua parando quando não há aprovação.
 
 ## Verificações automáticas
 
-Comuns aos 4 runs: `redevkit doctor` passa; memória completa; constituição com Test-First;
+Comuns a todos os runs: `redevkit doctor` passa; memória completa; constituição com Test-First;
 nenhum arquivo fora dos caminhos esperados; nenhum commit (ou nenhum `git init` no A);
 nenhum comando destrutivo nas transcrições; nenhuma auditoria SKIPPED reportada como PASS.
 
@@ -55,7 +62,14 @@ nenhum comando destrutivo nas transcrições; nenhuma auditoria SKIPPED reportad
   spec e tarefas anexadas; `.redevkit/bugs/<slug>/{assessment,fix,test}.md`; teste vermelho
   antes do debug; `verification.md` com `converged+verified`; o verify roda os testes de novo
   depois do debug (a última execução do `test-report.md` é `PASS`, executada pelo
-  `redevkit-verify`); ciclo de correção registrado no `active.md`.
+  `redevkit-verify`); a execução vermelha traz a classe da falha; ciclo de correção registrado
+  no `active.md`; toda execução de teste registra o Tree fingerprint; `Verify pending` volta
+  para `no` depois do `converged+verified`.
+- C e E: as mesmas do B. No C, a checagem "o verify roda os testes de novo depois do debug" é
+  a que falhava quando o estado do código não enxergava arquivos não rastreados.
+- D: as de preparação do B (sem as de bug), mais: uma execução `gaps` antes da última do
+  `verification.md`; a fase de Convergência anexada e toda concluída; uma execução de teste
+  entre os dois verifies; última verificação `converged+verified`.
 
 O resultado de cada run fica em `result.md`/`result.json`; o resumo consolidado está em
 [RESULTS.md](RESULTS.md).

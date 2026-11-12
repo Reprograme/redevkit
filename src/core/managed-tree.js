@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   atomicWrite,
+  contentHash,
   exists,
   hashFileIfExists,
   isSafeRelative,
@@ -30,6 +31,15 @@ export const createRunId = (date = new Date()) => {
 
 const act = (type, file, reason) => ({ type, file, reason });
 
+/** Plan reasons other modules look for. */
+export const DELETED_LOCALLY = "managed file deleted locally";
+export const DELETED_AND_CHANGED = "file deleted locally and changed upstream";
+export const RESTORED = "restored: managed file deleted locally";
+
+/** Managed files that stay missing after the plan is applied (deleted locally, deletion honoured). */
+export const missingAfterPlan = (plan) =>
+  [...plan.preserved.filter((p) => p.reason === DELETED_LOCALLY), ...plan.conflicts.filter((c) => c.reason === DELETED_AND_CHANGED)].map((x) => x.file).sort();
+
 /**
  * Build the update plan.
  * @param projectDir project root
@@ -37,10 +47,14 @@ const act = (type, file, reason) => ({ type, file, reason });
  * @param previous { rel: sha256 } from the manifest (empty object on a fresh install)
  * @param hasManifest whether a previous installation exists
  * @param force overwrite conflicting files (after backup)
+ * @param restore re-add managed files that are missing locally (never overwrites a local change)
+ *
+ * Hashes are content hashes (fsutil contentHash): a text file hashes the same with LF or CRLF.
  */
-export const createPlan = ({ projectDir, incoming, previous = {}, hasManifest = false, force = false }) => {
+export const createPlan = ({ projectDir, incoming, previous = {}, hasManifest = false, force = false, restore = false }) => {
   const incomingHashes = {};
-  for (const [rel, content] of incoming) incomingHashes[rel] = sha256(typeof content === "string" ? Buffer.from(content, "utf8") : content);
+  for (const [rel, content] of incoming) incomingHashes[rel] = contentHash(content);
+  const rawIncoming = (rel) => sha256(typeof incoming.get(rel) === "string" ? Buffer.from(incoming.get(rel), "utf8") : incoming.get(rel));
   const all = [...new Set([...Object.keys(previous), ...Object.keys(incomingHashes)])].sort();
   const actions = [];
   const conflicts = [];
@@ -50,9 +64,15 @@ export const createPlan = ({ projectDir, incoming, previous = {}, hasManifest = 
   for (const file of all) {
     if (!isSafeRelative(file)) throw new Error(`Unsafe managed path: ${file}`);
     const abs = resolveInside(projectDir, file);
-    const cur = hashFileIfExists(abs);
     const inc = incomingHashes[file];
-    const old = previous[file];
+    let old = previous[file];
+    let cur = hashFileIfExists(abs, old);
+    // Baseline written by CLI <= 1.0.3 (raw bytes) for the very content being installed now, which
+    // has CRLF in it: nothing changed upstream, so compare everything by content hash.
+    if (old !== undefined && inc !== undefined && old !== inc && old === rawIncoming(file)) {
+      if (cur === old) cur = inc;
+      old = inc;
+    }
     const conflict = (reason) => {
       if (force && inc !== undefined && cur !== "symlink") actions.push(act("update", file, `forced: ${reason}`));
       else conflicts.push({ file, reason, currentHash: cur ?? null, incomingHash: inc ?? null, oldHash: old ?? null });
@@ -73,8 +93,9 @@ export const createPlan = ({ projectDir, incoming, previous = {}, hasManifest = 
     }
     if (cur === undefined) {
       if (inc === undefined) unchanged.push(file);
-      else if (inc === old) preserved.push({ file, reason: "managed file deleted locally" });
-      else conflict("file deleted locally and changed upstream");
+      else if (restore) actions.push(act("add", file, RESTORED)); // nothing local to overwrite
+      else if (inc === old) preserved.push({ file, reason: DELETED_LOCALLY });
+      else conflict(DELETED_AND_CHANGED);
       continue;
     }
     if (inc === undefined) {
@@ -102,7 +123,7 @@ export const nextManifestFiles = (plan, previous = {}) => {
     files[file] = hash;
   }
   for (const p of plan.preserved) {
-    if (p.reason === "managed file deleted locally" && previous[p.file]) files[p.file] = previous[p.file];
+    if (p.reason === DELETED_LOCALLY && previous[p.file]) files[p.file] = previous[p.file];
   }
   return files;
 };

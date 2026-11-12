@@ -7,7 +7,7 @@ import { createRunId } from "../core/managed-tree.js";
 import { loadManifest } from "../core/manifest.js";
 import { ask, isInteractive } from "../core/prompt.js";
 import { LANGS, packageVersion } from "../core/render.js";
-import { printConfigPreview, printMessages, printPlan } from "./sync-report.js";
+import { printConfigPreview, printMessages, printMissing, printOutcome, printPlan } from "./sync-report.js";
 
 export const parseTargets = (value) => {
   if (!value) return null;
@@ -74,6 +74,7 @@ export const runInit = async (dir, opts, { log = console.log } = {}) => {
 
   if (opts.dryRun) {
     if (sync.claude.action === "migrate") log(sync.claude.diff);
+    printMissing(sync, { out: log });
     log(t("dryRun"));
     return { dryRun: true, sync };
   }
@@ -91,7 +92,7 @@ export const runInit = async (dir, opts, { log = console.log } = {}) => {
   const result = applySync(sync, { projectDir, previousManifest: previous, migrateClaude, backup: opts.backup !== false, runId });
   printMessages(result.messages, { out: log });
   if (result.backupDir) log(t("backupAt", { v: path.relative(projectDir, result.backupDir) || result.backupDir }));
-  log(t(result.noop ? "upToDate" : previous ? "updated" : "done", { version: packageVersion(), targets: targets.join("+"), lang }));
+  printOutcome(sync, { key: result.noop ? "upToDate" : previous ? "updated" : "done", vars: { version: packageVersion(), targets: targets.join("+"), lang }, out: log });
   if (targets.includes("claude")) log(t("nextStepClaude"));
   if (targets.includes("codex")) log(t("nextStepCodex"));
   if (targets.includes("claude")) log(t("claudeTrust"));

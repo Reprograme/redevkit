@@ -12,6 +12,11 @@ Supports:
 
 A linter that is not installed is SKIPPED, never FAIL and never PASS. When
 every linter is skipped the script exits 3 (SKIPPED).
+
+Each linter runs through audit_common.run_external (no terminal input, whole
+process tree killed after TIMEOUT_SECONDS). A linter that times out is a
+failure: it prints a ``[TIMEOUT]`` line and its JSON entry has
+``"timed_out": true``.
 """
 from __future__ import annotations
 
@@ -19,20 +24,25 @@ import argparse
 import importlib.util
 import json
 import shutil
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
+sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audit_common import run_external  # noqa: E402
+
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_SKIPPED = 0, 1, 2, 3
-TIMEOUT_SECONDS = 120
+TIMEOUT_SECONDS = 120  # per linter
+MAX_LINTERS = 4  # npm lint or eslint, tsc, ruff, mypy: the orchestrators allow MAX_LINTERS * TIMEOUT_SECONDS
 
 
 def utf8_stdio() -> None:
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+            stream.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)  # type: ignore[union-attr]
         except (AttributeError, ValueError, OSError):
             pass
 
@@ -115,34 +125,26 @@ def detect_project_type(project_path: Path) -> Dict[str, Any]:
 
 
 def run_linter(linter: Dict[str, Any], cwd: Path) -> Dict[str, Any]:
-    """Run one linter. ``status`` is passed, failed or skipped."""
-    result: Dict[str, Any] = {"name": linter["name"], "status": "skipped", "output": "", "error": ""}
+    """Run one linter. ``status`` is passed, failed or skipped; a timeout is failed with ``timed_out``."""
+    result: Dict[str, Any] = {"name": linter["name"], "status": "skipped", "timed_out": False, "output": "", "error": ""}
     if not linter.get("cmd"):
         result["error"] = linter.get("skip_reason") or "not available"
         return result
     try:
-        proc = subprocess.run(
-            linter["cmd"],
-            cwd=str(cwd),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=TIMEOUT_SECONDS,
-            check=False,
-        )
+        proc = run_external(linter["cmd"], cwd=cwd, timeout=TIMEOUT_SECONDS)
     except FileNotFoundError:
         result["error"] = f"command not found: {linter['cmd'][0]}"
-        return result
-    except subprocess.TimeoutExpired:
-        result["status"] = "failed"
-        result["error"] = f"timeout after {TIMEOUT_SECONDS}s"
         return result
     except OSError as exc:
         result["error"] = f"could not start {linter['cmd'][0]}: {exc}"
         return result
 
     result["output"] = (proc.stdout or "")[:2000]
+    if proc.timed_out:
+        result["status"] = "failed"
+        result["timed_out"] = True
+        result["error"] = f"timeout after {TIMEOUT_SECONDS}s (the process tree was killed)"
+        return result
     result["error"] = (proc.stderr or "")[:500]
     result["status"] = "passed" if proc.returncode == 0 else "failed"
     return result
@@ -185,6 +187,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"  [PASS] {linter['name']}")
         elif result["status"] == "skipped":
             print(f"  [SKIP] {linter['name']}: SKIPPED ({result['error']})")
+        elif result["timed_out"]:
+            print(f"  [TIMEOUT] {linter['name']}: {result['error']}")
         else:
             print(f"  [FAIL] {linter['name']}")
             if result["error"]:
@@ -196,6 +200,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     for r in results:
         if r["status"] == "skipped":
             print(f"[SKIP] {r['name']} - SKIPPED ({r['error']})")
+        elif r["timed_out"]:
+            print(f"[TIMEOUT] {r['name']} - {r['error']}")
         else:
             print(f"[{'PASS' if r['status'] == 'passed' else 'FAIL'}] {r['name']}")
 

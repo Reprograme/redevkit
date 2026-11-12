@@ -100,7 +100,7 @@ redevkit init my-app
 | --- | --- |
 | Check the latest published version | `redevkit version --check` or `npm view redevkit version` |
 | Update the global CLI | `npm install -g redevkit@latest` |
-| Run a specific version without installing | `npx redevkit@1.0.3 init --here` |
+| Run a specific version without installing | `npx redevkit@1.1.0 init --here` |
 | Remove the global CLI | `npm uninstall -g redevkit` |
 
 Updating the CLI does not change your projects; run `redevkit update` in each one (see
@@ -119,12 +119,12 @@ package.
 | `--lang <lang>` | Artifact language: `pt-BR` or `en` |
 | `--dry-run` | Show what would change, write nothing |
 | `-y, --yes` | Accept defaults and confirmations, including the migration of an existing `CLAUDE.md` (required without a TTY) |
-| `--force` | Overwrite conflicting files (after a backup) |
+| `--force` | Overwrite conflicting files and restore missing managed files (after a backup) |
 | `--verbose` | List every file action |
 
 Running `init` again on an installed project reuses the manifest's targets and language
 without asking and behaves like `redevkit update`; `--target` or `--lang` switch them, and
-`--force` resolves conflicts after a backup.
+`--force` resolves conflicts and restores missing managed files after a backup.
 
 ### 2. Start in the agent
 
@@ -157,7 +157,9 @@ flowchart TD
     CR --> TS["test"]
     EN --> TS
     TS -->|PASS| DONE["review; verify suggested"]
-    TS -->|FAIL| DB["debug"]
+    TS -->|"PASS · verify pending"| VF
+    TS -->|"FAIL · bug"| DB["debug"]
+    TS -->|"FAIL · not built yet"| CR
     DB --> VF["verify · mandatory after debug<br/>re-runs tests, convergence,<br/>execution, audits"]
     DONE -.-> VF
     VF -->|gaps| KIND
@@ -170,8 +172,11 @@ flowchart TD
 `redevkit-status` reports facts at any time; `redevkit-preview` starts, stops or checks the
 local dev server on demand.
 
-With `--auto`, the chain runs on its own: new → plan → create/enhance → test, and on a red test
-debug → verify (which re-runs the tests on the fixed code). It always stops at the gates, and
+With `--auto`, the chain runs on its own: new → plan → create/enhance → test. A red test goes
+where its failure class says: a bug goes to debug → verify (which re-runs the tests on the
+fixed code), behavior that was not built goes back to create, and an environment problem or a
+blocked task stops the chain. After a debug, or a verify that ended in `gaps` or `failed`, a
+green test goes on to verify, so the loop closes by itself. It always stops at the gates, and
 deploy is never part of the chain:
 
 | Gate | When the chain stops |
@@ -284,7 +289,7 @@ Project trust:
 | Command | Options | What it does |
 | --- | --- | --- |
 | `redevkit init [dir]` | `--here`, `--target`, `--lang`, `--dry-run`, `--yes`, `--force`, `--verbose` | Installs the kit: renders the targets, writes the `AGENTS.md` block, migrates `CLAUDE.md`, merges the config and creates the manifest |
-| `redevkit update` | `--dry-run`, `--no-backup`, `--conflict-report <file>`, `--verbose` | Three-way update of the managed files (see [Updating and recovery](#updating-and-recovery)). Never touches memory, specs or `DESIGN.md` |
+| `redevkit update` | `--dry-run`, `--no-backup`, `--restore`, `--conflict-report <file>`, `--verbose` | Three-way update of the managed files (see [Updating and recovery](#updating-and-recovery)); `--restore` re-adds the managed files that are missing. Never touches memory, specs or `DESIGN.md` |
 | `redevkit rollback` | `--backup <id>`, `--list`, `--dry-run` | Restores a backup, saving the current state first |
 | `redevkit status` | `--quiet`, `--json` | Installed version, targets, language and changed or missing managed files; works offline |
 | `redevkit doctor` | `--json` | Checks tools, installation, `AGENTS.md`, `CLAUDE.md`, memory, `specs/` numbering, config and Codex trust; exits non-zero on errors |
@@ -315,7 +320,13 @@ redevkit doctor
 
 The three-way merge compares the installed base, your copy and the new kit. A file only you
 changed is kept. A file changed by both you and the kit is a conflict: yours stays and the new
-version goes to `.redevkit/conflicts/<id>/`.
+version goes to `.redevkit/conflicts/<id>/`. Line endings are not a change: a checkout that
+rewrites the files with CRLF (`core.autocrlf=true`) is not reported as modified.
+
+A managed file you deleted stays deleted: `update` says how many are missing and
+`redevkit update --restore` (or `init --force`) brings them back without touching the files
+you changed. `redevkit doctor` reports a missing pipeline file (a `redevkit-*` skill, an audit
+or a template) as an error, and a missing knowledge skill or persona as a warning.
 
 `init`, `update`, `target` and `uninstall` back up the files they change to
 `.redevkit/backups/<id>/`:

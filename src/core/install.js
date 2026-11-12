@@ -2,7 +2,7 @@
 import path from "node:path";
 import { appendMigratedNotes, blockInner, isPointer, migratableContent, simpleDiff, upsertAgentsBlock } from "./context-files.js";
 import { exists, readText, removeInside, resolveInside, sha256, writeInside } from "./fsutil.js";
-import { applyPlan, createBackup, createPlan, createRunId, nextManifestFiles } from "./managed-tree.js";
+import { applyPlan, createBackup, createPlan, createRunId, nextManifestFiles, RESTORED } from "./managed-tree.js";
 import { loadManifest, newManifest, writeManifest } from "./manifest.js";
 import { KIT_ROOT, loadRuntimeEntries, packageVersion, renderAgentsBlock, renderAll, renderClaudePointer } from "./render.js";
 import { mergeClaudeSettings, mergeCodexConfig, unmergeClaudeSettings, unmergeCodexConfig } from "./runtime-config.js";
@@ -16,6 +16,14 @@ const readRel = (projectDir, rel) => {
 };
 
 export const today = () => new Date().toISOString().slice(0, 10);
+
+/**
+ * Managed files the pipeline cannot run without: the `redevkit-*` skill directories (commands,
+ * phases and the memory skill, with their references), the audits and the templates. Knowledge
+ * skills and personas are optional: a user may delete one on purpose (catalog budget).
+ */
+export const isPipelineCore = (rel) =>
+  /^\.(claude|agents)\/skills\/redevkit-[^/]+\//.test(rel) || rel.startsWith(".redevkit/audits/") || rel.startsWith(".redevkit/templates/");
 
 /** What already exists in the project (init reporting). */
 export const detectProject = (projectDir) => {
@@ -32,17 +40,20 @@ export const detectProject = (projectDir) => {
 
 /**
  * Compute everything an install/update would do, without writing.
- * opts: { projectDir, targets, lang, force, kitRoot, version }
+ * opts: { projectDir, targets, lang, force, restore, kitRoot, version }
+ * `restore` re-adds managed files that are missing locally; `force` implies it.
  */
-export const computeSync = ({ projectDir, targets, lang, force = false, kitRoot = KIT_ROOT, version = packageVersion(), previousManifest = null }) => {
+export const computeSync = ({ projectDir, targets, lang, force = false, restore = false, kitRoot = KIT_ROOT, version = packageVersion(), previousManifest = null }) => {
   const { files: incoming } = renderAll({ targets, lang, version, kitRoot });
   const previous = previousManifest?.files ?? {};
-  const plan = createPlan({ projectDir, incoming, previous, hasManifest: Boolean(previousManifest), force });
+  const plan = createPlan({ projectDir, incoming, previous, hasManifest: Boolean(previousManifest), force, restore: restore || force });
 
   // AGENTS.md block
   const block = renderAgentsBlock({ targets, lang, version, kitRoot });
   const agentsBefore = readRel(projectDir, "AGENTS.md");
   let agentsAfter = upsertAgentsBlock(agentsBefore, block, lang);
+  // Same content with CRLF line endings (autocrlf checkout): leave the file as it is.
+  if (agentsBefore !== null && agentsAfter === agentsBefore.replace(/\r\n/g, "\n")) agentsAfter = agentsBefore;
   const userEditedBlock =
     previousManifest?.context?.agentsBlockHash && agentsBefore && blockInner(agentsBefore) !== null &&
     sha256(blockInner(agentsBefore)) !== previousManifest.context.agentsBlockHash;
@@ -124,8 +135,10 @@ export const applySync = (sync, { projectDir, previousManifest = null, migrateCl
   if (isNoop(sync, previousManifest)) return { backupDir: null, conflictCopies: [], messages, manifest: previousManifest, noop: true };
 
   // 1. Backup everything we may modify or delete.
+  // A restored file is listed although it does not exist yet: it is recorded as absent, so a
+  // rollback of this run removes it again (it was managed before the run, so nothing else would).
   const touched = [
-    ...plan.actions.filter((a) => a.type !== "add" || exists(resolveInside(projectDir, a.file))).map((a) => a.file),
+    ...plan.actions.filter((a) => a.type !== "add" || a.reason === RESTORED || exists(resolveInside(projectDir, a.file))).map((a) => a.file),
     "AGENTS.md",
     ".redevkit/manifest.json",
   ];

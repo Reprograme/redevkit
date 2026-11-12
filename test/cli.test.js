@@ -269,6 +269,159 @@ test("status compares versions with semver and reports drift", () => {
   }
 });
 
+/** Rewrite files with CRLF line endings, as a checkout with `core.autocrlf=true` does. */
+const toCrlf = (dir, rels) => {
+  for (const rel of rels) {
+    const p = path.join(dir, ...rel.split("/"));
+    fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace(/\r?\n/g, "\r\n"));
+  }
+};
+const rawSha = (data) => createHash("sha256").update(data).digest("hex");
+
+test("a CRLF checkout is not drift: status is clean, update updates, uninstall removes everything", () => {
+  const dir = tmpProject();
+  try {
+    assert.equal(init(dir).status, 0);
+    const mPath = path.join(dir, ".redevkit", "manifest.json");
+    const manifest = JSON.parse(fs.readFileSync(mPath, "utf8"));
+    const managed = Object.keys(manifest.files);
+    // The manifest format is the one 1.0.3 wrote: for an LF file, the raw-byte sha256.
+    for (const rel of managed) assert.equal(manifest.files[rel], rawSha(fs.readFileSync(path.join(dir, ...rel.split("/")))), rel);
+
+    toCrlf(dir, [...managed, "AGENTS.md", "CLAUDE.md", ".claude/settings.json", ".codex/config.toml"]);
+    assert.match(read(dir, ".claude/skills/redevkit-new/SKILL.md"), /\r\n/);
+    assert.match(read(dir, ".redevkit/audits/checklist.py"), /\r\n/);
+    const st = JSON.parse(cli(["status", "--json"], dir).stdout);
+    assert.deepEqual(st.modified, [], "line endings are not a local modification");
+    assert.deepEqual(st.missing, []);
+
+    const before = treeState(dir);
+    const up = cli(["update"], dir);
+    assert.equal(up.status, 0, up.stderr);
+    assert.match(up.stdout, /Nada a fazer/);
+    assert.deepEqual(treeState(dir), before, "an update with nothing to do writes nothing (AGENTS.md keeps its CRLF)");
+
+    // One file from an older kit, checked out with CRLF: the update rewrites it instead of reporting a conflict.
+    const skill = ".claude/skills/redevkit-status/SKILL.md";
+    const current = read(dir, skill).replace(/\r\n/g, "\n");
+    write(dir, skill, "old version\r\nsecond line\r\n");
+    manifest.files[skill] = rawSha("old version\nsecond line\n");
+    fs.writeFileSync(mPath, JSON.stringify(manifest));
+    const up2 = cli(["update", "--conflict-report", "report.json"], dir);
+    assert.equal(up2.status, 0, up2.stderr);
+    const report = JSON.parse(read(dir, "report.json"));
+    assert.deepEqual(report.conflicts, []);
+    assert.deepEqual(report.preserved, []);
+    assert.deepEqual(report.actions.map((a) => `${a.type} ${a.file}`), [`update ${skill}`]);
+    assert.equal(read(dir, skill), current);
+
+    const un = cli(["uninstall", "--yes"], dir);
+    assert.equal(un.status, 0, un.stderr);
+    assert.match(un.stdout, /; 0 locally modified kept/);
+    for (const rel of [".claude/skills", ".claude/agents", ".agents", ".codex/agents", ".redevkit/audits", ".redevkit/templates", ".redevkit/manifest.json"]) {
+      assert.equal(has(dir, rel), false, `${rel} is removed`);
+    }
+  } finally {
+    rm(dir);
+  }
+});
+
+test("update --restore re-adds the missing managed files only; update and init say what is missing", () => {
+  const dir = tmpProject();
+  try {
+    assert.equal(init(dir).status, 0);
+    const gone = [".claude/skills/redevkit-plan/SKILL.md", ".redevkit/audits/checklist.py", ".agents/skills/clean-code/SKILL.md"];
+    const originals = Object.fromEntries(gone.map((rel) => [rel, read(dir, rel)]));
+    for (const rel of gone) fs.rmSync(path.join(dir, ...rel.split("/")));
+    const edited = ".claude/skills/redevkit-status/SKILL.md";
+    write(dir, edited, "edited by user\n");
+
+    // Plain update and a repeated init honour the deletion, but never claim the install is complete.
+    for (const r of [cli(["update"], dir), init(dir), cli(["update", "--dry-run"], dir)]) {
+      assert.equal(r.status, 0, r.stderr);
+      assert.doesNotMatch(r.stdout, /Nada a fazer|já está igual/);
+      assert.match(r.stdout, /3 arquivo\(s\) gerenciado\(s\)/);
+      assert.match(r.stdout, /redevkit update --restore/);
+      for (const rel of gone) assert.equal(has(dir, rel), false, `${rel} stays deleted`);
+    }
+    assert.equal(has(dir, ".redevkit/backups"), false, "nothing changed, so no backup");
+
+    const dry = cli(["update", "--restore", "--dry-run"], dir);
+    assert.match(dry.stdout, /3 novos/);
+    assert.equal(has(dir, gone[0]), false, "--dry-run writes nothing");
+
+    const rs = cli(["update", "--restore"], dir);
+    assert.equal(rs.status, 0, rs.stderr);
+    assert.doesNotMatch(rs.stdout, /update --restore/, "nothing is missing any more");
+    for (const rel of gone) assert.equal(read(dir, rel), originals[rel], `${rel} is restored`);
+    assert.equal(read(dir, edited), "edited by user\n", "a local modification is never overwritten by --restore");
+    const st = JSON.parse(cli(["status", "--json"], dir).stdout);
+    assert.deepEqual(st.missing, []);
+    assert.deepEqual(st.modified, [edited]);
+
+    // The restore is a run like any other: a rollback removes what it re-added.
+    const rb = cli(["rollback"], dir);
+    assert.equal(rb.status, 0, rb.stderr + rb.stdout);
+    for (const rel of gone) assert.equal(has(dir, rel), false, `${rel} is removed again by the rollback`);
+    assert.equal(read(dir, edited), "edited by user\n");
+  } finally {
+    rm(dir);
+  }
+});
+
+test("init --force restores missing managed files; messages follow the manifest language (en)", () => {
+  const dir = tmpProject();
+  try {
+    assert.equal(cli(["init", "--yes", "--target", "claude", "--lang", "en"], dir).status, 0);
+    const rel = ".claude/skills/redevkit-plan/SKILL.md";
+    const original = read(dir, rel);
+    fs.rmSync(path.join(dir, ...rel.split("/")));
+    const again = cli(["init", "--yes"], dir);
+    assert.equal(again.status, 0, again.stderr);
+    assert.doesNotMatch(again.stdout, /Nothing to do|already matches/);
+    assert.match(again.stdout, /installation is incomplete: 1 managed file\(s\) are missing\. To restore them: redevkit update --restore/);
+    assert.equal(has(dir, rel), false);
+    const forced = cli(["init", "--yes", "--force"], dir);
+    assert.equal(forced.status, 0, forced.stderr);
+    assert.equal(read(dir, rel), original);
+    assert.doesNotMatch(forced.stdout, /missing/);
+    assert.match(cli(["update"], dir).stdout, /Nothing to do/);
+  } finally {
+    rm(dir);
+  }
+});
+
+test("doctor: a missing pipeline file is an error; a missing knowledge skill or persona is a warning", () => {
+  const dir = tmpProject();
+  try {
+    assert.equal(init(dir).status, 0);
+    const doctor = () => {
+      const r = cli(["doctor", "--json"], dir);
+      return { status: r.status, issues: JSON.parse(r.stdout).issues.filter((i) => /managed file missing/.test(i.message)) };
+    };
+    // Optional files: a knowledge skill (whole directory) and a persona.
+    fs.rmSync(path.join(dir, ".claude", "skills", "clean-code"), { recursive: true });
+    fs.rmSync(path.join(dir, ".codex", "agents", "debugger.toml"));
+    let d = doctor();
+    assert.equal(d.status, 0, "optional files missing: warnings only");
+    assert.deepEqual(d.issues.map((i) => `${i.level} ${i.file}`).sort(), ["warn .claude/skills/clean-code/SKILL.md", "warn .codex/agents/debugger.toml"]);
+    for (const i of d.issues) assert.match(i.message, /redevkit update --restore/, "the hint names the command that fixes it");
+    // Pipeline core: a command skill, an audit and a template.
+    const core = [".agents/skills/redevkit-new/SKILL.md", ".redevkit/audits/checklist.py", ".redevkit/templates/spec.md"];
+    for (const rel of core) fs.rmSync(path.join(dir, ...rel.split("/")));
+    d = doctor();
+    assert.equal(d.status, 1, "a missing pipeline file makes the doctor fail");
+    assert.deepEqual(d.issues.filter((i) => i.level === "error").map((i) => i.file).sort(), [...core].sort());
+    // The hinted command fixes it.
+    assert.equal(cli(["update", "--restore"], dir).status, 0);
+    d = doctor();
+    assert.equal(d.status, 0);
+    assert.deepEqual(d.issues, []);
+  } finally {
+    rm(dir);
+  }
+});
+
 test("doctor: detects duplicate NNN, missing memory files and secrets; exit code != 0 on errors", () => {
   const dir = tmpProject();
   try {

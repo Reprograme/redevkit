@@ -42,7 +42,7 @@ Comandos de verificação usados abaixo:
 | D24 | Fases com `user-invocable: false` no Claude e `[internal]` no Codex (`targets/*.js`); `test/render.test.js`. |
 | D25 | Verificação leve em create/enhance/debug; completa em `redevkit-verify`. |
 | D26 | Handoffs test → deploy (verde) / debug → verify (vermelho) nos `## Handoff` dos comandos. |
-| D27 | `kit/commands/redevkit-deploy/SKILL.md` + `kit/commands/redevkit-test/references/code-state.md` (HEAD e impressões digitais; produção com confirmação; override com motivo). |
+| D27 | `kit/commands/redevkit-deploy/SKILL.md` + `kit/commands/redevkit-test/references/code-state.md` (HEAD e Tree fingerprint do conteúdo; produção com confirmação; override com motivo). |
 | D28 | `invocation: user-only` → `disable-model-invocation: true` e `agents/openai.yaml`; `test/kit.test.js`. |
 | D29 | Handoff em todos os comandos; `--auto` e gates no bloco do `AGENTS.md` e nos comandos. |
 | D30 | `kit/commands/redevkit-preview/SKILL.md` só MD; `auto_preview.py`/`session_manager.py` ausentes (`test_skipped_contract.py` checa os 20 scripts). |
@@ -213,7 +213,7 @@ verde segue para o deploy sugerindo o verify. Decisões tomadas com o solicitant
 | O verify decide pelo estado do código: reaproveita a última execução do `test-report.md` sobre o mesmo código (`PASS` segue, `FAIL` dá `failed`); senão executa o procedimento do test | `kit/commands/redevkit-verify/SKILL.md` passo 1 |
 | Com o test verde, o verify continua (convergência, execução sem rodar a suíte de novo, auditorias); com o test vermelho, para e vai ao debug | Passos 1–4 do verify |
 | Ciclo de correção: 2 `failed` após debug (qualquer causa) ou 3 verify sem `converged+verified` disparam o G5; execuções de testes não zeram o contador | Passo 6 do verify (definição única) |
-| Deploy: com debug pendente, `BLOCKED` até o verify; senão, a última execução do `test-report.md` precisa ser `PASS` sobre o código atual | `kit/commands/redevkit-test/references/code-state.md` § Compare |
+| Deploy: com verify pendente, `BLOCKED` até um verify `converged+verified`; senão, a última execução do `test-report.md` precisa ser `PASS` sobre o código atual | `kit/commands/redevkit-test/references/code-state.md` § Deploy reference run |
 | Checklists de domínio são informativos (um aviso no implement, "Não verificado" no verify) | `phases/redevkit-implement`, `phases/redevkit-checklist` |
 | `init --force` faz backup de todo arquivo que sobrescreve | `src/core/install.js`; `test/cli.test.js` |
 
@@ -251,3 +251,23 @@ conferidas no código e corrigidas:
 | Estado "sem tarefa aberta" indefinido no create; status e deploy comparavam com execução de escopo parcial | Texto dos comandos corrigido | `kit/commands/redevkit-create`, `redevkit-status`, `redevkit-deploy` |
 
 Não refeito nesta revisão: o E2E real (`node e2e/run.mjs`) e a CI nos três sistemas.
+
+## 7. Revisão 1.1.0 (2026-11-12)
+
+Origem: o pipeline travava entre create, test e verify. Uma auditoria do kit reproduziu as
+causas; cada uma foi corrigida com teste:
+
+| Achado | Correção | Evidência |
+| --- | --- | --- |
+| As impressões digitais de `git status` e `git diff` não mudavam quando um arquivo não rastreado era editado: depois do debug, o verify reaproveitava o `FAIL` antigo e caía no G5; além disso diferiam entre shells e não existiam sem git | `kit/audits/code_state.py`: Tree fingerprint do conteúdo; os relatórios e a comparação usam só ele | `test-audits/test_c1_code_state.py`; E2E cenário C |
+| O timeout dos scripts não matava o `node` filho do `npm.cmd` no Windows; o stdin herdado deixava o vitest em modo watch; nada era impresso até o fim | `run_external` em `audit_common.py`: sem stdin, `CI=1`, grupo de processos próprio, morte da árvore, saída por linha; limites externos maiores que os internos | `test-audits/test_s14` a `test_s16` |
+| `test_runner.py`: `PASS` sem nenhum teste, testes em `tests/` ignorados, `--coverage` sem provedor virava `FAIL`, contagens erradas | Regras de veredito documentadas no README das auditorias | `test-audits/test_s17` |
+| Todo test vermelho ia para o debug, inclusive ambiente quebrado, teste errado e tarefa não implementada | Classes de falha no `redevkit-test`; o handoff segue a classe | `kit/commands/redevkit-test/SKILL.md` passo 4; E2E C e E |
+| Depois de `gaps` → create → test `PASS`, a cadeia parava e apontava o deploy; a ordem entre debug e verify dependia de horários escritos pelo modelo | Bandeira `- Verify pending:` no `active.md` | `redevkit-verify` passo 6; E2E D |
+| Tarefa que esgotava as tentativas ficava `[ ]` e o create a repetia sem fim | Estado `- [!]` com nota `BLOCKED`; `--retry-blocked` | `task-format.md` § Blocked tasks |
+| Achados de auditoria em arquivos que a feature não tocou viravam tarefas a cada rodada até o G5 | Só arquivos criados ou alterados pela feature contam; o resto é linha de base | `execution.md` § Audits, passo 6 |
+| Checkout com CRLF marcava todos os arquivos gerenciados como modificados; arquivo do kit apagado não voltava e o `doctor` dizia "Nenhum erro" | Hash sem fim de linha; `update --restore`; `doctor` com erro para arquivos do pipeline | `test/core.test.js`, `test/cli.test.js` |
+
+Evidência de execução: E2E real dos cenários novos C, D e E no Claude Code
+(`e2e/runs/r7` e `r8`, 2026-11-12); ver [e2e/RESULTS.md](../e2e/RESULTS.md). Testes: 63 Node e
+181 Python; `validate-kit` e markdownlint sem achados. Não refeito: o E2E no Codex.

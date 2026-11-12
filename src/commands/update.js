@@ -7,7 +7,7 @@ import { createRunId } from "../core/managed-tree.js";
 import { loadManifest } from "../core/manifest.js";
 import { packageVersion } from "../core/render.js";
 import { CliError } from "./init.js";
-import { printConfigPreview, printMessages, printPlan, writeConflictReport } from "./sync-report.js";
+import { printConfigPreview, printMessages, printMissing, printOutcome, printPlan, writeConflictReport } from "./sync-report.js";
 
 export const requireManifest = (projectDir) => {
   const { manifest, error } = loadManifest(projectDir);
@@ -19,7 +19,7 @@ export const requireManifest = (projectDir) => {
 
 /** Shared by update and target add/remove. */
 export const runSync = (projectDir, manifest, targets, opts, log) => {
-  const sync = computeSync({ projectDir, targets, lang: manifest.lang, previousManifest: manifest });
+  const sync = computeSync({ projectDir, targets, lang: manifest.lang, restore: Boolean(opts.restore), previousManifest: manifest });
   printPlan(sync, { verbose: Boolean(opts.verbose), out: log });
   printConfigPreview(sync, { out: log });
   const runId = createRunId();
@@ -33,6 +33,7 @@ export const runSync = (projectDir, manifest, targets, opts, log) => {
     log(`conflict report: ${rep.path}`);
   }
   if (opts.dryRun) {
+    printMissing(sync, { out: log });
     log(t("dryRun"));
     return { dryRun: true, sync };
   }
@@ -46,6 +47,6 @@ export const runSync = (projectDir, manifest, targets, opts, log) => {
 export const runUpdate = async (opts, { log = console.log, projectDir = process.cwd() } = {}) => {
   const manifest = requireManifest(projectDir);
   const r = runSync(projectDir, manifest, manifest.targets, opts, log);
-  if (!r.dryRun) log(t(r.result.noop ? "upToDate" : "updated", { version: packageVersion() }));
+  if (!r.dryRun) printOutcome(r.sync, { key: r.result.noop ? "upToDate" : "updated", vars: { version: packageVersion() }, out: log });
   return r;
 };

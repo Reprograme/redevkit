@@ -75,7 +75,8 @@ a feature with the same intent, update that spec instead of creating a new one.
 10. **Set the active feature.** Update the Active feature section of
     `.redevkit/memory/active.md` with the path `specs/NNN-short-name`, the phase `specify` and
     `- Plan approved: no`, following `{{SKILL:redevkit-memanager}}`. A new active feature also
-    resets the Correction cycle line (rule in `{{CMD:redevkit-verify}}` step 6).
+    resets the Verify pending and Correction cycle lines (rule in `{{CMD:redevkit-verify}}`
+    step 6).
 11. **Offer the branch** as described below.
 
 ## Branch offer (D38)

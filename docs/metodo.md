@@ -252,8 +252,8 @@ resultado da análise e suposições.
 O `redevkit-create` (feature nova) e o `redevkit-enhance` (mudança no que existe) usam o
 mesmo motor:
 
-- As fases rodam em ordem: Setup → Fundação → US1..n → Polimento; uma fase só começa quando a
-  anterior termina.
+- As fases rodam em ordem: Setup → Fundação → US1..n → Polimento; uma fase começa quando
+  todas as tarefas da anterior estão `[X]` ou bloqueadas (`[!]`).
 - Cada tarefa é delegada à persona do campo `@persona`: no Claude Code pela ferramenta Agent
   com o subagente da persona; no Codex por `spawn_agent` ou, se o projeto não for confiável,
   aplicando a persona inline a partir do TOML.
@@ -262,6 +262,11 @@ mesmo motor:
   esperado antes da implementação.
 - Trabalho de interface usa os tokens do `DESIGN.md`.
 - Uma tarefa vira `[X]` só depois que o critério VERIFY foi observado.
+- Uma tarefa que continua falhando depois do limite de tentativas vira `[!]` (bloqueada), com
+  uma linha `BLOCKED AAAA-MM-DD: motivo; needs: o que a desbloqueia` logo abaixo. As tarefas
+  que dependem dela são puladas. Nenhum comando tenta uma tarefa bloqueada de novo sozinho: ela
+  só roda outra vez com `redevkit-create --retry-blocked` (ou quando você a nomeia), e a
+  cadeia `--auto` para enquanto houver tarefa bloqueada.
 
 O enhance registra a mudança como delta datado na spec (`## Enhancements` › `### AAAA-MM-DD —
 título`) e anexa as tarefas numa fase nova; se não houver feature correspondente, cria uma
@@ -281,30 +286,68 @@ Nenhum comando declara sucesso sem evidência: o comando que rodou e o resultado
 
 - **Test** (`redevkit-test`): mapeia cada cenário de aceite da spec (e do `quickstart.md`)
   para um teste, gera os que faltam sem mexer no código da aplicação e roda a suíte completa,
-  pelo `test_runner.py` quando há Python ou pelo comando de teste do projeto. O veredito é
+  pelo `test_runner.py` quando há Python ou pelo comando de teste do projeto, sempre de forma
+  não interativa e com limite de tempo. O veredito é
   `PASS` só quando todos os comandos saíram com 0, nenhum teste falhou e todo cenário
   automatizável mapeia para um teste que passa; qualquer outra coisa é `FAIL`. Um cenário
   que não dá para automatizar no ambiente fica `SKIPPED (motivo)` em **Não verificado**: não
-  reprova a execução e nunca conta como `PASS`.
+  reprova a execução e nunca conta como `PASS`. Toda falha recebe uma classe, e o handoff
+  segue a classe (ver [Classes de falha](#classes-de-falha)).
 - **Debug** (`redevkit-debug`): reproduz o problema, testa hipóteses com evidência, escreve
   primeiro o teste de regressão que falha, aplica a menor correção e confirma. O resultado do
-  bug é `verified`, `partial` ou `failed`. Qualquer que seja o resultado, o debug termina e
-  segue para o verify, que é obrigatório depois de um debug.
+  bug é `verified`, `partial` ou `failed`. Qualquer que seja o resultado, o debug termina,
+  marca `- Verify pending:` no `active.md` e segue para o verify, que é obrigatório depois de
+  um debug. Quando a causa não é um bug do código (o teste está errado, o comportamento nunca
+  foi construído, o ambiente não deixa a suíte rodar), o debug para sem corrigir e devolve ao
+  test, ao create ou a você.
 - **Verify** (`redevkit-verify`): começa pelos testes. Se a última execução da feature
-  inteira (escopo `feature`) no `test-report.md` foi sobre o mesmo estado do código atual, ela é reaproveitada (um `PASS`
+  inteira (escopo `feature`) no `test-report.md` foi sobre o mesmo estado do código atual (o
+  mesmo Tree fingerprint), ela é reaproveitada (um `PASS`
   segue, um `FAIL` encerra com `failed`); senão, o verify executa o procedimento do
-  `redevkit-test` e grava a execução no `test-report.md`. Como o debug normalmente muda o
-  código, depois dele os testes rodam de novo; se a correção não mudou nada, o `FAIL` é
+  `redevkit-test` e grava a execução no `test-report.md`. Como o debug muda o
+  código, depois dele os testes rodam de novo, inclusive quando a correção está num arquivo
+  novo, ainda fora do git; se a correção não mudou nada, o `FAIL` é
   reaproveitado e conta como failed após debug (um debug que não reproduz o problema para e
   não segue para o verify). Com os testes
   verdes, a fase `redevkit-converge` compara o código com spec, plano e tarefas, e cada lacuna
   vira uma tarefa anexada na fase de Convergência; depois vêm a execução real (build e, quando
   o Tipo de projeto tem runtime, subir a aplicação e percorrer os fluxos críticos do
   `quickstart.md`, sem rodar a suíte de novo) e as auditorias (uma execução de
-  `verify_all.py` ou `checklist.py`, ou `SKIPPED` sem Python; achados em código de terceiros
-  ou gerado ficam fora do escopo e não viram tarefa nem `failed`). O veredito é `converged+verified`, `gaps` ou
+  `verify_all.py` ou `checklist.py`, ou `SKIPPED` sem Python). As auditorias julgam o código
+  que a feature escreveu: só os achados em arquivos que ela criou ou alterou viram tarefa ou
+  `failed`; achados no resto do projeto são **linha de base** (dívida que já existia) e achados
+  em código de terceiros ou gerado ficam fora do escopo, e nenhum dos dois muda o veredito. O veredito é `converged+verified`, `gaps` ou
   `failed`. Uma spec leve do enhance (sem `plan.md`) também é verificada: o contexto técnico
   vem do `tech.md`.
+
+### Classes de falha
+
+Um teste vermelho tem mais de uma causa, e cada causa tem um dono. O `redevkit-test` dá uma
+classe a cada falha e a registra no relatório (**Failure class**); o handoff segue a classe:
+
+| Classe | Quando | Para onde vai |
+| --- | --- | --- |
+| `environment` | A suíte não rodou ou não terminou: dependência ou ferramenta ausente, quebra antes de qualquer teste, tempo esgotado (`[TIMEOUT]`), porta ocupada | Não é bug. Corrige-se o ambiente e roda-se o test de novo; nunca vai para o debug |
+| `test-defect` | O teste está errado: contradiz a spec ou falha por erro próprio | O próprio test corrige o teste (nunca o código), citando o cenário da spec como evidência, e roda a suíte mais uma vez |
+| `not-implemented` | O comportamento pertence a uma tarefa aberta `[ ]` ou bloqueada `[!]` | `redevkit-create` |
+| `product-defect` | O teste bate com a spec e o código se comporta de outro jeito | `redevkit-debug` |
+
+O veredito da execução continua sendo `PASS` ou `FAIL`: uma suíte que não rodou nunca é
+verde. O que muda é o caminho de saída.
+
+### Verify pendente
+
+A linha `- Verify pending:` em `.redevkit/memory/active.md` › Últimos resultados diz que a
+feature precisa de um verify que termine em `converged+verified` antes do deploy. É uma
+bandeira, então nenhum comando compara datas para saber o que veio antes:
+
+- o debug a liga (`debug <slug>`) quando muda código;
+- o verify a liga quando termina em `gaps` ou `failed`;
+- só um verify `converged+verified` a desliga (`no`).
+
+Enquanto ela está ligada, um test `PASS` aponta para o verify (não para o deploy), o
+`--auto` segue até ele e o deploy fica `BLOCKED`. Assim o laço
+gaps → create → test → verify se fecha sozinho, limitado pelo ciclo de correção.
 
 ### Ciclo de correção e G5
 
@@ -312,14 +355,15 @@ Esta seção é a referência da documentação para o G5; a regra exata está n
 `redevkit-verify`. O verify mantém dois contadores da feature ativa em
 `.redevkit/memory/active.md` › Últimos resultados, na linha `- Correction cycle:`:
 
-- **failed após debug:** soma 1 quando o veredito é `failed` e houve um debug desta feature
-  desde o verify anterior, seja qual for o teste ou o bug; zera com `converged+verified` ou
-  `gaps`.
+- **failed após debug:** soma 1 quando o veredito é `failed` e o verify começou com a
+  bandeira `Verify pending` em `debug <slug>`, seja qual for o teste ou o bug; zera com
+  `converged+verified` ou `gaps`.
 - **rodadas sem convergir:** soma 1 a cada veredito diferente de `converged+verified`; só zera
   com `converged+verified`. Execuções de testes não mexem nele, então o ciclo
   gaps → create → test → verify também chega ao limite.
 
-Um `failed` que só reaproveitou um `FAIL` sem debug no meio não altera os contadores. Os dois
+Um `failed` que só reaproveitou um `FAIL` sem debug no meio não altera os contadores, nem um
+`failed` cuja única classe de falha é `environment` (o código não chegou a ser julgado). Os dois
 zeram quando a feature ativa muda ou quando você escolhe continuar no G5. O G5 dispara com 2
 failed após debug ou 3 rodadas sem convergir. A cadeia para, mesmo no `--auto`, e pergunta:
 
@@ -332,14 +376,18 @@ Assim, nenhum caminho do pipeline fica em loop.
 ### Estado do código
 
 Os relatórios de test e verify registram o **estado do código** de cada execução: commit
-(HEAD), branch, árvore de trabalho (clean ou dirty), arquivos alterados e duas impressões
-digitais (do `git status` e do `git diff`, excluindo `.redevkit/` e `specs/`). O verify usa
-esses valores para decidir se reaproveita a última execução de testes (sem git, nunca
-reaproveita). O deploy faz assim:
+(HEAD), branch, árvore de trabalho (clean ou dirty), arquivos alterados e o **Tree
+fingerprint**, calculado por `.redevkit/audits/code_state.py`. O fingerprint é um hash do
+conteúdo dos arquivos do projeto (sem `.redevkit/`, `specs/`, as pastas dos agentes,
+dependências e saída de build): muda quando qualquer arquivo é criado, apagado ou editado,
+rastreado pelo git ou não, e não depende do shell, do histórico de commits nem de existir
+git. Dois estados são o mesmo quando o fingerprint é igual; um commit feito depois do teste
+não o altera. O verify usa esse valor para decidir se reaproveita a última execução de
+testes. Sem Python o fingerprint fica `n/a`, nada é reaproveitado e o deploy pede que você
+instale o Python ou confirme por override. O deploy faz assim:
 
-- **Debug pendente** (um debug desta feature mais novo que o último verify
-  `converged+verified`): `BLOCKED` até rodar o `redevkit-verify`, obrigatório depois de um
-  debug.
+- **Verify pendente** (depois de um debug, ou de um verify que terminou em `gaps` ou
+  `failed`): `BLOCKED` até um `redevkit-verify` terminar em `converged+verified`.
 - Senão, a referência é a **última** execução da feature inteira no `test-report.md` (escopo
   `feature`, avulsa ou feita pelo passo 1 do verify), que precisa ser `PASS` e ter o mesmo
   estado do código atual. Execuções de um arquivo ou cenário isolado não valem como referência.
@@ -387,11 +435,16 @@ Com ele, a cadeia segue sozinha:
 
 ```text
 new → plan → create | enhance → test
-  test PASS → para e sugere verify e deploy
-  test FAIL → debug → verify (que roda os testes de novo)
-    verify converged+verified → para antes do deploy
-    verify gaps → create (que termina no test)
-    verify failed → debug de novo
+  tarefa bloqueada no create ou no enhance → para e lista o que cada uma precisa
+  test PASS, sem verify pendente → para e sugere verify e deploy
+  test PASS, com verify pendente → verify
+  test FAIL, por classe de falha:
+    product-defect  → debug → verify (que roda os testes de novo)
+    not-implemented → create → test
+    environment     → para e diz o que corrigir no ambiente
+  verify converged+verified → para antes do deploy
+  verify gaps → create → test → verify
+  verify failed → debug de novo (ou create, ou para, conforme a classe)
   G5 (ciclo de correção sem convergir) → para e pergunta
 ```
 
@@ -403,6 +456,7 @@ precisa da sua aprovação (G2) mesmo no `--auto`. O deploy nunca faz parte da c
 ## Handoff
 
 Todo comando termina com uma seção de handoff: o próximo comando e o motivo. Por exemplo, o
-test verde aponta para o deploy (sugerindo o verify antes), o test vermelho aponta para o
-debug, e o debug sempre aponta para o verify. O `redevkit-status` sugere o próximo comando a
+test verde aponta para o deploy (sugerindo o verify antes) ou, com um verify pendente, para o
+verify; o test vermelho aponta para o comando que a classe da falha indica; e o debug sempre
+aponta para o verify. O `redevkit-status` sugere o próximo comando a
 partir dos fatos que leu.

@@ -1,7 +1,7 @@
 // Shared console reporting for init / update / target.
 import path from "node:path";
 import { summarize } from "../core/install.js";
-import { CONFLICT_ROOT } from "../core/managed-tree.js";
+import { CONFLICT_ROOT, missingAfterPlan } from "../core/managed-tree.js";
 import { t } from "../core/i18n.js";
 
 export const printPlan = (sync, { verbose = false, out = console.log } = {}) => {
@@ -20,6 +20,27 @@ export const printPlan = (sync, { verbose = false, out = console.log } = {}) => 
 
 export const printMessages = (messages, { out = console.log } = {}) => {
   for (const m of messages) out(`${m.level === "warn" ? "! " : ""}${t(m.key, m.vars)}`);
+};
+
+/** Managed files that stay missing after this run: how many, and the command that restores them. */
+export const printMissing = (sync, { out = console.log } = {}) => {
+  const n = missingAfterPlan(sync.plan).length;
+  if (n) out(t("missingManaged", { n }));
+  return n;
+};
+
+/**
+ * Final line of init/update. With managed files missing, never "nothing to do / already matches":
+ * the installation is incomplete, so say how many files are missing and how to restore them.
+ */
+export const printOutcome = (sync, { key, vars = {}, out = console.log } = {}) => {
+  const n = missingAfterPlan(sync.plan).length;
+  if (key === "upToDate" && n) out(t("missingNoop", { ...vars, n }));
+  else {
+    out(t(key, vars));
+    if (n) out(t("missingManaged", { n }));
+  }
+  return n;
 };
 
 export const printConfigPreview = (sync, { out = console.log } = {}) => {

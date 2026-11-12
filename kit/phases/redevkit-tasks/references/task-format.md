@@ -11,7 +11,7 @@
 
 | Part | Rule |
 | --- | --- |
-| `- [ ]` | Checkbox. Done is `- [X]` (uppercase), set only after the VERIFY criterion was observed |
+| `- [ ]` | Checkbox. Done is `- [X]` (uppercase), set only after the VERIFY criterion was observed. Blocked is `- [!]`: the retry budget was spent without meeting the criterion (see Blocked tasks) |
 | `T012` | Sequential ID, zero-padded to 3 digits, in execution order; never reused or renumbered |
 | `[P]` | Optional. Only when the task's files are disjoint from every other task in the same phase and it does not depend on an unfinished task of that phase |
 | `[US1]` | Required in user story phases, absent in Setup, Foundational and Polish; optional in appended phases (Convergence, Enhancement) when the task traces to a story |
@@ -27,7 +27,7 @@ description and the criterion are written in the project language.
 Valid line pattern (for self-checks):
 
 ```text
-^- \[( |X|x)\] T\d{3,} (\[P\] )?(\[US\d+\] )?.+ — .+ — @[a-z-]+ — VERIFY: .+$
+^- \[( |X|x|!)\] T\d{3,} (\[P\] )?(\[US\d+\] )?.+ — .+ — @[a-z-]+ — VERIFY: .+$
 ```
 
 Examples:
@@ -40,6 +40,25 @@ Examples:
 
 Wrong: missing ID, missing path, missing `@persona`, missing `VERIFY:`, `[P]` on two tasks
 that edit the same file, `[US1]` in Setup.
+
+## Blocked tasks
+
+A task whose retry budget was spent (`redevkit-orchestrate` step 7) is marked `- [!]` and
+gets one indented note line right below it:
+
+```markdown
+- [!] T013 [US1] Implement score service — src/services/score.ts — @backend-specialist — VERIFY: `npx vitest run tests/contract/scores.test.ts` passes
+  - BLOCKED 2026-11-12: database container does not start; needs: Docker running, or a test database URL in `.env.test`
+```
+
+- `BLOCKED` and `needs:` are structural tokens and stay in English; the reason and the need
+  are written in the project language. The date is the day it was blocked.
+- A blocked task is open work that no command retries on its own: it runs again only when
+  the user asks (`redevkit-create --retry-blocked`, or naming the task). On success it
+  becomes `- [X]` and the note stays as history.
+- Tasks that depend on a blocked task stay `- [ ]` and are skipped until it is done.
+- A blocked task is never deleted or renumbered; when the plan changes, the tasks phase
+  decides what replaces it.
 
 ## Phase headings
 
@@ -89,5 +108,6 @@ When TDD is waived, the tests sub-section is optional, but every task still has 
   comments are not tasks.
 - Next free ID = highest existing `T` number + 1. Next phase number = highest existing phase
   number + 1.
-- Progress per phase = `[X]` count / task count in that phase.
+- Progress per phase = `[X]` count / task count in that phase; report `[!]` tasks apart, as
+  blocked.
 - Never reorder, renumber or delete existing tasks; append instead.

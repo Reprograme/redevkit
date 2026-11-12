@@ -14,7 +14,9 @@ from typing import Optional, Sequence
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from validation_runner import CheckSpec, run_suite  # noqa: E402
+from validation_runner import (  # noqa: E402
+    LIGHTHOUSE_CHECK_TIMEOUT, LINT_CHECK_TIMEOUT, TEST_CHECK_TIMEOUT, CheckSpec, run_suite,
+)
 
 VERIFICATION_SUITE = (
     CheckSpec(
@@ -26,10 +28,10 @@ VERIFICATION_SUITE = (
         excludes=True,
     ),
     CheckSpec("Dependency Analysis", "dependency_analyzer.py", "P0 Security", excludes=True),
-    CheckSpec("Lint Check", "lint_runner.py", "P1 Code Quality", required=True),
+    CheckSpec("Lint Check", "lint_runner.py", "P1 Code Quality", required=True, timeout=LINT_CHECK_TIMEOUT),
     CheckSpec("Type Coverage", "type_coverage.py", "P1 Code Quality", excludes=True),
     CheckSpec("Schema Validation", "schema_validator.py", "P2 Data Layer", excludes=True),
-    CheckSpec("Test Suite", "test_runner.py", "P3 Testing", tests=True),
+    CheckSpec("Test Suite", "test_runner.py", "P3 Testing", tests=True, timeout=TEST_CHECK_TIMEOUT),
     CheckSpec("UX Audit", "ux_audit.py", "P4 UX & Accessibility", excludes=True),
     CheckSpec("Accessibility Check", "accessibility_checker.py", "P4 UX & Accessibility", excludes=True),
     CheckSpec("SEO Check", "seo_checker.py", "P5 SEO & Content", excludes=True),
@@ -39,7 +41,8 @@ VERIFICATION_SUITE = (
     CheckSpec("Mobile Audit", "mobile_audit.py", "P7 Platform Quality", excludes=True),
     CheckSpec("i18n Check", "i18n_checker.py", "P7 Platform Quality", excludes=True),
     CheckSpec("API Validation", "api_validator.py", "P7 Platform Quality", excludes=True),
-    CheckSpec("Lighthouse Audit", "lighthouse_audit.py", "P8 Runtime", target="url", required=True, timeout=180),
+    CheckSpec("Lighthouse Audit", "lighthouse_audit.py", "P8 Runtime", target="url", required=True,
+              timeout=LIGHTHOUSE_CHECK_TIMEOUT),
     CheckSpec("Playwright E2E", "playwright_runner.py", "P8 Runtime", target="url", timeout=120),
 )
 

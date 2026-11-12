@@ -17,7 +17,7 @@ export const runUninstall = async (opts, { log = console.log, projectDir = proce
   const remove = [];
   const keptModified = [];
   for (const [rel, hash] of Object.entries(manifest.files)) {
-    const cur = hashFileIfExists(resolveInside(projectDir, rel));
+    const cur = hashFileIfExists(resolveInside(projectDir, rel), hash);
     if (cur === undefined) continue;
     if (cur === hash || opts.force) remove.push(rel);
     else keptModified.push(rel);

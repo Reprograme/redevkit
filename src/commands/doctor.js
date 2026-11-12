@@ -9,7 +9,7 @@ import { blockInner, findBlock } from "../core/context-files.js";
 import { exists, listFiles, readText, resolveInside } from "../core/fsutil.js";
 import { parseFrontmatter } from "../core/frontmatter.js";
 import { getLang, setLang } from "../core/i18n.js";
-import { CONFIG_FILES } from "../core/install.js";
+import { CONFIG_FILES, isPipelineCore } from "../core/install.js";
 import { loadManifest } from "../core/manifest.js";
 import { loadRuntimeEntries } from "../core/render.js";
 import { codexEntriesPresent } from "../core/runtime-config.js";
@@ -210,7 +210,8 @@ export const runDoctor = async (opts, { log = console.log, projectDir = process.
   if (manifest) {
     setLang(manifest.lang);
     const drift = managedDrift(projectDir, manifest);
-    for (const f of drift.missing) add("warn", f, "managed file missing (run redevkit update)");
+    // A missing pipeline file breaks the commands; a knowledge skill or persona may be deleted on purpose.
+    for (const f of drift.missing) add(isPipelineCore(f) ? "error" : "warn", f, "managed file missing (run redevkit update --restore)");
     for (const f of drift.modified) add("info", f, "managed file modified locally (kept by update)");
 
     // Installed files per target: frontmatter, placeholders, links, catalog budget.

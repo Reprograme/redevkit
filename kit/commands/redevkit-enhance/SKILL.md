@@ -65,7 +65,7 @@ Search `specs/` for the feature the change belongs to (spec titles, user stories
   Completed tasks are never rewritten. In `pt-BR` artifacts the headings are
   `## Melhorias` › `### AAAA-MM-DD — <título>` and `## Fase N: Melhoria AAAA-MM-DD`. If that
   feature is not the active one, make it active in `active.md` (`- Feature:`, which also
-  starts a new Correction cycle line per `{{CMD:redevkit-verify}}` step 6).
+  starts new Verify pending and Correction cycle lines per `{{CMD:redevkit-verify}}` step 6).
 - **No feature (D55):** create a lightweight spec with the light mode of
   `{{SKILL:redevkit-specify}}` (next `NNN`, template, only what the change needs: summary, the
   change's user story, acceptance scenarios, requirements delta, assumptions). Tasks follow `{{SKILL:redevkit-tasks}}` for the change only.
@@ -137,6 +137,9 @@ result. Conflicts and risks cite the file where they were found.
 ## Handoff
 
 - Done → `{{CMD:redevkit-test}}` to run the full suite against the spec.
+- Blocked tasks (`[!]`) → as in `{{CMD:redevkit-create}}`: resolve what they need, revise
+  with `{{CMD:redevkit-plan}}` or go on to the test; never repeat this command unchanged.
 - Redirected at step 3 → `{{CMD:redevkit-plan}}` with the drafted delta.
-- `--auto`: continue with `{{CMD:redevkit-test}}` `--auto`; at step 3 the recommendation
+- `--auto`: continue with `{{CMD:redevkit-test}}` `--auto` (a blocked task stops the chain
+  with the blocked list); at step 3 the recommendation
   (plan) is adopted and the chain continues with `{{CMD:redevkit-plan}}` `--auto`.

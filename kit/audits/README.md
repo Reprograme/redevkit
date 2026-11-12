@@ -7,7 +7,10 @@ own build, test and lint commands; they add static checks on top of them.
 Every script uses only the Python standard library (Playwright is an optional import),
 runs on Python 3.9 or newer, writes UTF-8 to stdout, never uses `shell=True`, resolves
 Node executables with `shutil.which` (for example `npm.cmd` on Windows) and starts
-Python sub-processes with `sys.executable`.
+Python sub-processes with `sys.executable`. Output is line-buffered also when it goes to a
+pipe, so every finished step is visible at once, and every external tool runs with a real
+time limit and without access to the terminal (see
+[External commands and time limits](#external-commands-and-time-limits)).
 
 ## Interpreter detection protocol
 
@@ -64,6 +67,8 @@ Run from the project root. `<PY>` is the interpreter chosen above.
 <PY> .redevkit/audits/verify_all.py . --url http://localhost:3000 --report verification.json
 <PY> .redevkit/audits/verify_all.py . --no-runtime --no-tests --exclude "prototypes/"
 <PY> .redevkit/audits/security_scan.py . --output summary  # one audit
+<PY> .redevkit/audits/test_runner.py . --timeout 600 --log test-output.log
+<PY> .redevkit/audits/code_state.py .                        # code state of a test or verify run
 ```
 
 Orchestrator options (identical in `checklist.py` and `verify_all.py`):
@@ -71,7 +76,7 @@ Orchestrator options (identical in `checklist.py` and `verify_all.py`):
 | Option | Effect |
 | --- | --- |
 | `project` | Project directory (default `.`) |
-| `--url URL` | Running app URL for Lighthouse and Playwright; without it they are SKIPPED |
+| `--url URL` | Running app URL for Lighthouse and Playwright; without it they are SKIPPED. It must be an `http://` or `https://` URL without quotes or white space, otherwise the orchestrator exits `2` |
 | `--no-runtime` | Drop every URL-based runtime check (the only runtime flag) |
 | `--no-tests` | Do not run the project's test suite: the Test Runner check is `SKIPPED (test suite not run (--no-tests); ...)`. Use it when the suite already ran for the same code |
 | `--exclude PATTERN` | Exclude paths in every audit that scans files (repeatable); see [Excluding paths](#excluding-paths) |
@@ -83,7 +88,17 @@ The orchestrators find the audits next to themselves (`Path(__file__).parent`), 
 work from any working directory. They forward `--exclude` and `--no-gitignore` only to
 the audits that scan project files (every audit except `lint_runner.py`,
 `test_runner.py`, `lighthouse_audit.py` and `playwright_runner.py`, which run external
-tools with their own configuration).
+tools with their own configuration). Before each check they print
+`[RUN]  <check> (time limit Ns)`, so a long step is visible while it runs.
+
+`test_runner.py` options:
+
+| Option | Effect |
+| --- | --- |
+| `project` | Project directory (default `.`) |
+| `--timeout SECONDS` | Time limit of the test command (default `300`). When it expires the whole process tree is killed and the result is a timeout (see [Exit codes](#exit-codes)) |
+| `--log FILE` | Write the full combined output (stdout and stderr, in order) of the test command to `FILE`; the console shows only its last 40 lines |
+| `--coverage` | Collect coverage when the tool for it is installed (Vitest with `@vitest/coverage-v8` or `@vitest/coverage-istanbul`, Jest, pytest with `pytest-cov`). Otherwise the suite runs without coverage and one line says `SKIPPED (coverage provider not installed)` or `SKIPPED (coverage not supported for this test command)` |
 
 ## Excluding paths
 
@@ -124,7 +139,9 @@ app/Views/errors/
 ```
 
 Limits: no global gitignore, no `core.ignorecase=false` (matching always ignores case),
-and a file cannot be included again inside an excluded folder (as in git).
+a file cannot be included again inside an excluded folder (as in git), and a pattern
+with a character class that cannot be compiled (for example the reversed range in
+`*.[a-Z]`) is ignored.
 `bundle_analyzer.py` measures build output, so it applies only your patterns, never the
 defaults or `.gitignore`.
 
@@ -140,12 +157,87 @@ run only on files that contain the element (`<html lang>`, the skip link on `<bo
 (`errors/`, `error_404.php`) and e-mail templates are not SEO or GEO pages; GEO counts
 a PHP view as a page only when it renders an `<h1>` and is not a layout or partial.
 
+## Code state
+
+`code_state.py` is not an audit: it prints the **code state** that the test and verify
+reports record, and compares it with a recorded one. It is read-only.
+
+```bash
+<PY> .redevkit/audits/code_state.py .                                  # Commit, Branch, Working tree, Changed files, Tree fingerprint
+<PY> .redevkit/audits/code_state.py . --json                           # the same as one JSON object
+<PY> .redevkit/audits/code_state.py . --expect sha256:<fingerprint>    # Compare: SAME (exit 0) or DIFFERENT (exit 1)
+```
+
+The **Tree fingerprint** is a SHA-256 over the sorted list of `<file sha256>  <path>` lines,
+so it changes when any file is added, removed, renamed or edited, whether git tracks it or
+not. The two fingerprints the kit used before (of `git status` and of `git diff`) did not
+change when an untracked file was edited, which made a verify reuse a stale test run.
+
+| | |
+| --- | --- |
+| Files hashed in a git repository | Every tracked file, plus every untracked file that git does not ignore and that is not dependency, build or report output (the shared defaults of [Excluding paths](#excluding-paths)) |
+| Files hashed without git | Every file that the shared defaults and the project's `.gitignore` files do not exclude |
+| Never hashed | `.redevkit/`, `specs/`, `.claude/`, `.agents/`, `.codex/` and `.git/` at the project root: reports and memory are written after a run and must not make the code look changed |
+| Independent of | The shell, the commit history and git being installed. A commit made after the run does not change it |
+| Line endings | Hashed as they are on disk: a CRLF checkout of the same code is a different state |
+
+`HEAD`, `Branch` and `Working tree` are context for the reader; only the fingerprint decides
+whether two states are the same. Exit codes: `0` computed (with `--expect`: same), `1` with
+`--expect`: different, `2` usage error. It never prints `SKIPPED`, and it is the only script
+here whose exit `1` is not a failure.
+
+## External commands and time limits
+
+Every external tool (`npm`, `tsc`, `lighthouse`, the project's test command, and each
+audit an orchestrator starts) runs through `run_external` in `audit_common.py`:
+
+- **Never interactive.** The command gets no terminal input (its stdin is the null
+  device) and the environment `CI=1` (an existing `CI` value is kept), `NO_COLOR=1` and
+  `FORCE_COLOR=0`. A test script such as `"test": "vitest"` runs once instead of entering
+  watch mode, nothing can wait for an answer, and the output carries no colour codes.
+- **A real time limit.** The command runs in its own process group. When the limit
+  expires the whole process tree is killed (`taskkill /F /T` on Windows, where `npm.cmd`
+  is a `cmd.exe` that starts `node`; the process group and every descendant elsewhere),
+  and the output printed until then is kept. No wait on an output pipe is unbounded.
+- **Nested limits.** An orchestrator gives each check the worst case of its audit plus
+  60 seconds, so the audit reports its own timeout before the orchestrator has to stop it.
+
+| Step | Limit |
+| --- | --- |
+| `test_runner.py`: the test command | 300 s, or `--timeout SECONDS` |
+| `lint_runner.py`: each linter (at most 4) | 120 s |
+| `type_coverage.py`: `tsc` | 180 s for each `tsconfig.json`, 240 s for all of them |
+| `security_scan.py`: `npm audit` | 90 s |
+| `lighthouse_audit.py`: Lighthouse | 180 s, or `--timeout` |
+| Orchestrator check: Test Runner | 360 s |
+| Orchestrator check: Lint | 540 s |
+| Orchestrator check: Lighthouse | 240 s |
+| Orchestrator check: Playwright | 120 s |
+| Orchestrator check: any other audit | 300 s |
+
+A full suite therefore needs more than the default time limit of most agent shell
+tools: give the call a limit that fits (the test command alone may use 300 seconds),
+or run it in the background and read its output, which arrives line by line.
+
+What a timeout looks like:
+
+- `test_runner.py` prints `[TIMEOUT] Test command timed out after Ns ...`, exits `1`,
+  and its JSON has `"status": "timeout"`, `"timed_out": true` and a `"reason"`. The last
+  lines the command printed are shown, and `--log FILE` keeps all of them.
+- `lint_runner.py` prints `[TIMEOUT] <linter> - timeout after 120s ...`, exits `1`, and
+  the linter's JSON entry has `"timed_out": true`.
+- A `tsc` or `npm audit` that times out is a skipped sub-check (`SKIPPED (...)`).
+- A check stopped by an orchestrator is an `error` with the reason
+  `timed out after Ns`; the report keeps the output the audit printed so far. When the
+  audit hit its own limit, the check is `failed` and its reason quotes the audit's
+  `[TIMEOUT]` line.
+
 ## Exit codes
 
 | Code | Meaning |
 | --- | --- |
 | `0` | PASS: the audit ran and found nothing at or above its failure threshold |
-| `1` | FAIL: blocking findings |
+| `1` | FAIL: blocking findings; also a timeout of the test command or of a linter (it prints a `[TIMEOUT]` line) |
 | `2` | Usage error or missing input path |
 | `3` | SKIPPED: nothing was checked (the audit could not run or does not apply); it printed `SKIPPED (<reason>)` |
 
@@ -155,14 +247,16 @@ The orchestrators (`checklist.py`, `verify_all.py`) aggregate their checks:
 | --- | --- |
 | `0` | At least one check ran (PASS) and none failed; skipped checks are listed as not verified |
 | `1` | Any check failed or errored |
-| `2` | Usage error (bad option, missing project directory) |
+| `2` | Usage error (bad option, bad `--url`, missing project directory) |
 | `3` | SKIPPED: every check was skipped, nothing was verified; prints `SKIPPED (all N check(s) skipped; nothing was verified)` |
 
 A skipped `required` check (Security Scan, Lint Check, Lighthouse with `--url`) is
 marked `[SKIPPED] (required)` in the summary and named on a `Required check(s) SKIPPED`
 line. It does not fail the suite on its own, but a run where everything skipped is `3`,
 never `0`. The JSON report carries `status` (`passed`, `failed`, `skipped`), `exit_code`
-and `success` (true only for exit `0`).
+and `success` (true only for exit `0`); each entry of `results` has its own `status`
+(`passed`, `failed`, `skipped`, or `error` for a check that timed out or could not start),
+`reason`, `stdout` and `stderr`.
 
 ## SKIPPED semantics
 
@@ -185,12 +279,12 @@ and `success` (true only for exit `0`).
 
 | Script | Checks | Skips when |
 | --- | --- | --- |
-| `security_scan.py` | Lock files, `npm audit`, hard-coded secrets, dangerous code (`eval`/`exec` builtins, `shell=True`, XSS sinks, SQL built from variables), risky config | `npm audit` alone is skipped when npm is missing or fails |
+| `security_scan.py` | Lock files, `npm audit`, hard-coded secrets, dangerous code (`eval`/`exec` builtins, `shell=True`, XSS sinks, SQL built from variables), risky config | No source, configuration or dependency file to scan; `npm audit` alone is skipped when npm is missing, fails or times out |
 | `dependency_analyzer.py` | Unbounded or remote dependency versions, missing or duplicate lock files (a workspace package may use a parent's lock file; a manifest without dependencies needs none), unpinned Python requirements (offline) | No dependency manifest |
-| `lint_runner.py` | `npm run lint` or project-local `eslint`, project-local `tsc --noEmit`, `ruff`, `mypy` | Each missing linter; all of them missing |
+| `lint_runner.py` | `npm run lint` or project-local `eslint`, project-local `tsc --noEmit`, `ruff`, `mypy`; a linter that exceeds 120 s fails with `[TIMEOUT]` | Each missing linter; all of them missing |
 | `type_coverage.py` | Explicit `any`, `@ts-ignore`, project-local `tsc`, Python annotation ratio | No TS or Python files; `tsc` missing or timed out (sub-check) |
 | `schema_validator.py` | Prisma naming, ids, `createdAt`, missing `@@index` (advisory). Drizzle files are only listed as "not validated" | No Prisma or Drizzle schema; Drizzle schemas only (nothing validated) |
-| `test_runner.py` | `npm test`, project-local vitest or jest, pytest or unittest via `sys.executable` | No test command (the `npm init` placeholder script counts as none), runner missing, no tests found (also "Ran 0 tests" with exit 0) |
+| `test_runner.py` | `npm test`, project-local vitest or jest, pytest or unittest with the project's `.venv`/`venv` interpreter when it exists, else `sys.executable` (see [Test Runner verdict](#test-runner-verdict)) | No test command (the `npm init` placeholder script counts as none), runner or declared framework not installed, no tests found, or exit 0 without any test result in the output |
 | `ux_audit.py` | UX laws, typography, color, motion and effect heuristics, also on PHP views | No frontend source files or PHP views |
 | `accessibility_checker.py` | Input and button labels, `<html lang>`, skip link (when the page has a `<nav>` or `<header>`), keyboard handlers, positive `tabIndex` (comments ignored), also on PHP views | No HTML, JSX, TSX or PHP view files |
 | `seo_checker.py` | `<title>`, meta description, Open Graph (files with a `<head>`), single H1, image alt, also on PHP views | No page files |
@@ -204,12 +298,36 @@ and `success` (true only for exit `0`).
 | `playwright_runner.py` | Smoke test of a URL: status, title, page errors, basic accessibility (needs `--url`) | Playwright or its Chromium missing |
 | `checklist.py` | Fast suite: security, lint, types, schema, tests, UX, accessibility, SEO, runtime | - |
 | `verify_all.py` | Full suite: the fast suite plus dependencies, GEO, bundle, React, mobile, i18n, API | - |
+| `code_state.py` | Content fingerprint of the project's code for the test and verify reports (see [Code state](#code-state)); not an audit, not run by the orchestrators | - |
 | `validation_runner.py` | Shared runner imported by the two orchestrators (not run directly) | - |
-| `audit_common.py` | Shared path exclusion and PHP view reading imported by the audits (not run directly) | - |
+| `audit_common.py` | Shared path exclusion, PHP view reading and the external command runner (`run_external`) imported by the audits (not run directly) | - |
 
 Every audit that scans files accepts `--exclude PATTERN` (repeatable) and
 `--no-gitignore`, walks the project once and applies the policy of
 [Excluding paths](#excluding-paths): by path segment, never by substring.
+
+### Test Runner verdict
+
+`test_runner.py` decides from the exit code of the test command and from its output:
+
+| Result | When |
+| --- | --- |
+| PASS (`0`) | Exit 0 and the output shows that tests ran: a summary of unittest, pytest, Jest, Vitest, `node --test`, Mocha or a generic `N passed` with at least one test, or, for a format it cannot count, any sign of executed tests (`12 specs`, `ok 1`, a check mark, `PASS file`). The JSON then has `"counts_parsed": false` and zero counts |
+| SKIPPED (`3`) | No test command; `npm` or the declared framework is not installed (`vitest is not installed in node_modules/.bin (run the package install first)`); the summary says zero tests ran (`node --test` without test files, `Ran 0 tests`); Vitest or Jest found no test file; pytest or unittest exited 5; or the command exited 0 and printed no test result at all (`"test": "echo ok"`). Run the project's own test command and judge its output |
+| FAIL (`1`) | Any other non-zero exit code (exit 5 of a command that is not pytest or unittest included) and a timeout |
+
+Details:
+
+- Python: when the project root has no `test*.py` and `tests/` (or `test/`) is not a
+  package, unittest starts there (`discover -s tests`); from the root it would find
+  nothing and failing tests would look like "no tests found".
+- Node: `node_modules/.bin` is also looked up in the parent folders (workspaces).
+- The console shows the last 40 lines of the output (failures and the summary are at the
+  end); `--log FILE` keeps all of it.
+- The JSON at the end of the output has `status` (`passed`, `failed`, `skipped`,
+  `timeout`), `timed_out`, `exit_code`, `duration_seconds`, `tests_run`, `tests_passed`,
+  `tests_failed`, `counts_parsed`, `coverage`, `reason` (unless passed) and `log` (with
+  `--log`).
 
 ## Tests
 

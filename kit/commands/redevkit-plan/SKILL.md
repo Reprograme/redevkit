@@ -61,7 +61,10 @@ new feature (Recommended when the input names new behavior) or continue the acti
    `active.md` › Workflow preferences); do not ask again here.
 
 Continuing an existing feature: skip this step, but `spec.md` must exist (T7); if it does not,
-run this step.
+run this step. When the plan or the tasks of a feature that was already approved are about to
+change (a revision, for example after G5), set `- Plan approved: no` in `active.md` first:
+the create command must not run on a plan that is being revised, and only step 8 approves it
+again.
 
 ### 2. Domain routing
 
@@ -131,7 +134,7 @@ Present: feature summary, stack and Project Type, Constitution Check result, des
 task count per phase, analysis result, assumptions taken. Ask for approval (approve, or
 request changes). On approval, set `active.md` › Active feature to phase `plan approved` and
 `- Plan approved: YYYY-MM-DD` (the label stays in English in every language); later phases
-change the phase line but never this one. Without
+change the phase line but never this one (only a revision in step 1 sets it back to `no`). Without
 approval, apply the requested changes and repeat steps 5–8. The chain stops here even in
 `--auto`; in a non-interactive run, end the run and report that approval is pending.
 

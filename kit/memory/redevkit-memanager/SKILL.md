@@ -37,7 +37,7 @@ language `{{LANG}}`; answer the user in the user's language.
 | `project.md` | `project` | Scope · Core objective · Success criteria · Out of scope (current negative decisions) · Problem · Audience · What "working well" looks like · Expected experience · Domain |
 | `system.md` | `system` | Overall architecture · Design decisions · **Invariants** (never pruned) · Patterns in use · Code conventions · Component relationships |
 | `tech.md` | `tech` | Stack · Dependencies · Dev environment (build, test and dev commands, preview port) · Technical constraints |
-| `active.md` | `active` | **Active feature** (`specs/NNN-name`, phase) · Where we are · Recent events · What works · What's left · Next steps · Known issues · Last results (test, verify, debug, correction cycle) · Workflow preferences (branch per feature: `always`, `never` or `ask`) |
+| `active.md` | `active` | **Active feature** (`specs/NNN-name`, phase) · Where we are · Recent events · What works · What's left · Next steps · Known issues · Last results (test, verify, debug, verify pending, correction cycle) · Workflow preferences (branch per feature: `always`, `never` or `ask`) |
 | `changelog.md` | `changelog` | Keep a Changelog (Unreleased + versions) · Consolidated history · Architecture decisions (short ADR) · Constitution amendments (Sync Impact Report). At most 512 lines: older entries rotate to `archive/` |
 | `user.md` | `user` | Environment and tools · Communication style · Recorded feedback |
 | `topics/<topic>.md` | `user`, `feedback`, `project` or `reference` | Free topics |
@@ -183,13 +183,17 @@ do nothing here: the new command offers amend, resync or exit.
 - `active.md`: a new event at the top of Recent events (`- YYYY-MM-DD — what — why`), Active
   feature and phase, What works, What's left, Next steps, Known issues, and Last results:
   rewrite in place the template line the command owns (`Test` with its Run by field,
-  `Verify`, `Debug`, `Correction cycle`), keeping the format of `memory/active.md`.
+  `Verify`, `Debug`, `Verify pending`, `Correction cycle`), keeping the format of
+  `memory/active.md`. Dates and times come from the system clock.
 - `changelog.md`: deliveries under Unreleased. The changelog mirrors the version the project
   declares; when the project bumps its version, move the Unreleased items under the new one.
 - `system.md`, `tech.md`, `project.md`, `user.md`: only when the command revealed a pattern,
   dependency, command, scope change or preference. Review `project.md` whenever visible
   capabilities change: feature lists go stale silently.
 - `MEMORY.md`: refresh the Core lines whose status changed; add index lines for new facts.
+- Change memory files in place with the file-editing tool; never regenerate a whole file from
+  memory. Every file keeps its frontmatter, `MEMORY.md` included: after a write, its first
+  line is still `---`.
 - Set `updated` in every file written, run **prune** on them, emit the 💾 line.
 
 **One fact** ("remember this"):
@@ -276,7 +280,8 @@ Called by `{{CMD:redevkit-status}}`. Read-only, facts only:
 - Last entry date (as in the 📖 line) and constitution version.
 - Active feature, its phase, and whether its path exists.
 - From `active.md` › Last results, as written: Test (with Run by), Verify and Debug with
-  their dates, the Correction cycle counters, and a pending G5 when one is recorded.
+  their dates, Verify pending with its reason, the Correction cycle counters, and a pending
+  G5 when one is recorded.
 - Pending markers, counted per file.
 - Index size (lines out of 256), files over 100 or 256 lines, `changelog.md` over 512, and any
   [doctor-contract](references/doctor-contract.md) problem seen.

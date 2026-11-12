@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// REDEVKIT E2E (PLANO §15.2): 2 scenarios × 2 runtimes, real `claude -p` and `codex exec`.
+// REDEVKIT E2E (PLANO §15.2): scenarios × 2 runtimes, real `claude -p` and `codex exec`.
+// A and B are the acceptance scenarios; C, D and E cover the pipeline routes between create,
+// test, debug and verify (untracked code, the gaps loop, the full --auto chain).
 // The work dir uses the long Windows path (realpath): Claude Code refuses writes through 8.3
 // short names such as RICARD~1.
-// Usage: node e2e/run.mjs --scenario A|B --runtime claude|codex [--out <dir>] [--work <dir>]
-//        node e2e/run.mjs --check <workDir> --scenario A|B --runtime claude|codex   (checks only)
+// Usage: node e2e/run.mjs --scenario A|B|C|D|E --runtime claude|codex [--out <dir>] [--work <dir>]
+//        node e2e/run.mjs --check <workDir> --scenario A|B|C|D|E --runtime claude|codex   (checks only)
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -23,6 +25,36 @@ const arg = (name, def = null) => {
 const NONINTERACTIVE =
   "Execução não interativa (E2E): não há usuário para responder. Assuma as recomendações e registre-as como suposições.";
 
+const B_NEW = { id: "new", cmd: "redevkit-new", text: `projeto existente. Há memória legada em memory-bank/: escolho importar e arquivar (gate G7). ${NONINTERACTIVE} Eu aprovo a constituição proposta (gate G1).` };
+const B_ENHANCE = `adicionar endpoint GET /health que responde {"status":"ok","uptime":<segundos>}. ${NONINTERACTIVE} Eu aprovo o plano da mudança.`;
+const B_ABOUT_TESTS = "Gere também os testes que faltam para comportamentos existentes sem cobertura registrados na memória (o /about não tem testes).";
+
+/**
+ * Harness step for scenario D: appends a task marked done whose claim is false (no README
+ * describes the endpoint). The tests stay green, so only the convergence step of the verify can
+ * notice it: the verdict must be `gaps`, and the chain must come back to the verify by itself.
+ */
+export const injectFalseDoneTask = (workDir) => {
+  const specs = path.join(workDir, "specs");
+  const feature = fs.existsSync(specs) ? fs.readdirSync(specs).filter((d) => /^\d{3}-/.test(d)).sort()[0] : null;
+  if (!feature) throw new Error("inject-gap: no feature under specs/");
+  const file = path.join(specs, feature, "tasks.md");
+  const text = fs.readFileSync(file, "utf8");
+  const max = (re) => Math.max(0, ...[...text.matchAll(re)].map((m) => Number(m[1])));
+  const task = String(max(/^\s*- \[[ xX!]\] T(\d{3,})/gm) + 1).padStart(3, "0");
+  const phase = max(/^##\s+(?:Phase|Fase)\s+(\d+):/gm) + 1;
+  const today = new Date().toISOString().slice(0, 10);
+  const block = [
+    "",
+    `## Fase ${phase}: Melhoria ${today}`,
+    "",
+    `- [X] T${task} Documentar o endpoint GET /health no README (rota, resposta e exemplo) — README.md — @documentation-writer — VERIFY: \`README.md\` descreve o GET /health e a resposta`,
+    "",
+  ].join("\n");
+  fs.writeFileSync(file, `${text.replace(/\n+$/, "")}\n${block}`);
+  return `T${task} appended as done to specs/${feature}/tasks.md (README.md does not exist)`;
+};
+
 export const SCENARIOS = {
   A: {
     title: "Projeto novo: jogo de nave 2D para web",
@@ -36,12 +68,53 @@ export const SCENARIOS = {
   B: {
     title: "Projeto existente: API com memory-bank, CLAUDE.md e bug latente",
     fixture: "api-b",
+    expects: { bug: true },
     steps: [
       { id: "new", cmd: "redevkit-new", text: `projeto existente. Há memória legada em memory-bank/: escolho importar e arquivar (gate G7). ${NONINTERACTIVE} Eu aprovo a constituição proposta (gate G1).` },
       { id: "enhance", cmd: "redevkit-enhance", text: `adicionar endpoint GET /health que responde {"status":"ok","uptime":<segundos>}. ${NONINTERACTIVE} Eu aprovo o plano da mudança. Pare antes do redevkit-test.` },
       { id: "test", cmd: "redevkit-test", text: `Gere também os testes que faltam para comportamentos existentes sem cobertura registrados na memória (o /about não tem testes). ${NONINTERACTIVE} Não corrija código neste comando.` },
       { id: "debug", cmd: "redevkit-debug", text: `corrija as falhas do último test-report. ${NONINTERACTIVE} Pare antes do redevkit-verify.` },
       { id: "verify", cmd: "redevkit-verify", text: `${NONINTERACTIVE}` },
+    ],
+  },
+  // Same route as B, but nothing is committed: every file is untracked. The old code state
+  // (git status + git diff) did not change when the debug fixed the code, so the verify reused
+  // the stale FAIL run and the correction cycle ran into G5.
+  C: {
+    title: "Repositório sem commit: debug corrige arquivo não rastreado e o verify roda os testes de novo",
+    fixture: "api-b",
+    commitFixture: false,
+    expects: { bug: true },
+    steps: [
+      B_NEW,
+      { id: "enhance", cmd: "redevkit-enhance", text: `${B_ENHANCE} Pare antes do redevkit-test.` },
+      { id: "test", cmd: "redevkit-test", text: `${B_ABOUT_TESTS} ${NONINTERACTIVE} Não corrija código neste comando.` },
+      { id: "debug", cmd: "redevkit-debug", text: `corrija as falhas do último test-report. ${NONINTERACTIVE} Pare antes do redevkit-verify.` },
+      { id: "verify", cmd: "redevkit-verify", text: `${NONINTERACTIVE}` },
+    ],
+  },
+  // The gaps loop: verify (gaps) → create → test (PASS) → verify. Before the verify-pending
+  // flag the chain stopped at the green test and pointed at the deploy.
+  D: {
+    title: "Laço de lacunas: verify gaps → create → test → verify, com --auto",
+    fixture: "api-b",
+    expects: { gaps: true },
+    steps: [
+      B_NEW,
+      { id: "enhance", cmd: "redevkit-enhance", text: `${B_ENHANCE} Pare antes do redevkit-test.` },
+      { id: "test", cmd: "redevkit-test", text: `${NONINTERACTIVE} Não corrija código neste comando.` },
+      { id: "inject-gap", mutate: injectFalseDoneTask },
+      { id: "verify", cmd: "redevkit-verify", text: `--auto ${NONINTERACTIVE} Siga a cadeia do --auto até o fim, parando só nos gates.`, timeoutMin: 90 },
+    ],
+  },
+  // The whole --auto chain in one invocation: enhance → test (red) → debug → verify.
+  E: {
+    title: "Cadeia --auto completa: enhance → test vermelho → debug → verify",
+    fixture: "api-b",
+    expects: { bug: true },
+    steps: [
+      B_NEW,
+      { id: "enhance-auto", cmd: "redevkit-enhance", text: `--auto ${B_ENHANCE} No redevkit-test da cadeia: ${B_ABOUT_TESTS} Siga a cadeia do --auto até o fim, parando só nos gates.`, timeoutMin: 120 },
     ],
   },
 };
@@ -180,6 +253,7 @@ export const check = ({ scenario, workDir, transcripts, commitsBefore }) => {
   });
   ok("no SKIPPED audit reported as PASS", lies.length === 0, lies.join(" / "));
 
+  const expects = SCENARIOS[scenario]?.expects ?? {};
   if (scenario === "A") {
     ok("specs/001-*/ has spec, plan, tasks", feature && /^001-/.test(feature) && ["spec.md", "plan.md", "tasks.md"].every((f) => doc(f)), feature ?? "none");
     const plan = doc("plan.md");
@@ -209,20 +283,39 @@ export const check = ({ scenario, workDir, transcripts, commitsBefore }) => {
     const delta = /^##\s+(Enhancements|Melhorias)/m.test(doc("spec.md")) || /^##\s+(Phase|Fase)\s+\d+:\s*(Enhancement|Melhoria)/m.test(doc("tasks.md"));
     const lightweight = Boolean(feature) && /health/i.test(doc("spec.md")) && /^\s*- \[[xX]\] T\d{3}/m.test(doc("tasks.md"));
     ok("spec delta + tasks (or lightweight spec, D55)", delta || lightweight, feature ?? "no feature");
-    const bugs = fs.existsSync(path.join(workDir, ".redevkit", "bugs")) ? fs.readdirSync(path.join(workDir, ".redevkit", "bugs")) : [];
-    ok(".redevkit/bugs/<slug>/{assessment,fix,test}.md", bugs.some((b) => ["assessment.md", "fix.md", "test.md"].every((f) => fs.existsSync(path.join(workDir, ".redevkit", "bugs", b, f)))), bugs.join(", ") || "none");
     const vr = runVerdicts(doc("verification.md"));
     ok("verification.md converged+verified (last run)", vr.at(-1) === "converged+verified", vr.join(" → ") || "missing");
     const tv = runVerdicts(doc("test-report.md"));
-    ok("test went red before debug (bug exposed)", tv.includes("FAIL"), tv.join(" → "));
-    // The verify after a debug runs the tests again on the fixed code (step 1) and appends the run.
-    const lastRun = doc("test-report.md").split(/^(?=##\s+(?:Run|Execução)\b)/m).at(-1) ?? "";
-    ok(
-      "verify re-ran the tests after debug (last test run PASS, run by redevkit-verify)",
-      tv.at(-1) === "PASS" && tv.indexOf("FAIL") < tv.length - 1 && /redevkit-verify/.test(lastRun),
-      tv.join(" → "),
-    );
+    const runs = doc("test-report.md").split(/^(?=##\s+(?:Run|Execução)\b)/m).filter((r) => /^##\s+(?:Run|Execução)\b/.test(r));
+    if (expects.bug) {
+      const bugs = fs.existsSync(path.join(workDir, ".redevkit", "bugs")) ? fs.readdirSync(path.join(workDir, ".redevkit", "bugs")) : [];
+      ok(".redevkit/bugs/<slug>/{assessment,fix,test}.md", bugs.some((b) => ["assessment.md", "fix.md", "test.md"].every((f) => fs.existsSync(path.join(workDir, ".redevkit", "bugs", b, f)))), bugs.join(", ") || "none");
+      ok("test went red before debug (bug exposed)", tv.includes("FAIL"), tv.join(" → "));
+      // The verify after a debug runs the tests again on the fixed code (step 1) and appends the run.
+      const lastRun = runs.at(-1) ?? "";
+      ok(
+        "verify re-ran the tests after debug (last test run PASS, run by redevkit-verify)",
+        tv.at(-1) === "PASS" && tv.indexOf("FAIL") < tv.length - 1 && /redevkit-verify/.test(lastRun),
+        tv.join(" → "),
+      );
+      const redRun = runs.find((r) => /^##[^\n]*FAIL\s*$/m.test(r)) ?? "";
+      ok("red test run names a failure class", /product-defect|not-implemented|test-defect|environment/.test(redRun), redRun ? "" : "no FAIL run");
+    }
+    if (expects.gaps) {
+      ok("verify found the injected gap (a gaps run before the last one)", vr.slice(0, -1).includes("gaps"), vr.join(" → ") || "missing");
+      const tasks = doc("tasks.md");
+      const convergence = tasks.split(/^(?=##\s+(?:Phase|Fase)\s+\d+:)/m).filter((p) => /^##\s+(?:Phase|Fase)\s+\d+:\s*(Convergence|Convergência)/.test(p));
+      const open = convergence.flatMap((p) => p.split("\n").filter((l) => /^\s*- \[[ !]\] T\d{3}/.test(l)));
+      ok("Convergence tasks appended and all done", convergence.length > 0 && open.length === 0, convergence.length ? `${open.length} open or blocked` : "no Convergence phase");
+      // The chain reached the second verify through create → test: a test run exists after the first one.
+      ok("test ran again between the two verifies", tv.length >= 2 && tv.at(-1) === "PASS", tv.join(" → "));
+    }
     ok("correction cycle recorded in active.md", /Correction cycle|Ciclo de correção/i.test(mem("active.md")));
+    // New contract: content fingerprint in every test run, and the verify-pending flag cleared
+    // only by the converged+verified verify.
+    ok("every test run records a Tree fingerprint", runs.length > 0 && runs.every((r) => /Tree fingerprint[^\n]*sha256:[0-9a-f]{64}/.test(r)), `${runs.length} run(s)`);
+    const pending = /^- Verify pending:\s*(.*)$/m.exec(mem("active.md"))?.[1]?.trim() ?? "missing";
+    ok("Verify pending cleared after converged+verified", /^(no|não)\b/i.test(pending), pending);
   }
   return res;
 };
@@ -231,7 +324,7 @@ const main = async () => {
   const scenario = arg("scenario");
   const runtime = arg("runtime");
   if (!SCENARIOS[scenario] || !["claude", "codex"].includes(runtime)) {
-    console.error("usage: node e2e/run.mjs --scenario A|B --runtime claude|codex [--out dir]");
+    console.error(`usage: node e2e/run.mjs --scenario ${Object.keys(SCENARIOS).join("|")} --runtime claude|codex [--out dir]`);
     process.exit(2);
   }
   const checkOnly = arg("check");
@@ -248,9 +341,12 @@ const main = async () => {
     if (spec.fixture) {
       copyDir(path.join(HERE, "fixtures", spec.fixture), workDir);
       git(workDir, ["init", "-q"]);
-      git(workDir, ["add", "-A"]);
-      git(workDir, ["-c", "user.name=e2e", "-c", "user.email=e2e@example.invalid", "commit", "-q", "-m", "fixture"]);
-      commitsBefore = 1;
+      commitsBefore = 0;
+      if (spec.commitFixture !== false) {
+        git(workDir, ["add", "-A"]);
+        git(workDir, ["-c", "user.name=e2e", "-c", "user.email=e2e@example.invalid", "commit", "-q", "-m", "fixture"]);
+        commitsBefore = 1;
+      }
     }
     const init = spawnSync(process.execPath, [BIN, "init", "--yes", "--target", "both", "--lang", "pt-BR"], { cwd: workDir, encoding: "utf8" });
     fs.writeFileSync(path.join(outDir, "00-init.log"), `${init.stdout}\n${init.stderr}`);
@@ -259,9 +355,17 @@ const main = async () => {
     const steps = [];
     for (const [i, step] of spec.steps.entries()) {
       const log = path.join(outDir, `${String(i + 1).padStart(2, "0")}-${step.id}.jsonl`);
+      if (step.mutate) {
+        // Harness step: changes the project between two agent steps (no agent runs).
+        const note = step.mutate(workDir);
+        fs.writeFileSync(log.replace(/\.jsonl$/, ".log"), `${note}\n`);
+        steps.push({ id: step.id, code: 0, seconds: 0, harness: true });
+        console.log(`[${id}] ${step.id}: ${note}`);
+        continue;
+      }
       transcripts.push(log);
       console.log(`[${id}] ${step.id}…`);
-      const r = await runStep(runtime, workDir, step, log, timeoutMs);
+      const r = await runStep(runtime, workDir, step, log, step.timeoutMin ? step.timeoutMin * 60000 : timeoutMs);
       steps.push(r);
       console.log(`[${id}] ${step.id} exit=${r.code} ${r.seconds}s`);
     }
@@ -283,7 +387,7 @@ const main = async () => {
     }
     if (resume.length) fs.writeFileSync(path.join(outDir, "steps.json"), JSON.stringify({ workDir, steps: prior.steps }, null, 2));
     for (const f of fs.readdirSync(outDir)) if (f.endsWith(".jsonl")) transcripts.push(path.join(outDir, f));
-    if (fs.existsSync(path.join(workDir, ".git"))) commitsBefore = 1;
+    if (fs.existsSync(path.join(workDir, ".git"))) commitsBefore = spec.commitFixture === false ? 0 : 1;
   }
 
   const results = check({ scenario, workDir, transcripts, commitsBefore });

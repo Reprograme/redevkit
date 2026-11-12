@@ -45,7 +45,9 @@ When nothing remains, `tasks.md` stays byte-for-byte unchanged (no empty header)
 2. **Bound the scope.** The files named in the plan and tasks, plus a keyword search for each
    requirement's concepts. Do not assess beyond what the artifacts define.
 3. **Assess the code.** Every existing task is part of the intent, checked or not: a `[X]`
-   is a claim, not evidence. Check current behavior against the intent, reading the code
+   is a claim, not evidence. Judge a task by the outcome it describes, not by the literal
+   wording of a test-first `VERIFY:` ("the test fails before the implementation" was true
+   when it was observed; a test that passes now is the expected end state, not a gap). Check current behavior against the intent, reading the code
    and running the relevant tests when they exist. Record a finding only for a gap:
    - `missing`: the work is absent;
    - `partial`: it exists but does not fully satisfy the requirement;
@@ -56,9 +58,10 @@ When nothing remains, `tasks.md` stays byte-for-byte unchanged (no empty header)
 
    With little or no code yet, the whole specified scope is `missing`.
 
-   A gap already covered by an open `[ ]` task in an existing Convergence phase is not a new
-   finding: list it in the report with that task ID (for example "covered by T042") and do
-   not append it again.
+   A gap already covered by an open `[ ]` or blocked `[!]` task (in an existing Convergence
+   phase or anywhere else in `tasks.md`) is not a new finding: list it in the report with
+   that task ID (for example "covered by T042", or "covered by blocked T042") and do not
+   append it again.
 4. **Assign severity.** CRITICAL: violates a constitution MUST, or a `missing`/`contradicts`
    gap that blocks a P1 story. HIGH: `missing` or `partial` on a core requirement. MEDIUM:
    `partial` on a secondary requirement, or `unrequested` with unclear justification. LOW:
