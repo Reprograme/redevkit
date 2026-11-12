@@ -6,6 +6,53 @@ All notable changes to REDEVKIT are documented in this file. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-12
+
+### Fixed
+
+- Pipeline stalls between create, test and verify:
+  - **Code state** is now a content fingerprint (`kit/audits/code_state.py`, `Tree fingerprint`
+    in the reports). The two `git status`/`git diff` fingerprints did not see edits to
+    untracked files, so in a repository without commits, or for the new files of a feature,
+    the verify reused a stale `FAIL` (or `PASS`) run; they also differed between shells and
+    did not exist without git. Reports written by older versions are never treated as the
+    same code state.
+  - **Audit runners no longer hang**: every external command runs with no stdin, `CI=1`, its
+    own process group and a timeout that kills the whole process tree (the old timeout only
+    killed the `npm.cmd` shell on Windows); output is line-buffered; the test runner reports
+    a timeout as such and has `--timeout` and `--log`.
+  - **Test runner verdicts**: zero tests is `SKIPPED`, not `PASS`; tests under `tests/` are
+    found; a missing runner or coverage provider no longer turns into `FAIL`; counts are
+    parsed for node:test, unittest, pytest, vitest and jest.
+- CLI: a CRLF checkout no longer marks every managed file as modified (hashes ignore line
+  endings); `doctor` fails when a pipeline file is missing.
+- Memory saves edit files in place and keep their frontmatter: a long `--auto` chain could
+  rewrite `MEMORY.md` without it, which `doctor` reports as an error.
+
+### Added
+
+- **Failure classes** in `redevkit-test` (`environment`, `test-defect`, `not-implemented`,
+  `product-defect`): the handoff of a red test follows the class instead of always going to
+  the debug command; the test command corrects its own wrong tests and environment problems.
+- **`- Verify pending:`** in `active.md`: set by a debug and by a verify that ends in `gaps`
+  or `failed`, cleared only by `converged+verified`. While it is set, a green test hands off
+  to the verify (also in `--auto`) and the deploy is `BLOCKED`. It replaces the comparison of
+  dates between debug, test and verify runs.
+- **Blocked tasks** (`- [!]` with a `BLOCKED` note): a task that spent its retry budget is no
+  longer left as an open `[ ]` that every create run retries. `redevkit-create
+  --retry-blocked` tries it again; a blocked task stops the `--auto` chain.
+- **New-code gate** in `redevkit-verify`: only audit findings in files the feature created or
+  changed become tasks or `failed`; findings in the rest of the project are reported as
+  baseline.
+- `redevkit update --restore` re-adds managed files that were deleted locally; `init --force`
+  does the same.
+
+### Changed
+
+- `redevkit-test` has six steps (classification is step 4); the verify command runs steps
+  1–6 as its step 1.
+- Re-planning an approved feature sets `- Plan approved: no` until G2 approves it again.
+
 ## [1.0.3] - 2026-11-11
 
 ### Changed
