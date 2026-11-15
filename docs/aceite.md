@@ -271,3 +271,29 @@ causas; cada uma foi corrigida com teste:
 Evidência de execução: E2E real dos cenários novos C, D e E no Claude Code
 (`e2e/runs/r7` e `r8`, 2026-11-12); ver [e2e/RESULTS.md](../e2e/RESULTS.md). Testes: 63 Node e
 181 Python; `validate-kit` e markdownlint sem achados. Não refeito: o E2E no Codex.
+
+## 8. Escopos de teste: spec e global (2026-11-15)
+
+Pedido do solicitante: o `redevkit-test` testa só a especificação atual e libera um novo plan;
+o `redevkit-verify` roda a suíte inteira e é o caminho para o deploy; cada escopo tem o seu
+laço test ↔ debug com limite. Decisões tomadas com o solicitante:
+
+| Decisão | Onde está |
+| --- | --- |
+| O test roda só o conjunto de testes da spec ativa, sem argumento de arquivo ou cenário; laço test → debug → test só para `product-defect`, G5 depois de 5 rodadas de debug | `kit/commands/redevkit-test/SKILL.md`; `references/loops.md` (definição única dos laços e do G5) |
+| O verify roda a suíte inteira, mais convergência, execução e auditorias; laço verify → debug → verify, G5 depois de 3 rodadas de debug ou 3 rodadas sem convergir | `kit/commands/redevkit-verify/SKILL.md`; `loops.md` |
+| O deploy exige o último verify `converged+verified` sobre o código atual e nenhuma feature Unverified; a bandeira `- Verify pending:` sai | `references/code-state.md` § Deploy reference run; `redevkit-deploy` |
+| Um test verde permite um novo plan; a feature anterior entra em `- Unverified:` e o próximo verify a converge e audita | Fase `redevkit-specify`; `loops.md` § Unverified |
+| O debug devolve ao laço de onde veio (`- Failing scope:`); fora de um laço, pergunta e recomenda pelo contexto | `kit/commands/redevkit-debug/SKILL.md` § Handoff |
+| Antes da primeira execução da suíte inteira toda verde, falhas em testes que as features não tocaram são `baseline` | `redevkit-test` passo 4 |
+| `test_runner.py --paths`; scripts `node --test` sem argumentos posicionais aceitam arquivos | `test-audits/test_s21_test_runner_paths.py` |
+
+Uma revisão independente do kit encontrou oito problemas, todos corrigidos antes do E2E final
+(ver [e2e/RESULTS.md](../e2e/RESULTS.md), histórico). O E2E também mostrou que testes pedidos
+para comportamento fora da spec precisavam de regra própria: ficam em "Fora da spec" e o
+verify os roda.
+
+Evidência de execução: E2E real no Claude Code com o kit 1.2.0 (`e2e/runs/r9`, 2026-11-15),
+cinco cenários aprovados: B e C (laço da spec), D (laço de lacunas), E (cadeia `--auto`
+inteira até o laço global) e F (laço global com regressão fora da spec). Testes: 63 Node e 189
+Python; `validate-kit` e markdownlint sem achados. Não refeito: o E2E no Codex e o cenário A.

@@ -65,14 +65,16 @@ Search `specs/` for the feature the change belongs to (spec titles, user stories
   Completed tasks are never rewritten. In `pt-BR` artifacts the headings are
   `## Melhorias` › `### AAAA-MM-DD — <título>` and `## Fase N: Melhoria AAAA-MM-DD`. If that
   feature is not the active one, make it active in `active.md` (`- Feature:`, which also
-  starts new Verify pending and Correction cycle lines per `{{CMD:redevkit-verify}}` step 6).
+  starts new loop lines and moves the previous feature to the Unverified list as
+  `{{SKILLDIR:redevkit-test}}/references/loops.md` defines).
 - **No feature (D55):** create a lightweight spec with the light mode of
   `{{SKILL:redevkit-specify}}` (next `NNN`, template, only what the change needs: summary, the
   change's user story, acceptance scenarios, requirements delta, assumptions). Tasks follow `{{SKILL:redevkit-tasks}}` for the change only.
   No `plan.md` is written: the technical context comes from `tech.md` and `system.md`, and
   `{{SKILL:redevkit-implement}}` accepts a lightweight spec with `spec.md` + `tasks.md`.
   Record it as the active feature in `active.md` (`- Feature: specs/NNN-short-name`,
-  `- Plan approved: no` until step 4).
+  `- Plan approved: no` until step 4); the specify phase handles the loop lines and the
+  Unverified list.
 
 ### 3. Big-change check
 
@@ -136,7 +138,7 @@ result. Conflicts and risks cite the file where they were found.
 
 ## Handoff
 
-- Done → `{{CMD:redevkit-test}}` to run the full suite against the spec.
+- Done → `{{CMD:redevkit-test}}` to run the spec's tests against the spec.
 - Blocked tasks (`[!]`) → as in `{{CMD:redevkit-create}}`: resolve what they need, revise
   with `{{CMD:redevkit-plan}}` or go on to the test; never repeat this command unchanged.
 - Redirected at step 3 → `{{CMD:redevkit-plan}}` with the drafted delta.

@@ -1,7 +1,9 @@
 # Verification by execution and audits
 
 Steps 3 and 4 of redevkit-verify. The test suite is not part of this reference: step 1 of
-redevkit-verify runs it through the test procedure (or reuses a run on the same code). Principle: code that exists is not code that works. Verify
+redevkit-verify runs the whole suite through the test procedure in the global scope (or
+reuses a run on the same code). The **features in scope** are the active feature and every
+feature on the `- Unverified:` line of `active.md`. Principle: code that exists is not code that works. Verify
 by running it; never by inspection or assumption.
 
 ## Execution (step 3)
@@ -9,14 +11,15 @@ by running it; never by inspection or assumption.
 ### 1. Identify what changed
 
 Files and behavior changed since the last verification run (`git diff`, `git log` since the
-previous run, `tasks.md` items marked `[X]` since then, the bug folder after a debug).
+previous run, `tasks.md` items of the features in scope marked `[X]` since then, the bug
+folders after a debug).
 
 ### 2. Choose the method per change
 
 | Change type | Method |
 | --- | --- |
 | Bug fix | Reproduce the original scenario from `assessment.md` and confirm it no longer occurs |
-| New feature | Run the `quickstart.md` scenarios and confirm the expected outcomes |
+| New feature | Run the `quickstart.md` scenarios of each feature in scope and confirm the expected outcomes |
 | Refactor | Covered by the step 1 test run; walk the affected flows and confirm nothing broke |
 | API change | Call the endpoint and confirm status code and response shape, including error cases |
 | UI change | Render the page in a browser (Playwright via `webapp-testing`) and check the console |
@@ -29,7 +32,8 @@ previous run, `tasks.md` items marked `[X]` since then, the bug folder after a d
 2. When the Project Type has a runtime (`web`, `fullstack`, `api`, `mobile` web preview,
    `game` for the web): start the application in the background as the preview command's
    start procedure describes, wait for the HTTP health check, walk the critical flows of
-   `quickstart.md` (happy path and at least one error path), then stop it.
+   `quickstart.md` of each feature in scope (happy path and at least one error path), then
+   stop it.
 3. Anything that cannot be automated goes to **Not verified**, with the reason.
 
 ### Checklist by Project Type
@@ -70,11 +74,11 @@ previous run, `tasks.md` items marked `[X]` since then, the bug folder after a d
 5. Report each audit as `PASS`, `FAIL` or `SKIPPED (reason)`. A tool that is missing is
    `SKIPPED`, never `PASS` and never `FAIL`.
 6. Triage every finding by its file before the fix policy below. The verification judges
-   the code this feature wrote, not the debt the project already had:
+   the code the features in scope wrote, not the debt the project already had:
 
    | Bucket | Files | Effect |
    | --- | --- | --- |
-   | In scope | Files this feature created or changed: the paths of its `tasks.md` tasks, the files changed by its bug fixes (`fix.md` of its bugs), the tests listed as generated or corrected in its `test-report.md` and, in a git repository, the files `git status` and `git diff` show as changed | The fix policy below applies |
+   | In scope | Files the features in scope created or changed: the paths of their `tasks.md` tasks, the files changed by their bug fixes (`fix.md` of their bugs), the tests listed as generated or corrected in their `test-report.md` and, in a git repository, the files `git status` and `git diff` show as changed | The fix policy below applies |
    | Baseline | Any other file the project owns | Never a task, never `failed`. Notes: `baseline (pre-existing): N findings in M files` |
    | Out of scope | Code the project does not own: installed dependencies, vendored or third-party libraries, framework core files kept in the repository, generated, minified or build output, and files the project's `.gitignore` ignores | Never a task, never `failed`. Notes: `out of scope (third-party/generated): <paths>` |
 
@@ -82,7 +86,7 @@ previous run, `tasks.md` items marked `[X]` since then, the bug folder after a d
    all baseline or out of scope does not count as an audit `FAIL` for the verdict. A baseline
    finding of high or critical severity from the Security Scan is also listed under **Not
    verified** as a pre-existing risk, with the suggestion to treat it in its own feature
-   (`redevkit-enhance`); it still does not block this one. An in-scope finding that an open
+   (`redevkit-enhance`); it still does not block this verification. An in-scope finding that an open
    `[ ]` or blocked `[!]` Convergence task already covers is cited with that task ID, not
    appended again. The audits already skip
    dependency folders, build output, generated reports, minified files and what `.gitignore`
@@ -100,13 +104,16 @@ The verify command does not edit application code. Failures (for audits, in-scop
 only: Audits step 6; baseline and out-of-scope findings never count) become either:
 
 - **gaps** — non-critical audit findings and missing behavior: appended as tasks to this
-  run's `## Phase N: Convergence` (the one step 2 appended, otherwise a new one), same
-  grammar as the other tasks; or
+  run's `## Phase N: Convergence` in the active feature's `tasks.md` (the one step 2
+  appended, otherwise a new one; a finding in an Unverified feature's file cites that
+  feature), same grammar as the other tasks; or
 - **failed** — a `FAIL` test run (step 1), build failure, application that does not start,
   broken critical flow, or a Security or Lint failure of error severity. The handoff follows
   the cause: a test run that failed by `environment` is fixed outside the code, one that
   failed by `not-implemented` goes to the create command, everything else to the debug
-  command.
+  command, which hands back to the verify (global loop, G5 after 3 debug rounds).
+  Test failures classified `baseline` (pre-existing, before the project's first fully green
+  whole-suite run) never count as failed.
 
 ## Verdict
 

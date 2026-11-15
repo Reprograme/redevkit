@@ -9,17 +9,20 @@ type: test-report
 
 <!--
 Append-only. Add one "Run" section at the end of this file for each execution.
-Never edit or delete a past run. Only feature-wide runs (Scope: feature) count: the latest one
-is the run redevkit-verify (step 1) may reuse, and the deploy reference is chosen as
-redevkit-test/references/code-state.md describes; both compare code states there.
-Keep these tokens in English: PASS, FAIL, SKIPPED, MISSING, clean, dirty, and the failure
-classes product-defect, not-implemented, test-defect, environment.
+Never edit or delete a past run. Scope spec: redevkit-test ran the tests of this feature
+only (spec (full suite) when the test command cannot select files). Scope global:
+redevkit-verify (step 1) ran the whole suite. Only runs of the whole suite may be reused by
+redevkit-verify; the deploy never takes a test run as its reference (it takes the latest
+verify, redevkit-test/references/code-state.md).
+Keep these tokens in English: PASS, FAIL, SKIPPED, MISSING, clean, dirty, the scopes, and the
+failure classes product-defect, not-implemented, test-defect, environment, baseline.
 -->
 
 ## Run [YYYY-MM-DD HH:MM] — [PASS | FAIL]
 
 - **Run by**: [redevkit-test | redevkit-verify (step 1)]
-- **Scope**: [feature | file or scenario: …]
+- **Scope**: [spec | spec (full suite) | global]
+- **Spec test set** (scope spec): [test files passed to the runner, or the reason the whole suite ran]
 
 ### Code state
 
@@ -47,8 +50,10 @@ Tree fingerprint is equal.
 
 - **Total**: [N] · **Passed**: [N] · **Failed**: [N] · **Skipped**: [N]
 - **Failures** (one line each, with its class):
-  - `[TEST ID]` — [product-defect | not-implemented | test-defect | environment] — [assertion or error excerpt]
+  - `[TEST ID]` — [product-defect | not-implemented | test-defect | environment | baseline] — [assertion or error excerpt]
 - **Failure class** (all that remain on a FAIL run; none on PASS): [product-defect | not-implemented | test-defect | environment | none]
+- **Baseline failures** (scope global, before the project's first fully green whole-suite run; never make the run FAIL): [test — file, or none]
+- **Outside the spec** (tests generated on request for behavior outside the spec, and in scope spec (full suite) every other test of the suite; never make the run FAIL, the verify judges them): [test — file — result, or none]
 
 ```text
 [SHORT OUTPUT EXCERPT: final summary lines or the failing assertion]
@@ -75,9 +80,9 @@ Tree fingerprint is equal.
 **[PASS | FAIL]** — [one sentence with the decisive evidence].
 
 <!--
-PASS only when every command exited 0, no test failed and every automatable acceptance
-scenario maps to a passing test. Anything else is FAIL. Scenarios that cannot be automated
+PASS only when every command exited 0 (scope global: or failed only by baseline failures),
+no other test failed and every automatable acceptance scenario maps to a passing test. Anything else is FAIL. Scenarios that cannot be automated
 here go to Not verified: they do not make the run FAIL and are never PASS.
 -->
 
-- **Next step**: [PASS: redevkit-verify when a verify is pending, otherwise redevkit-deploy, suggesting redevkit-verify first | FAIL, by class: environment → fix it and run again; not-implemented → redevkit-create; product-defect → redevkit-debug | inside redevkit-verify: the verification continues (PASS) or stops as failed (FAIL)]
+- **Next step**: [PASS: redevkit-verify (the only way to the deploy), or redevkit-plan for the next feature | FAIL, by class: environment → fix it and run again; not-implemented → redevkit-create; product-defect → redevkit-debug (test cycle N/5) | inside redevkit-verify: the verification continues (PASS) or stops as failed (FAIL)]

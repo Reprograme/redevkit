@@ -18,7 +18,8 @@ description: Test-driven development (RED-GREEN-REFACTOR), the REDEVKIT default;
 - **Bugs:** the regression test that reproduces the bug comes before the fix
   (`{{SKILL:systematic-debugging}}`, artifacts in `.redevkit/bugs/<slug>/`).
 - **Test runs:** `{{CMD:redevkit-test}}` fills the gaps between acceptance scenarios and tests,
-  runs the full suite and appends the run to `specs/NNN-name/test-report.md`.
+  runs the active spec's tests and appends the run to `specs/NNN-name/test-report.md`;
+  `{{CMD:redevkit-verify}}` runs the whole suite.
 
 If the constitution waives TDD for this project, still write tests for each user story, but
 the order is free.

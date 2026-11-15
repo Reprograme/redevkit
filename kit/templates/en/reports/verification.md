@@ -33,10 +33,11 @@ Same script as the test report: redevkit-test/references/code-state.md.
 
 | Field | Value |
 | --- | --- |
-| Test run | `test-report.md`, run [YYYY-MM-DD HH:MM] — [PASS \| FAIL] |
+| Test run | `test-report.md`, run [YYYY-MM-DD HH:MM] — [PASS \| FAIL] — scope [global \| spec (full suite)] |
 | Source | [ran in step 1 \| reused: same code state as the current code] |
-| Failure class (FAIL run) | [product-defect \| not-implemented \| environment \| none] |
-| Verify pending at the start | [no \| debug <slug> \| gaps \| failed] |
+| Failure class (FAIL run) | [product-defect \| not-implemented \| test-defect \| environment \| none] |
+| Baseline failures | [N pre-existing failing tests (listed under Not verified) \| none] |
+| Features in scope | [specs/NNN-name (active), plus each Unverified feature covered, or none] |
 
 <!--
 A FAIL test run ends the verification here: verdict failed, and the Convergence, Execution
@@ -45,8 +46,8 @@ and Audits sections are SKIPPED (test run FAIL).
 
 ### Convergence
 
-- **Result**: converged / gaps found
-- **Tasks appended**: `Phase [N]: Convergence` in `tasks.md`, [T0NN–T0NN], or none
+- **Result** (per feature in scope): [specs/NNN-name: converged / gaps found]
+- **Tasks appended**: `Phase [N]: Convergence` in the active feature's `tasks.md`, [T0NN–T0NN] (with the feature each one comes from), or none
 
 | Gap | Source (spec, plan or task) | Task appended |
 | --- | --- | --- |
@@ -96,13 +97,13 @@ Baseline and out-of-scope findings are listed in Notes and never change the verd
 **[converged+verified | gaps | failed]** — [one or two sentences with the decisive evidence].
 
 <!--
-converged+verified: test run PASS; no convergence gaps; build and critical flows pass; no audit
-FAIL with in-scope findings (baseline findings in files this feature did not touch and findings
+converged+verified: whole-suite test run PASS (baseline failures aside); no convergence gaps in any feature in scope; build and critical flows pass; no audit
+FAIL with in-scope findings (baseline findings in files the features in scope did not touch and findings
 in third-party or generated code are listed in Notes and never become tasks).
 gaps: test run PASS and execution passes, but convergence or non-critical audits appended tasks.
 failed: the test run is FAIL, or the build, a critical flow or a blocking audit fails.
 -->
 
-- **Correction cycle** (after this run): failed after debug [N]/2 · rounds without convergence [N]/3
-- **Verify pending** (after this run): [no | gaps | failed]
-- **Next step**: [redevkit-deploy | redevkit-create or redevkit-enhance (gaps) | redevkit-debug (failed) | redevkit-create (failed: not-implemented) | fix the environment and run redevkit-verify again (failed: environment) | G5 reached: waiting for the user]
+- **Correction cycle** (after this run): debug rounds [N]/3 · rounds without convergence [N]/3
+- **Unverified** (after this run): [none | specs/NNN-name, …]
+- **Next step**: [redevkit-deploy (user-triggered) or redevkit-plan | redevkit-create or redevkit-enhance (gaps) | redevkit-debug (failed) | redevkit-create (failed: not-implemented) | fix the environment and run redevkit-verify again (failed: environment) | G5 reached: waiting for the user]

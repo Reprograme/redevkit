@@ -1,6 +1,6 @@
 ---
 name: redevkit-debug
-description: Fix a failure - reproduce, root cause, regression test first, fix, bug record; then verify.
+description: Fix a failure - reproduce, root cause, regression test first, fix, bug record; then retest.
 short-description: Fix a bug with a regression test
 argument-hint: "[--auto] <symptom, error or failing test>"
 ---
@@ -9,25 +9,29 @@ argument-hint: "[--auto] <symptom, error or failing test>"
 
 **Input:** {{ARGS}}
 
-Flags: `--auto` continues to the verify command. The rest of the input describes the symptom
+Flags: `--auto` continues to the command this run hands back to. The rest of the input describes the symptom
 (error message, failing test, unexpected behavior). With no input, take the failing tests of
-the latest `FAIL` run in the active feature's `test-report.md`. Write artifacts in {{LANG}};
+the latest `FAIL` run of the active feature (`test-report.md`, or `verification.md` when the
+Failing scope is `global`). Write artifacts in {{LANG}};
 answer the user in the user's language.
 
 ## Purpose
 
 Investigate and fix one problem with evidence (D26): reproduce it, find the root cause, write
 a regression test that fails, fix, confirm. Every step leaves a file in
-`.redevkit/bugs/<slug>/`. The hand-off to the verify command is mandatory.
+`.redevkit/bugs/<slug>/`. The run hands back to the loop that sent the failure (`active.md` ›
+Last results › `- Failing scope:`): `spec` → the test command, `global` → the verify command;
+outside a loop it asks. The loops and their limits are defined in
+`{{SKILLDIR:redevkit-test}}/references/loops.md`.
 
 ## Preconditions
 
 - Memory initialized. If not, suggest `{{CMD:redevkit-new}}` and stop.
-- A symptom: the input, or a `FAIL` run in `test-report.md`. If neither exists, ask for the
+- A symptom: the input, or a `FAIL` run in `test-report.md` or `verification.md`. If neither exists, ask for the
   error, the steps to reproduce and the expected vs actual behavior.
-- G5 check: if the Correction cycle line names the active feature and says G5 was reached,
-  present the G5 question before starting (answers at a precondition: `{{CMD:redevkit-verify}}`
-  step 6).
+- G5 check: if the Test cycle or the Correction cycle line names the active feature and says
+  G5 was reached, present the G5 question before starting (answers at a precondition:
+  `loops.md` § G5).
 - Templates resolve per T10: `.redevkit/templates/overrides/reports/<name>` if it exists,
   otherwise `.redevkit/templates/reports/<name>` (`bug-assessment.md`, `bug-fix.md`,
   `bug-test.md`).
@@ -35,7 +39,7 @@ a regression test that fails, fix, confirm. Every step leaves a file in
 ## Memory phase 1
 
 Recall per `{{SKILL:redevkit-memanager}}`: `MEMORY.md`, `active.md` (Known issues, Last
-results), the invariants in `system.md`, `tech.md` (build and test commands). Read
+results: Failing scope, Test cycle, Correction cycle), the invariants in `system.md`, `tech.md` (build and test commands). Read
 `.redevkit/memory/constitution.md`. Print `📖 Memory loaded. Last entry: YYYY-MM-DD.`
 
 ## Questions
@@ -78,17 +82,19 @@ Follow `{{SKILL:redevkit-bug-assess}}` with the debugging persona and
 
 Cannot reproduce: record what was tried and ask for more information; do not guess a fix. In
 `--auto` or a non-interactive run, stop the chain here with the question pending: no fix, no
-handoff to verify. Memory: only `- Bug <slug>: open` in Known issues, no `- Debug:` line
-(nothing was changed, so nothing is pending for the verify).
+handoff. Memory: only `- Bug <slug>: open` in Known issues, no `- Debug:` line and no
+counter change (nothing was changed).
 
 Verdict `invalid` (expected behavior, misuse, duplicate): stop. Write no `- Debug:` or
-`- Bug` line, report the reason and suggest `{{CMD:redevkit-status}}`; no handoff to verify.
+`- Bug` line, report the reason and suggest `{{CMD:redevkit-status}}`; no handoff.
 
 Not a bug in the code (decide it here, before any fix, and write no `- Debug:` or `- Bug`
 line):
 
 - **The test is wrong** (it contradicts the spec, or fails by its own error): stop and hand
-  off to `{{CMD:redevkit-test}}` with the evidence; that command corrects test defects.
+  off to `{{CMD:redevkit-test}}` with the evidence (test name, spec scenario or error); that
+  command corrects test defects, and asks the user when it disagrees. This handback counts as
+  a debug round of the loop (`loops.md`).
 - **The behavior was never built** (it belongs to an open `[ ]` or blocked `[!]` task of
   `tasks.md`): stop and hand off to `{{CMD:redevkit-create}}`.
 - **The suite cannot run** (missing dependency or tool, timeout, port in use): stop and name
@@ -115,7 +121,8 @@ original reproduction. `test.md` records the result: `verified`, `partial` or `f
 ### 5. Light verification (D25)
 
 On the changed files, with evidence: build or type check, touched tests, lint. This is not the
-full verification: the verify command runs the full test procedure and the rest next.
+test run: the command this run hands back to runs the tests next (the spec tests, or the
+whole suite and the full verification).
 
 ## Gates that apply
 
@@ -134,9 +141,10 @@ full verification: the verify command runs the full test procedure and the rest 
 
 Save per `{{SKILL:redevkit-memanager}}`: `active.md` › Last results › Debug (active feature, bug
 slug, date and time read from the system clock, `test.md` result, link to the bug folder),
-`- Verify pending: specs/NNN-short-name — debug <slug>` whenever this run changed code or
-tests (rule in `{{CMD:redevkit-verify}}` step 6: the verify uses it to know that it follows a
-debug, and the deploy stays blocked until that verify ends in `converged+verified`) and Known issues (`- Bug <slug>: open — .redevkit/bugs/<slug>/`; only a `converged+verified`
+the debug rounds of the loop it hands back to whenever this run changed code or tests, or sent
+the failure back as a wrong test (Test
+cycle for the test command, Correction cycle for the verify command; rules in `loops.md`; delete
+an obsolete `- Verify pending:` line) and Known issues (`- Bug <slug>: open — .redevkit/bugs/<slug>/`; only a `converged+verified`
 verify of that feature closes it; a bug debugged with no active feature is closed by the user
 through `{{SKILL:redevkit-memanager}}`), `changelog.md`
 (Unreleased › Fixed, only when `test.md` says `verified`), `system.md` when the root cause
@@ -156,7 +164,16 @@ cause without a test that confirms it.
 - Not a bug in the code (step 2) → `{{CMD:redevkit-test}}` for a wrong test,
   `{{CMD:redevkit-create}}` for behavior never built, no command for an environment problem;
   `--auto` continues to those commands and stops on the environment problem.
-- Otherwise always → `{{CMD:redevkit-verify}}` (mandatory after a debug, whatever `test.md` says): it
-  runs the test procedure on the fixed code, then the full verification, and decides whether
-  the code can go to deploy.
-- `--auto`: continue with `{{CMD:redevkit-verify}}` `--auto`.
+- Otherwise, by the Failing scope of the active feature (whatever `test.md` says):
+  - `spec` → `{{CMD:redevkit-test}}`: it runs the spec tests on the fixed code; its `PASS`
+    leads to the verify.
+  - `global` → `{{CMD:redevkit-verify}}`: it runs the whole suite on the fixed code, then the
+    full verification.
+  - `none`, another feature or no line (a debug outside a loop) → ask where to go, with the
+    recommendation taken from the context: `{{CMD:redevkit-verify}}` (Recommended) when the
+    symptom came from a verify run, a build, a flow, an audit, a test of another feature or
+    production; `{{CMD:redevkit-test}}` (Recommended) when it came from a test of the active
+    spec or from the user's description of its behavior. In `--auto` or a non-interactive run,
+    adopt the recommendation and record it in `fix.md`.
+- The deploy is never next: only a verify that ends in `converged+verified` opens it.
+- `--auto`: continue with the chosen command `--auto`.

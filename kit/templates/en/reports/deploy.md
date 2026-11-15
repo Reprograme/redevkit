@@ -21,22 +21,22 @@ failed, rolled-back, aborted, clean, dirty.
 
 | Check | Reference (from report) | Current | Result |
 | --- | --- | --- | --- |
-| Verify pending | [no / yes: debug <slug>, gaps or failed] | — | OK / BLOCKED |
-| Reference run | [test-report.md, run YYYY-MM-DD HH:MM, run by redevkit-test / redevkit-verify (step 1)] | — | — |
-| Reference verdict | [PASS] | — | OK / BLOCKED |
+| Reference run | [verification.md, run YYYY-MM-DD HH:MM] | — | — |
+| Reference verdict | [converged+verified] | — | OK / BLOCKED |
+| Unverified features | — | [none / specs/NNN-name, …] | OK / BLOCKED |
 | Tree fingerprint | `sha256:[HASH]` | `sha256:[HASH]` | OK / BLOCKED |
 | Commit (HEAD) | `[SHA]` | `[SHA]` | — |
 | Working tree | [clean / dirty] | [clean / dirty] | — |
 
 - **Precondition status**: OK / BLOCKED / OVERRIDDEN
-- **Verify suggested**: [not needed (the latest verify is converged+verified on this same code) / suggested, user chose: verify first or deploy now]
 - **Override reason**: [required when OVERRIDDEN, written in the user's words; otherwise none]
 
 <!--
 Reference run and comparison: redevkit-test/references/code-state.md (the single
-definition). BLOCKED when a verify is pending, when there is no reference, when the latest
-feature-wide test run is not PASS, when the Tree fingerprint differs (the code changed after
-it) or when the code state cannot be computed. Commit and working tree are context only.
+definition). The reference is the latest verify of the active feature, never a test run.
+BLOCKED when there is no verify run, when it is not converged+verified, when a feature is
+still Unverified, when the Tree fingerprint differs (the code changed after it) or when the
+code state cannot be computed. Commit and working tree are context only.
 -->
 
 ## Deploy plan

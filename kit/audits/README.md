@@ -98,6 +98,7 @@ tools with their own configuration). Before each check they print
 | `project` | Project directory (default `.`) |
 | `--timeout SECONDS` | Time limit of the test command (default `300`). When it expires the whole process tree is killed and the result is a timeout (see [Exit codes](#exit-codes)) |
 | `--log FILE` | Write the full combined output (stdout and stderr, in order) of the test command to `FILE`; the console shows only its last 40 lines |
+| `--paths FILE [FILE ...]` | Run only these test files (relative to the project): the spec scope of `redevkit-test`. Vitest, Jest (directly or through `npm test --`), a `node --test` script without positional arguments, pytest and unittest take files; any other test command runs the whole suite and the output says `Scope: full suite (<reason>)` (JSON `"scope": "full suite"`, `"paths_ignored"`). A missing path or one outside the project is a usage error (exit `2`) |
 | `--coverage` | Collect coverage when the tool for it is installed (Vitest with `@vitest/coverage-v8` or `@vitest/coverage-istanbul`, Jest, pytest with `pytest-cov`). Otherwise the suite runs without coverage and one line says `SKIPPED (coverage provider not installed)` or `SKIPPED (coverage not supported for this test command)` |
 
 ## Excluding paths

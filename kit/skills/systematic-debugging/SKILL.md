@@ -90,7 +90,8 @@ Find the root cause, not just the symptom.
 2. **GREEN:** make the smallest change that fixes the root cause.
 3. Run the regression test, then the relevant suite as `{{SKILL:redevkit-bug-test}}` says
    (tests of the changed modules and of the feature; the full suite only when the project has
-   no narrower command). The full suite runs next, in `{{CMD:redevkit-verify}}` step 1.
+   no narrower command). The tests run again next: the spec's tests in
+   `{{CMD:redevkit-test}}`, or the whole suite in `{{CMD:redevkit-verify}}` step 1.
 4. Search for the same pattern elsewhere in the code.
 5. Record the verdict: `verified` (bug gone, relevant suite green), `partial` (bug gone, other
    failures remain) or `failed`.
@@ -104,8 +105,10 @@ Find the root cause, not just the symptom.
 - [ ] Root cause documented
 ```
 
-After a fix, `{{CMD:redevkit-verify}}` is mandatory: it runs the tests again on the fixed code.
-Its correction cycle stops for the user at gate G5 (rules in `{{CMD:redevkit-verify}}` step 6).
+After a fix, the tests run again on the fixed code: `{{CMD:redevkit-test}}` when the failure
+came from the spec's tests, `{{CMD:redevkit-verify}}` when it came from the whole suite or the
+full verification. Each loop stops for the user at gate G5 (rules in
+`{{SKILLDIR:redevkit-test}}/references/loops.md`).
 
 ## Investigation Checklist
 

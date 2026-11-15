@@ -15,7 +15,8 @@ One rule for tests and audits:
 - **During implementation (light verification):** the project's own build, type-check, lint
   and the tests you touched, with the commands from `.redevkit/memory/tech.md`. Not the audit
   scripts.
-- **Full suite:** `{{CMD:redevkit-test}}` step 3 (Python found → `.redevkit/audits/test_runner.py`
+- **Spec tests and whole suite:** `{{CMD:redevkit-test}}` step 3 (the whole suite in
+  `{{CMD:redevkit-verify}}` step 1) (Python found → `.redevkit/audits/test_runner.py`
   per `.redevkit/audits/README.md`, exit `3` → the `tech.md` test command; no Python → the
   `tech.md` command).
 - **Audits** (`.redevkit/audits/*.py`): only inside `{{CMD:redevkit-verify}}` step 4, as one

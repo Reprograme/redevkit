@@ -284,41 +284,44 @@ Nenhum comando declara sucesso sem evidência: o comando que rodou e o resultado
 (código de saída, contagens de teste, status HTTP). Uma checagem que não rodou aparece como
 `SKIPPED (motivo)`, nunca como `PASS`.
 
-- **Test** (`redevkit-test`): mapeia cada cenário de aceite da spec (e do `quickstart.md`)
-  para um teste, gera os que faltam sem mexer no código da aplicação e roda a suíte completa,
-  pelo `test_runner.py` quando há Python ou pelo comando de teste do projeto, sempre de forma
-  não interativa e com limite de tempo. O veredito é
+- **Test** (`redevkit-test`): testa **só a spec ativa** (escopo `spec`). Mapeia cada cenário
+  de aceite da spec (e do `quickstart.md`) para um teste, gera os que faltam sem mexer no
+  código da aplicação e roda o **conjunto de testes da spec**: os testes mapeados, os gerados
+  nesta execução, os arquivos de teste das tarefas e os testes de regressão dos bugs da
+  feature. Roda pelo `test_runner.py --paths` quando há Python, ou pelo comando de teste do
+  projeto, sempre de forma não interativa e com limite de tempo; quando o comando de teste não
+  aceita arquivos, roda a suíte inteira e registra o escopo `spec (full suite)`. O veredito é
   `PASS` só quando todos os comandos saíram com 0, nenhum teste falhou e todo cenário
   automatizável mapeia para um teste que passa; qualquer outra coisa é `FAIL`. Um cenário
   que não dá para automatizar no ambiente fica `SKIPPED (motivo)` em **Não verificado**: não
   reprova a execução e nunca conta como `PASS`. Toda falha recebe uma classe, e o handoff
-  segue a classe (ver [Classes de falha](#classes-de-falha)).
+  segue a classe (ver [Classes de falha](#classes-de-falha)). Um `PASS` prova a feature, não o
+  projeto: o próximo passo é o verify (o único caminho para o deploy) ou um novo plan.
 - **Debug** (`redevkit-debug`): reproduz o problema, testa hipóteses com evidência, escreve
   primeiro o teste de regressão que falha, aplica a menor correção e confirma. O resultado do
-  bug é `verified`, `partial` ou `failed`. Qualquer que seja o resultado, o debug termina,
-  marca `- Verify pending:` no `active.md` e segue para o verify, que é obrigatório depois de
-  um debug. Quando a causa não é um bug do código (o teste está errado, o comportamento nunca
-  foi construído, o ambiente não deixa a suíte rodar), o debug para sem corrigir e devolve ao
-  test, ao create ou a você.
-- **Verify** (`redevkit-verify`): começa pelos testes. Se a última execução da feature
-  inteira (escopo `feature`) no `test-report.md` foi sobre o mesmo estado do código atual (o
-  mesmo Tree fingerprint), ela é reaproveitada (um `PASS`
-  segue, um `FAIL` encerra com `failed`); senão, o verify executa o procedimento do
-  `redevkit-test` e grava a execução no `test-report.md`. Como o debug muda o
-  código, depois dele os testes rodam de novo, inclusive quando a correção está num arquivo
-  novo, ainda fora do git; se a correção não mudou nada, o `FAIL` é
-  reaproveitado e conta como failed após debug (um debug que não reproduz o problema para e
-  não segue para o verify). Com os testes
-  verdes, a fase `redevkit-converge` compara o código com spec, plano e tarefas, e cada lacuna
-  vira uma tarefa anexada na fase de Convergência; depois vêm a execução real (build e, quando
-  o Tipo de projeto tem runtime, subir a aplicação e percorrer os fluxos críticos do
-  `quickstart.md`, sem rodar a suíte de novo) e as auditorias (uma execução de
-  `verify_all.py` ou `checklist.py`, ou `SKIPPED` sem Python). As auditorias julgam o código
-  que a feature escreveu: só os achados em arquivos que ela criou ou alterou viram tarefa ou
-  `failed`; achados no resto do projeto são **linha de base** (dívida que já existia) e achados
-  em código de terceiros ou gerado ficam fora do escopo, e nenhum dos dois muda o veredito. O veredito é `converged+verified`, `gaps` ou
-  `failed`. Uma spec leve do enhance (sem `plan.md`) também é verificada: o contexto técnico
-  vem do `tech.md`.
+  bug é `verified`, `partial` ou `failed`. Qualquer que seja o resultado, o debug devolve para
+  o laço que mandou a falha: o test (escopo `spec`) ou o verify (escopo `global`); chamado fora
+  de um laço, pergunta para onde ir e recomenda pelo contexto. Quando a causa não é um bug do
+  código (o teste está errado, o comportamento nunca foi construído, o ambiente não deixa a
+  suíte rodar), o debug para sem corrigir e devolve ao test, ao create ou a você.
+- **Verify** (`redevkit-verify`): verifica no **escopo global**. Começa pela **suíte
+  inteira**: se a última execução da suíte inteira no `test-report.md` (escopo `global`, ou um
+  `PASS` em `spec (full suite)`) foi sobre o mesmo estado do código atual (o mesmo Tree
+  fingerprint), ela é reaproveitada (um `PASS` segue, um `FAIL` encerra com `failed`); senão,
+  o verify executa o procedimento do `redevkit-test` no escopo `global` e grava a execução no
+  `test-report.md`. Com os testes verdes, a fase `redevkit-converge` compara o código com
+  spec, plano e tarefas da feature ativa e de cada feature da lista
+  [Unverified](#features-não-verificadas), e cada lacuna vira uma tarefa anexada na fase de
+  Convergência; depois vêm a execução real (build e, quando o Tipo de projeto tem runtime,
+  subir a aplicação e percorrer os fluxos críticos do `quickstart.md`, sem rodar a suíte de
+  novo) e as auditorias (uma execução de `verify_all.py` ou `checklist.py`, ou `SKIPPED` sem
+  Python). As auditorias julgam o código que as features no escopo escreveram: só os achados
+  em arquivos que elas criaram ou alteraram viram tarefa ou `failed`; achados no resto do
+  projeto são **linha de base** (dívida que já existia) e achados em código de terceiros ou
+  gerado ficam fora do escopo, e nenhum dos dois muda o veredito. O veredito é
+  `converged+verified`, `gaps` ou `failed`, e só um `converged+verified` libera o deploy. Uma
+  spec leve do enhance (sem `plan.md`) também é verificada: o contexto técnico vem do
+  `tech.md`.
 
 ### Classes de falha
 
@@ -328,50 +331,72 @@ classe a cada falha e a registra no relatório (**Failure class**); o handoff se
 | Classe | Quando | Para onde vai |
 | --- | --- | --- |
 | `environment` | A suíte não rodou ou não terminou: dependência ou ferramenta ausente, quebra antes de qualquer teste, tempo esgotado (`[TIMEOUT]`), porta ocupada | Não é bug. Corrige-se o ambiente e roda-se o test de novo; nunca vai para o debug |
+| `baseline` | Só no escopo `global`, enquanto o projeto nunca teve uma execução da suíte inteira toda verde (`PASS` sem nenhuma falha de baseline): um teste num arquivo que as features no escopo não criaram nem alteraram, cuja falha não aponta para código que elas mudaram | Já falhava antes. Fica listado em **Falhas de baseline** e em Não verificado; não vira tarefa, não vai ao debug e não reprova a execução. Depois da primeira execução da suíte inteira toda verde, todo teste vermelho é regressão |
 | `test-defect` | O teste está errado: contradiz a spec ou falha por erro próprio | O próprio test corrige o teste (nunca o código), citando o cenário da spec como evidência, e roda a suíte mais uma vez |
 | `not-implemented` | O comportamento pertence a uma tarefa aberta `[ ]` ou bloqueada `[!]` | `redevkit-create` |
-| `product-defect` | O teste bate com a spec e o código se comporta de outro jeito | `redevkit-debug` |
+| `product-defect` | O teste bate com a spec e o código se comporta de outro jeito | `redevkit-debug`, que devolve ao laço de onde veio |
 
 O veredito da execução continua sendo `PASS` ou `FAIL`: uma suíte que não rodou nunca é
 verde. O que muda é o caminho de saída.
 
-### Verify pendente
+### Laços de teste e G5
 
-A linha `- Verify pending:` em `.redevkit/memory/active.md` › Últimos resultados diz que a
-feature precisa de um verify que termine em `converged+verified` antes do deploy. É uma
-bandeira, então nenhum comando compara datas para saber o que veio antes:
+A definição exata está em `redevkit-test/references/loops.md`. Há dois laços, um por escopo:
 
-- o debug a liga (`debug <slug>`) quando muda código;
-- o verify a liga quando termina em `gaps` ou `failed`;
-- só um verify `converged+verified` a desliga (`no`).
+| Escopo | Comando | O que roda | Laço | Limite |
+| --- | --- | --- | --- | --- |
+| `spec` | `redevkit-test` | Só os testes da spec ativa | test → debug → test | 5 rodadas de debug → G5 |
+| `global` | `redevkit-verify` | A suíte inteira, convergência, execução e auditorias | verify → debug → verify | 3 rodadas de debug, ou 3 rodadas sem convergir → G5 |
 
-Enquanto ela está ligada, um test `PASS` aponta para o verify (não para o deploy), o
-`--auto` segue até ele e o deploy fica `BLOCKED`. Assim o laço
-gaps → create → test → verify se fecha sozinho, limitado pelo ciclo de correção.
+Só defeitos de código entram num laço: uma falha `product-defect` e, no verify, um build que
+quebra, uma aplicação que não sobe, um fluxo quebrado ou uma auditoria bloqueante. O estado
+dos laços fica em `.redevkit/memory/active.md` › Últimos resultados, em linhas da feature
+ativa (os rótulos ficam em inglês):
 
-### Ciclo de correção e G5
+- `- Failing scope:` (`spec`, `global` ou `none`): o test grava `spec` quando a falha é do
+  debug, o verify grava `global` (também quando o G5 segura o handoff); o debug lê a linha para saber se devolve ao test ou
+  ao verify. Sem linha (debug chamado por você fora de um laço), o debug pergunta.
+- `- Test cycle:` (laço `spec`): o debug soma 1 rodada sempre que devolve ao test (corrigiu
+  código ou testes, ou devolveu dizendo que o teste está errado); um test `PASS` zera. Se o
+  test discorda de um debug que disse "o teste está errado", vira uma pergunta de spec para
+  você, e a falha não volta ao debug. Com 5 rodadas e o test ainda vermelho, em vez de ir para o debug
+  de novo, dispara o G5.
+- `- Correction cycle:` (laço `global`): o debug soma 1 rodada quando devolve ao verify (zera
+  com `converged+verified` ou `gaps`); o verify soma 1 rodada sem convergir a cada `gaps` e a
+  cada `failed` que vai para o create (só zera com `converged+verified`). Um `failed` que vai
+  para o debug é contado pelas rodadas de debug, para que o limite de 3 debugs valha. Execuções de testes não
+  mexem nesse contador, então o ciclo gaps → create → test → verify também chega ao limite. Um
+  `failed` só por `environment`, ou que reaproveitou um `FAIL` sobre o mesmo código, não altera
+  os contadores. O G5 dispara num `failed` com 3 rodadas de debug, ou com 3 rodadas sem
+  convergir.
 
-Esta seção é a referência da documentação para o G5; a regra exata está no passo 6 do
-`redevkit-verify`. O verify mantém dois contadores da feature ativa em
-`.redevkit/memory/active.md` › Últimos resultados, na linha `- Correction cycle:`:
+No G5 a cadeia para, mesmo no `--auto`, e pergunta:
 
-- **failed após debug:** soma 1 quando o veredito é `failed` e o verify começou com a
-  bandeira `Verify pending` em `debug <slug>`, seja qual for o teste ou o bug; zera com
-  `converged+verified` ou `gaps`.
-- **rodadas sem convergir:** soma 1 a cada veredito diferente de `converged+verified`; só zera
-  com `converged+verified`. Execuções de testes não mexem nele, então o ciclo
-  gaps → create → test → verify também chega ao limite.
+1. Revisar o plano (recomendado): zera os contadores do laço e segue para o `redevkit-plan`.
+2. Continuar: zera os contadores do laço e segue o handoff do veredito (o debug para um
+   defeito de código, o create para lacunas).
+3. Parar: o G5 fica pendente; o próximo comando do laço pergunta de novo.
 
-Um `failed` que só reaproveitou um `FAIL` sem debug no meio não altera os contadores, nem um
-`failed` cuja única classe de falha é `environment` (o código não chegou a ser julgado). Os dois
-zeram quando a feature ativa muda ou quando você escolhe continuar no G5. O G5 dispara com 2
-failed após debug ou 3 rodadas sem convergir. A cadeia para, mesmo no `--auto`, e pergunta:
+Assim, nenhum caminho do pipeline fica em loop. A linha `- Verify pending:` das versões até a
+1.1 não existe mais: o deploy passou a exigir um verify, e a linha é apagada na próxima
+gravação.
 
-1. Revisar o plano (recomendado): zera os contadores e segue para o `redevkit-plan`.
-2. Continuar: zera os contadores e segue o handoff normal.
-3. Parar: o G5 fica pendente; o próximo verify ou debug pergunta de novo.
+### Features não verificadas
 
-Assim, nenhum caminho do pipeline fica em loop.
+Depois de um test `PASS` você pode seguir direto para um novo `redevkit-plan`. Quando a
+feature ativa muda, a anterior entra na linha `- Unverified:` do `active.md`, a menos que o
+último verify dela seja `converged+verified` sobre o código atual. O próximo verify converge
+e audita a feature ativa e todas as da lista, e a esvazia (`none`) quando termina em
+`converged+verified`. Uma lacuna de uma feature da lista vira tarefa de Convergência no
+`tasks.md` da feature ativa (citando a spec de origem), porque o create e o test trabalham só
+na feature ativa. Enquanto a lista não está vazia, o deploy fica `BLOCKED`; uma feature
+abandonada sai da lista quando você pede ao `redevkit-memanager`, com o motivo no
+`changelog.md`. Assim nenhuma feature pula a convergência e as auditorias.
+
+Um teste fora do conjunto da spec não decide o test: os testes que você pede para
+comportamento fora da spec são gerados, mas ficam em **Fora da spec**, e no escopo
+`spec (full suite)` (o comando de teste não seleciona arquivos) o mesmo vale para o resto da
+suíte. Quem julga a suíte inteira é o verify.
 
 ### Estado do código
 
@@ -382,15 +407,12 @@ conteúdo dos arquivos do projeto (sem `.redevkit/`, `specs/`, as pastas dos age
 dependências e saída de build): muda quando qualquer arquivo é criado, apagado ou editado,
 rastreado pelo git ou não, e não depende do shell, do histórico de commits nem de existir
 git. Dois estados são o mesmo quando o fingerprint é igual; um commit feito depois do teste
-não o altera. O verify usa esse valor para decidir se reaproveita a última execução de
-testes. Sem Python o fingerprint fica `n/a`, nada é reaproveitado e o deploy pede que você
-instale o Python ou confirme por override. O deploy faz assim:
-
-- **Verify pendente** (depois de um debug, ou de um verify que terminou em `gaps` ou
-  `failed`): `BLOCKED` até um `redevkit-verify` terminar em `converged+verified`.
-- Senão, a referência é a **última** execução da feature inteira no `test-report.md` (escopo
-  `feature`, avulsa ou feita pelo passo 1 do verify), que precisa ser `PASS` e ter o mesmo
-  estado do código atual. Execuções de um arquivo ou cenário isolado não valem como referência.
+não o altera. O verify usa esse valor para decidir se reaproveita a última execução da suíte
+inteira. Sem Python o fingerprint fica `n/a`, nada é reaproveitado e o deploy pede que você
+instale o Python ou confirme por override. A referência do deploy é sempre o **último verify**
+da feature ativa, nunca uma execução de teste (o test cobre só a spec ativa): ele precisa ser
+`converged+verified`, ter o mesmo estado do código atual, e a lista `- Unverified:` precisa
+estar vazia.
 
 Qualquer outra situação deixa o deploy `BLOCKED`. A única saída é um override com o motivo
 registrado no relatório (`OVERRIDDEN`), e mesmo assim a confirmação do gate G6 continua.
@@ -399,8 +421,8 @@ registrado no relatório (`OVERRIDDEN`), e mesmo assim a confirmação do gate G
 
 | Relatório | Onde | Regra |
 | --- | --- | --- |
-| Testes | `specs/NNN-nome/test-report.md` | Somente acréscimo: uma seção datada por execução, com estado do código, comandos, resultados, cobertura dos cenários e veredito `PASS` ou `FAIL` |
-| Verificação | `specs/NNN-nome/verification.md` | Somente acréscimo: estado do código, evidência de testes (execução usada e se foi reaproveitada), convergência, evidência de execução, auditorias, lista do que não foi verificado e veredito |
+| Testes | `specs/NNN-nome/test-report.md` | Somente acréscimo: uma seção datada por execução, com escopo (`spec`, `spec (full suite)` ou `global`), estado do código, comandos, resultados, cobertura dos cenários e veredito `PASS` ou `FAIL` |
+| Verificação | `specs/NNN-nome/verification.md` | Somente acréscimo: estado do código, features no escopo, evidência de testes (execução da suíte inteira usada e se foi reaproveitada), convergência, evidência de execução, auditorias, lista do que não foi verificado e veredito |
 | Bug | `.redevkit/bugs/<slug>/assessment.md`, `fix.md`, `test.md` | Avaliação (reprodução, hipóteses, causa raiz), correção (teste de regressão escrito primeiro) e confirmação |
 | Avaliação de ideia | `.redevkit/assessments/<slug>/intake.md`, `research.md`, `definition.md`, `shape.md`, `decision.md` | Decisão `go`, `needs-clarification` ou `kill` |
 | Deploy | `.redevkit/deploys/AAAA-MM-DD-<ambiente>.md` | Pré-condições, plano de deploy, plano de rollback, confirmação de produção, execução, smoke test e desfecho `succeeded`, `failed`, `rolled-back` ou `aborted` |
@@ -419,7 +441,7 @@ Gate é um ponto onde a cadeia sempre para e espera você, inclusive com `--auto
 | G2 | Aprovação do plano (fim do `redevkit-plan`) |
 | G3 | Violação da constituição detectada em qualquer fase |
 | G4 | Ação destrutiva ou irreversível |
-| G5 | Ciclo de correção sem convergir (ver [Ciclo de correção e G5](#ciclo-de-correção-e-g5)) |
+| G5 | Limite de um laço de teste: 5 rodadas de debug no escopo da spec, 3 no global (ver [Laços de teste e G5](#laços-de-teste-e-g5)) |
 | G6 | Deploy (só você dispara) |
 | G7 | Escolha sobre memória legada |
 
@@ -436,16 +458,16 @@ Com ele, a cadeia segue sozinha:
 ```text
 new → plan → create | enhance → test
   tarefa bloqueada no create ou no enhance → para e lista o que cada uma precisa
-  test PASS, sem verify pendente → para e sugere verify e deploy
-  test PASS, com verify pendente → verify
+  test PASS (escopo spec) → verify
   test FAIL, por classe de falha:
-    product-defect  → debug → verify (que roda os testes de novo)
+    product-defect  → debug → test (laço spec; G5 com 5 rodadas de debug)
     not-implemented → create → test
     environment     → para e diz o que corrigir no ambiente
-  verify converged+verified → para antes do deploy
-  verify gaps → create → test → verify
-  verify failed → debug de novo (ou create, ou para, conforme a classe)
-  G5 (ciclo de correção sem convergir) → para e pergunta
+  verify (suíte inteira):
+    converged+verified → para antes do deploy
+    gaps   → create → test → verify
+    failed → debug → verify (laço global; G5 com 3 rodadas), ou create, ou para, conforme a classe
+  G5 (limite de um laço) → para e pergunta
 ```
 
 No `--auto`, a descrição dada ao `redevkit-new` vira a primeira feature (MVP) do plan, e as
@@ -456,7 +478,8 @@ precisa da sua aprovação (G2) mesmo no `--auto`. O deploy nunca faz parte da c
 ## Handoff
 
 Todo comando termina com uma seção de handoff: o próximo comando e o motivo. Por exemplo, o
-test verde aponta para o deploy (sugerindo o verify antes) ou, com um verify pendente, para o
-verify; o test vermelho aponta para o comando que a classe da falha indica; e o debug sempre
-aponta para o verify. O `redevkit-status` sugere o próximo comando a
+test verde aponta para o verify (o único caminho para o deploy) ou para um novo plan; o test
+vermelho aponta para o comando que a classe da falha indica; o debug devolve ao test ou ao
+verify, conforme o laço de onde a falha veio; e o verify `converged+verified` aponta para o
+deploy (que só você dispara). O `redevkit-status` sugere o próximo comando a
 partir dos fatos que leu.

@@ -16,8 +16,8 @@ The order is owned by the commands; do not keep a separate table here.
    one phase per user story in which the **failing tests come first**, then Polish. Each task
    names its persona (`database-architect`, `backend-specialist`, `frontend-specialist`,
    `test-engineer`, ...).
-3. **Quality:** `{{CMD:redevkit-test}}` runs the full suite; `{{CMD:redevkit-verify}}` runs
-   it (or reuses a run on the same code), then the audits (test engineer, security auditor,
+3. **Quality:** `{{CMD:redevkit-test}}` runs the active spec's tests; `{{CMD:redevkit-verify}}`
+   runs the whole suite (or reuses a run on the same code), then the audits (test engineer, security auditor,
    performance optimizer).
 4. **Operations:** local preview via `{{CMD:redevkit-preview}}`; deploy only when the user runs
    `{{CMD:redevkit-deploy}}` (G6).

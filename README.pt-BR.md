@@ -154,30 +154,35 @@ flowchart TD
     PLAN -->|"G2: aprovação do plano"| KIND{"Feature nova ou mudança?"}
     KIND -->|nova| CR["create"]
     KIND -->|mudança| EN["enhance"]
-    CR --> TS["test"]
+    CR --> TS["test · escopo da spec<br/>os testes da spec ativa"]
     EN --> TS
-    TS -->|PASS| DONE["revisar; verify sugerido"]
-    TS -->|"PASS · verify pendente"| VF
-    TS -->|"FAIL · bug"| DB["debug"]
+    TS -->|"PASS"| VF["verify · escopo global<br/>suíte inteira, convergência,<br/>execução, auditorias"]
+    TS -.->|"PASS · próxima feature"| PLAN
+    TS -->|"FAIL · bug"| DBS["debug"]
+    DBS -->|"laço da spec"| TS
     TS -->|"FAIL · ainda não construído"| CR
-    DB --> VF["verify · obrigatório após debug<br/>roda os testes de novo, convergência,<br/>execução, auditorias"]
-    DONE -.-> VF
     VF -->|gaps| KIND
-    VF -->|failed| DB
+    VF -->|"failed · bug"| DBG["debug"]
+    DBG -->|"laço global"| VF
     VF -->|converged+verified| READY["pronto"]
-    VF -.->|"G5: ciclo de correção<br/>sem convergir"| ASK["para e pergunta a você"]
+    TS -.->|"G5: 5 rodadas de debug"| ASK["para e pergunta a você"]
+    VF -.->|"G5: 3 rodadas de debug<br/>ou 3 rodadas sem convergir"| ASK
     READY -.->|"você dispara"| DP["deploy<br/>G6, plano de rollback, smoke test"]
 ```
 
 O `redevkit-status` mostra os fatos a qualquer momento; o `redevkit-preview` sobe, para ou
 checa o servidor de desenvolvimento local sob demanda.
 
-Com `--auto`, a cadeia segue sozinha: new → plan → create/enhance → test. O teste vermelho vai
-para onde a classe da falha indica: um bug vai para debug → verify (que roda os testes de novo
-sobre o código corrigido), um comportamento que não foi construído volta para o create, e um
-problema de ambiente ou uma tarefa bloqueada param a cadeia. Depois de um debug, ou de um
-verify que terminou em `gaps` ou `failed`, o teste verde segue para o verify, e o laço se fecha
-sozinho. Ela sempre para nos gates, e o deploy nunca faz parte da cadeia:
+O `redevkit-test` testa só a spec ativa, então você pode seguir para um novo
+`redevkit-plan` assim que ele fica verde; o `redevkit-verify` roda a suíte inteira, mais
+convergência, execução e auditorias, e só o `converged+verified` dele libera o deploy. Uma
+feature que você deixa sem verify entra na lista Unverified, e o próximo verify a cobre.
+
+Com `--auto`, a cadeia segue sozinha: new → plan → create/enhance → test → verify. O teste
+vermelho vai para onde a classe da falha indica: um bug vai para o debug e volta ao test (laço
+da spec), um comportamento que não foi construído volta para o create, e um problema de
+ambiente ou uma tarefa bloqueada param a cadeia. Um verify `failed` vai para o debug e volta
+ao verify (laço global). Ela sempre para nos gates, e o deploy nunca faz parte da cadeia:
 
 | Gate | Quando a cadeia para |
 | --- | --- |
@@ -185,7 +190,7 @@ sozinho. Ela sempre para nos gates, e o deploy nunca faz parte da cadeia:
 | G2 | Aprovação do plano (fim do `redevkit-plan`) |
 | G3 | Violação da constituição detectada |
 | G4 | Ação destrutiva ou irreversível |
-| G5 | Ciclo de correção sem convergir: 2 verify `failed` depois de um debug, ou 3 verify seguidos sem `converged+verified` ([regras](docs/metodo.md#ciclo-de-correção-e-g5)) |
+| G5 | Um laço de teste chegou ao limite: 5 rodadas de debug no laço da spec, ou 3 rodadas de debug ou 3 verify sem `converged+verified` no laço global ([regras](docs/metodo.md#laços-de-teste-e-g5)) |
 | G6 | Deploy (só você dispara) |
 | G7 | Escolha sobre memória legada |
 
@@ -202,11 +207,11 @@ Chame como `/redevkit-<nome>` no Claude Code e `$redevkit-<nome>` no Codex.
 | `redevkit-plan` | Spec, roteamento por domínio, plano, gate do `DESIGN.md`, tarefas com TDD, análise e aprovação |
 | `redevkit-create` | Implementa as tarefas aprovadas de uma feature nova, uma persona por tarefa, testes primeiro |
 | `redevkit-enhance` | Muda algo existente: delta na spec e tarefas anexadas; mudança grande vai para o `redevkit-plan` |
-| `redevkit-test` | Mapeia cenários para testes, gera os que faltam, roda a suíte e grava o `test-report.md` |
+| `redevkit-test` | Mapeia cenários para testes, gera os que faltam, roda os testes da spec ativa e grava o `test-report.md` |
 | `redevkit-debug` | Reproduz, acha a causa raiz, escreve o teste de regressão primeiro, corrige e registra o bug |
-| `redevkit-verify` | Roda os testes (ou reaproveita um run sobre o mesmo estado do código), confere a convergência com a spec, executa a aplicação, roda as auditorias e dá o veredito |
+| `redevkit-verify` | Roda a suíte inteira (ou reaproveita um run sobre o mesmo estado do código), confere a convergência com a spec, executa a aplicação, roda as auditorias e dá o veredito que o deploy exige |
 | `redevkit-preview` | Sobe, para ou checa o servidor de desenvolvimento local |
-| `redevkit-deploy` | Só por invocação sua: pré-condições, plano de rollback, confirmação e smoke test |
+| `redevkit-deploy` | Só por invocação sua: exige um verify `converged+verified` sobre o código atual, plano de rollback, confirmação e smoke test |
 | `redevkit-status` | Só fatos: feature ativa, progresso, último test e verify, bugs, git |
 
 A skill de memória `redevkit-memanager` também pode ser chamada diretamente e responde a pedidos

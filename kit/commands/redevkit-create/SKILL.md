@@ -140,7 +140,7 @@ task as done because the code "should work".
 
 ## Handoff
 
-- All tasks done → `{{CMD:redevkit-test}}` to map scenarios to tests and run the full suite.
+- All tasks done → `{{CMD:redevkit-test}}` to map scenarios to tests and run the spec's tests.
 - Open tasks that can still run (a range was given, or the run was interrupted) →
   `{{CMD:redevkit-create}}` again (or the remaining range).
 - Blocked tasks → no command repeats on its own. Ask, with the blocked list as evidence:

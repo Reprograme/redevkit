@@ -163,49 +163,59 @@ Os gates G1–G7 estão descritos em [metodo.md](metodo.md#gates).
 
 ## redevkit-test
 
-- **Propósito:** provar a feature contra a spec. Mapeia cada cenário de aceite para um teste,
-  gera os que faltam, roda a suíte completa, classifica as falhas e anexa uma execução datada
-  ao relatório. Não muda código da aplicação.
-- **Entrada:** `[--auto] [feature, arquivo ou cenário]`. Padrão: a feature ativa.
-- **Pré-condições:** memória inicializada; feature com `spec.md`. Sem nenhuma feature, roda só
-  a suíte e sugere o plan.
+- **Propósito:** provar a feature ativa contra a spec, no **escopo da spec**. Mapeia cada
+  cenário de aceite para um teste, gera os que faltam, roda só os testes desta feature,
+  classifica as falhas e anexa uma execução datada ao relatório. Não muda código da
+  aplicação. A suíte inteira, a convergência e as auditorias são do `redevkit-verify`.
+- **Entrada:** `[--auto]`. Sempre a feature ativa (normalmente a spec mais recente).
+- **Pré-condições:** memória inicializada; feature ativa com `spec.md`. Sem nenhuma feature,
+  roda só a suíte e sugere o plan. G5 do laço da spec atingido e sem resposta → apresenta a
+  pergunta de novo.
 - **Personas e skills:** `test-engineer` (unidade e integração), `qa-automation-engineer` com
   `webapp-testing` (fluxos end-to-end); `testing-patterns` e `tdd-workflow` para gerar
   testes.
 - **Passos principais:** tabela cenário → teste (`covered` ou `missing`); gera os testes
-  faltantes sem enfraquecer testes existentes; roda `.redevkit/audits/test_runner.py` quando
-  há Python, senão o comando de teste do `tech.md` (detectado e registrado se faltar), sempre
-  sem modo watch, com limite de tempo e com a saída completa em
-  `.redevkit/tmp/test-output.log`; dá a cada falha uma
-  [classe](metodo.md#classes-de-falha) (`environment`, `test-defect`, `not-implemented`,
-  `product-defect`), corrigindo ali mesmo o que é do ambiente ou do próprio teste; grava o
-  estado do código com o `code_state.py` (HEAD, branch, árvore, Tree fingerprint).
-- **Grava:** novos testes e `specs/NNN-nome/test-report.md` (somente acréscimo).
+  faltantes sem enfraquecer testes existentes; monta o **conjunto de testes da spec** (testes
+  mapeados aos cenários, inclusive os gerados agora, arquivos de teste das tarefas e testes de
+  regressão dos bugs da feature; testes pedidos para comportamento fora da spec ficam em "Fora
+  da spec" e o verify os roda) e o roda com `.redevkit/audits/test_runner.py --paths` quando há Python,
+  senão com o comando de teste do `tech.md` (detectado e registrado se faltar), sempre sem
+  modo watch, com limite de tempo e com a saída completa em `.redevkit/tmp/test-output.log`;
+  se o comando de teste não aceita arquivos, roda a suíte inteira e registra o escopo
+  `spec (full suite)`; dá a cada falha uma [classe](metodo.md#classes-de-falha)
+  (`environment`, `test-defect`, `not-implemented`, `product-defect`), corrigindo ali mesmo o
+  que é do ambiente ou do próprio teste; grava o estado do código com o `code_state.py` (HEAD,
+  branch, árvore, Tree fingerprint).
+- **Grava:** novos testes e `specs/NNN-nome/test-report.md` (somente acréscimo, com o
+  escopo); as linhas Failing scope e Test cycle de `active.md` › Últimos resultados.
 - **Veredito:** `PASS` só quando todos os comandos saíram com 0, nenhum teste falhou e todo
   cenário automatizável mapeia para um teste que passa; senão `FAIL`. Cenários que não dá para
   automatizar ficam `SKIPPED (motivo)` em Não verificado e nunca contam como `PASS`.
 - **Dentro do verify:** os passos acima também são o passo 1 do `redevkit-verify`, que os
-  executa sem as fases de memória e o handoff próprios, marcando a execução com
-  "Executado por: redevkit-verify (step 1)".
-- **Gates:** G4 (testes que usam serviços externos reais, bancos reais ou apagam dados), G3
-  (requisito só testável violando a constituição).
-- **Handoff:** `PASS` com [verify pendente](metodo.md#verify-pendente) → `redevkit-verify`;
-  `PASS` sem pendência → `redevkit-deploy` (por você), sugerindo o `redevkit-verify` antes
-  (um verify logo em seguida, sobre o mesmo código, reaproveita esta execução). `FAIL` segue a
-  classe da falha: `environment` → corrigir o ambiente e rodar o test de novo;
-  `not-implemented` → `redevkit-create`; `product-defect` → `redevkit-debug`. No `--auto`, a
-  cadeia segue esses mesmos caminhos e para no `PASS` sem pendência, na falha de ambiente e
-  quando só restam tarefas bloqueadas.
+  executa no escopo `global` (a suíte inteira, com a classe `baseline`), sem as fases de
+  memória e o handoff próprios, marcando a execução com "Executado por: redevkit-verify (step
+  1)".
+- **Gates:** G5 ([laço da spec](metodo.md#laços-de-teste-e-g5): 5 rodadas de debug), G4
+  (testes que usam serviços externos reais, bancos reais ou apagam dados), G3 (requisito só
+  testável violando a constituição).
+- **Handoff:** `PASS` → `redevkit-verify` (recomendado; o único caminho para o deploy) ou
+  `redevkit-plan` para a próxima feature (esta entra na lista Unverified e o próximo verify a
+  cobre); nunca o deploy. `FAIL` segue a classe da falha: `environment` → corrigir o ambiente
+  e rodar o test de novo; `not-implemented` → `redevkit-create`; `product-defect` →
+  `redevkit-debug`, que devolve ao test (com 5 rodadas de debug, o G5 pergunta antes). No
+  `--auto`, o `PASS` segue para o verify, os `FAIL` seguem esses mesmos caminhos, e a cadeia
+  para na falha de ambiente, no G5 e quando só restam tarefas bloqueadas.
 
 ## redevkit-debug
 
 - **Propósito:** investigar e corrigir um problema com evidência: reproduzir, achar a causa
   raiz, escrever o teste de regressão que falha, corrigir e confirmar.
-- **Entrada:** `[--auto] <sintoma, erro ou teste que falha>`. Sem entrada, usa os testes que
-  falharam na última execução `FAIL` do `test-report.md`.
+- **Entrada:** `[--auto] <sintoma, erro ou teste que falha>`. Sem entrada, usa as falhas da
+  última execução `FAIL` da feature ativa (`test-report.md`, ou `verification.md` quando a
+  falha veio do verify).
 - **Pré-condições:** memória inicializada; um sintoma (a entrada ou uma execução `FAIL`). Se
-  o `active.md` mostra o G5 atingido e ainda sem resposta, apresenta a pergunta do G5 antes
-  de começar.
+  o `active.md` mostra um G5 atingido e ainda sem resposta (laço da spec ou global),
+  apresenta a pergunta do G5 antes de começar.
 - **Passos principais:**
   1. Slug do sintoma. Um bug aberto equivalente só é continuado quando o debug anterior foi
      interrompido (falta `fix.md` ou `test.md`); se o `test.md` já existe, abre um bug novo
@@ -215,39 +225,45 @@ Os gates G1–G7 estão descritos em [metodo.md](metodo.md#gates).
   3. `redevkit-bug-fix`: teste de regressão primeiro (visto falhando), menor correção que
      ataca a causa raiz, teste passando, prevenção quando a causa pode voltar.
   4. `redevkit-bug-test`: resultado `verified`, `partial` ou `failed`. Um `failed` não abre
-     outra avaliação dentro do mesmo debug: o próximo debug, depois do verify, abre um bug
-     novo ligado a este.
+     outra avaliação dentro do mesmo debug: o próximo debug abre um bug novo ligado a este.
   5. Verificação leve.
 - **Grava:** `.redevkit/bugs/<slug>/assessment.md`, `fix.md`, `test.md`; o teste de
-  regressão e a correção; as linhas Debug e `Verify pending` de `active.md` › Últimos
-  resultados (a segunda é como o verify sabe que veio depois de um debug e o que mantém o
-  deploy bloqueado até lá).
+  regressão e a correção; a linha Debug de `active.md` › Últimos resultados e uma rodada a
+  mais no contador do laço para onde devolve (Test cycle ou Correction cycle).
 - **Gates:** G3 (correção violaria a constituição), G4 (passos destrutivos ou irreversíveis),
   G5 (atingido e ainda sem resposta).
-- **Handoff:** `redevkit-verify`, qualquer que seja o resultado do `test.md`. Quando a causa
-  não é um bug do código, o debug para antes de corrigir: teste errado → `redevkit-test`;
-  comportamento nunca construído → `redevkit-create`; ambiente → você.
+- **Handoff:** pela linha `- Failing scope:` do `active.md`, qualquer que seja o resultado do
+  `test.md`: `spec` → `redevkit-test`; `global` → `redevkit-verify`. Chamado fora de um laço
+  (sem a linha), pergunta para onde ir e recomenda pelo contexto: o verify quando o sintoma
+  veio de um verify, de um build, de um fluxo, de uma auditoria, de um teste de outra feature
+  ou de produção; o test quando veio de um teste da spec ativa. Quando a causa não é um bug do
+  código, o debug para antes de corrigir: teste errado → `redevkit-test`; comportamento nunca
+  construído → `redevkit-create`; ambiente → você. Nunca aponta para o deploy.
 
 ## redevkit-verify
 
-- **Propósito:** a verificação completa: testes sobre o código atual, convergência do código
-  com spec, plano e tarefas, execução real e auditorias, com um veredito ligado ao estado do
-  código. Obrigatório depois de um debug; sugerido depois de um test `PASS`, antes do deploy.
-- **Entrada:** `[--auto] [feature ou escopo]`. Padrão: a feature ativa e o que mudou desde a
-  última verificação.
+- **Propósito:** a verificação completa, no **escopo global**: a suíte inteira sobre o código
+  atual, convergência do código com spec, plano e tarefas, execução real e auditorias, com um
+  veredito ligado ao estado do código. É o único caminho para o deploy.
+- **Entrada:** `[--auto]`. Cobre a feature ativa e todas as da lista
+  [Unverified](metodo.md#features-não-verificadas).
 - **Pré-condições:** memória inicializada; feature com `spec.md`, `plan.md` e `tasks.md` (uma
   spec leve do enhance não tem `plan.md`: o Tipo de projeto vem do `tech.md`). Sem feature, a
   convergência fica `SKIPPED (no feature spec)`, nada é gravado em relatório e o `--auto` não
-  continua. G5 atingido para a feature ativa e sem resposta → apresenta a pergunta de novo.
+  continua. G5 do laço global atingido e sem resposta → apresenta a pergunta de novo.
 - **Passos principais:**
-  1. Testes: compara o Tree fingerprint do código atual com o da última execução da feature
-     inteira (Escopo `feature`) do `test-report.md`.
-     `PASS` sobre o mesmo código → reaproveita, sem rodar de novo. `FAIL` sobre o mesmo código
-     → reaproveita e o veredito é `failed`. Qualquer outro caso (por exemplo, depois de um
-     debug) → executa o procedimento do `redevkit-test` e grava a execução no
-     `test-report.md`; um `FAIL` encerra a verificação com `failed`.
-  2. `redevkit-converge`: cada lacuna vira uma tarefa anexada na fase de Convergência do
-     `tasks.md` (somente acréscimo).
+  1. Suíte inteira: compara o Tree fingerprint do código atual com o da última execução da
+     suíte inteira do `test-report.md` (escopo `global`, ou um `PASS` em `spec (full
+     suite)`). `PASS` sobre o mesmo código → reaproveita, sem rodar de novo. `FAIL` global
+     sobre o mesmo código → reaproveita e o veredito é `failed`. Qualquer outro caso →
+     executa o procedimento do `redevkit-test` no escopo `global` (testes da spec ativa
+     mapeados e gerados, suíte inteira rodada, classe `baseline` para o que já falhava antes da
+     primeira execução da suíte inteira toda verde) e grava a execução no `test-report.md`; um `FAIL` encerra a
+     verificação com `failed`.
+  2. `redevkit-converge` para cada feature no escopo: cada lacuna vira uma tarefa anexada na
+     fase de Convergência do `tasks.md` da feature ativa, também as de uma feature Unverified
+     (citando a spec dela), porque o create e o test trabalham só na feature ativa (somente
+     acréscimo).
   3. Execução: build e, quando o Tipo de projeto tem runtime, subir a aplicação em segundo
      plano, percorrer os fluxos críticos do `quickstart.md` e parar; para correções de bug,
      reproduzir o cenário original. A suíte não roda de novo: a evidência é a do passo 1.
@@ -256,23 +272,24 @@ Os gates G1–G7 estão descritos em [metodo.md](metodo.md#gates).
      já é a evidência dos testes). Caminhos fora do escopo vão em `.redevkit/audit-ignore`
      ou `--exclude`. Sem Python: `SKIPPED (no Python
      interpreter)` mais o lint e a checagem de tipos do projeto. Só os achados em arquivos
-     que a feature criou ou alterou contam; achados no resto do projeto são linha de base e
-     achados em código de terceiros ou gerado ficam fora do escopo: nenhum dos dois vira
-     tarefa nem `failed`.
+     que as features no escopo criaram ou alteraram contam; achados no resto do projeto são
+     linha de base e achados em código de terceiros ou gerado ficam fora do escopo: nenhum dos
+     dois vira tarefa nem `failed`.
   5. Relatório com o veredito `converged+verified`, `gaps` ou `failed`.
-  6. `Verify pending` e ciclo de correção em `active.md` (regras em
-     [metodo.md](metodo.md#verify-pendente)).
-- **Grava:** `specs/NNN-nome/verification.md` (somente acréscimo); `test-report.md` e testes
-  novos quando o passo 1 executa o procedimento do test; havendo lacunas, a fase de
-  Convergência no `tasks.md`. Não edita código da aplicação.
-- **Gates:** G5 (ciclo de correção sem convergir), G4 (testes ou fluxos que escrevem em
-  sistemas externos reais ou apagam dados), G3 (requisito só testável violando a
-  constituição).
-- **Handoff:** `converged+verified` → `redevkit-deploy` (por você); `gaps` →
-  `redevkit-create`, ou `redevkit-enhance` quando a lacuna pede mudança na spec (o test que
-  vem depois devolve ao verify); `failed` → `redevkit-debug`, ou `redevkit-create` quando a
-  falha é `not-implemented`, ou corrigir o ambiente quando é `environment`; G5 atingido →
-  para e espera a sua resposta.
+  6. Failing scope, Correction cycle e Unverified em `active.md` (regras em
+     [metodo.md](metodo.md#laços-de-teste-e-g5)).
+- **Grava:** `specs/NNN-nome/verification.md` da feature ativa (somente acréscimo);
+  `test-report.md` e testes novos quando o passo 1 executa o procedimento do test; havendo
+  lacunas, a fase de Convergência no `tasks.md` da feature ativa. Não edita código da
+  aplicação.
+- **Gates:** G5 ([laço global](metodo.md#laços-de-teste-e-g5): 3 rodadas de debug ou 3
+  rodadas sem convergir), G4 (testes ou fluxos que escrevem em sistemas externos reais ou
+  apagam dados), G3 (requisito só testável violando a constituição).
+- **Handoff:** `converged+verified` → `redevkit-deploy` (por você) ou `redevkit-plan` para a
+  próxima feature; `gaps` → `redevkit-create`, ou `redevkit-enhance` quando a lacuna pede
+  mudança na spec, depois o test e de volta ao verify; `failed` → `redevkit-debug`, que
+  devolve ao verify, ou `redevkit-create` quando a falha é `not-implemented`, ou corrigir o
+  ambiente quando é `environment`; G5 atingido → para e espera a sua resposta.
 
 ## redevkit-preview
 
@@ -295,7 +312,7 @@ Os gates G1–G7 estão descritos em [metodo.md](metodo.md#gates).
 
 ## redevkit-deploy
 
-- **Propósito:** levar o código testado a um ambiente, com plano de deploy, plano de
+- **Propósito:** levar o código verificado a um ambiente, com plano de deploy, plano de
   rollback, confirmação explícita e smoke test. Só você inicia este comando: ele nunca é
   invocado pelo modelo, nunca entra no `--auto` e nunca é disparado pelo handoff de outro
   comando. No Claude Code, a skill tem `disable-model-invocation: true`; no Codex,
@@ -306,13 +323,12 @@ Os gates G1–G7 estão descritos em [metodo.md](metodo.md#gates).
 - **Pré-condições:**
   1. Invocado por você neste turno.
   2. Memória inicializada.
-  3. Evidência verde sobre o código atual, pela regra de
-     [Estado do código](metodo.md#estado-do-código): com verify pendente, `BLOCKED` até um
-     verify `converged+verified`; senão, a última execução da feature inteira no
-     `test-report.md` precisa ser `PASS` e ter o Tree fingerprint do código atual. A única
-     saída é `OVERRIDDEN`, com o seu motivo registrado.
-  4. Se o último verify não é `converged+verified` sobre este mesmo código, pergunta se você
-     quer rodar o verify antes (recomendado).
+  3. Verificação sobre o código atual, pela regra de
+     [Estado do código](metodo.md#estado-do-código): o último verify da feature ativa
+     precisa ser `converged+verified`, ter o Tree fingerprint do código atual, e a lista
+     Unverified precisa estar vazia. Um test `PASS` nunca basta (cobre só a spec ativa).
+     Qualquer outra situação é `BLOCKED`; a única saída é `OVERRIDDEN`, com o seu motivo
+     registrado.
 - **Passos principais:** ambiente e plataforma (pelo `tech.md` ou pelos arquivos de deploy
   do projeto); plano com a persona `devops-engineer` e as skills `deployment-procedures` e
   `server-management` (pre-flight, plano de deploy, plano de rollback); rascunho do
@@ -324,8 +340,7 @@ Os gates G1–G7 estão descritos em [metodo.md](metodo.md#gates).
 - **Gates:** G6 (o comando todo e a confirmação), G4 (passos irreversíveis, rollback,
   migrations de dados), G3 (plano que viola a constituição).
 - **Handoff:** `succeeded` → `redevkit-status` ou `redevkit-plan` para a próxima feature;
-  `failed` ou `rolled-back` → `redevkit-debug`; `BLOCKED` → `redevkit-verify` quando há um
-  verify pendente, senão `redevkit-test`; `aborted` →
+  `failed` ou `rolled-back` → `redevkit-debug`; `BLOCKED` → `redevkit-verify`; `aborted` →
   nada mudou.
 
 ## redevkit-status
@@ -337,7 +352,9 @@ Os gates G1–G7 estão descritos em [metodo.md](metodo.md#gates).
   inicializada.
 - **Mostra:** último registro da memória; feature ativa e fase; progresso do `tasks.md` por
   fase, com as tarefas bloqueadas; aprovação do plano; último test (quem o executou e a
-  classe da falha), último verify, último debug, o verify pendente e o ciclo de correção; se o código mudou desde o último test; bugs abertos; avaliações pendentes; marcadores de entrevista pendentes; último deploy;
+  classe da falha e o escopo), último verify, último debug, os laços (Failing scope, Test cycle,
+  Correction cycle) e as features não verificadas; se o código mudou desde o último test e
+  desde o último verify; bugs abertos; avaliações pendentes; marcadores de entrevista pendentes; último deploy;
   branch e mudanças não commitadas. O que não consegue ler aparece como `unknown (motivo)`.
   Inconsistências são listadas, não corrigidas.
 - **Grava:** nada. Não pergunta nada.
@@ -345,8 +362,8 @@ Os gates G1–G7 estão descritos em [metodo.md](metodo.md#gates).
 - **Handoff:** sugere um próximo comando a partir dos fatos, na ordem de uma tabela em que a
   primeira linha que se aplica vale (por exemplo: sem memória → `redevkit-new`; G5 sem
   resposta → responder ao G5; tarefas abertas → `redevkit-create`; só tarefas bloqueadas →
-  resolver o que elas precisam; último test vermelho → o comando da classe da falha; verify
-  pendente → `redevkit-verify`).
+  resolver o que elas precisam; último test vermelho → o comando da classe da falha; test
+  verde → `redevkit-verify`; verify `converged+verified` → `redevkit-deploy`).
 
 ## redevkit-memanager
 

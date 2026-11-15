@@ -35,21 +35,23 @@ In Codex invoke them as `$redevkit-<name>`.
 | `redevkit-plan` | Spec, domain routing, plan, `DESIGN.md` gate, TDD tasks, analysis |
 | `redevkit-create` | Implement a new feature from the approved `tasks.md` |
 | `redevkit-enhance` | Change existing behavior (spec delta + appended tasks) |
-| `redevkit-test` | Generate missing tests, run the suite, write `test-report.md` |
+| `redevkit-test` | Generate missing tests, run the active spec's tests, write `test-report.md` |
 | `redevkit-debug` | Reproduce, fix with a failing regression test first, record the bug |
-| `redevkit-verify` | Run the tests (or reuse a run on the same code), converge with spec, run it for real, audits |
+| `redevkit-verify` | Run the whole suite, converge with spec, run it for real, audits; the only way to deploy |
 | `redevkit-preview` | Start, stop or check the local dev server |
 | `redevkit-deploy` | Deploy (only when the user invokes it) |
 | `redevkit-status` | Show facts: active feature, progress, last test and verify |
 
 Every command ends with a handoff: the next command and why. With `--auto` the chain
-new → plan → create/enhance → test runs on its own. A red test goes where its failure class
-says: a bug to debug → verify, unbuilt behavior back to create; an environment problem or a
-blocked task stops the chain. While a verify is pending (after a debug, or a verify that
-ended in `gaps` or `failed`), a green test goes on to verify. It always stops at the gates: G1
+new → plan → create/enhance → test → verify runs on its own. The test runs the active spec's
+tests (loop test → debug → test); the verify runs the whole suite and the full verification
+(loop verify → debug → verify) and only its `converged+verified` opens the deploy. A red test
+goes where its failure class says: a bug to debug, unbuilt behavior back to create; an
+environment problem or a blocked task stops the chain. It always stops at the gates: G1
 constitution creation or amendment, G2 plan approval, G3 constitution violation, G4
-destructive or irreversible action, G5 correction cycle without convergence (rules in
-`redevkit-verify` step 6), G6 deploy (user only), G7 legacy memory choice. Outside the gates, questions are answered with
+destructive or irreversible action, G5 loop limit (5 debug rounds in the spec loop, 3 in the
+global loop; rules in `redevkit-test` references/loops.md), G6 deploy (user only), G7 legacy
+memory choice. Outside the gates, questions are answered with
 the recommendation and recorded as assumptions.
 
 Small, direct edits outside the pipeline are allowed; anything bigger goes through the commands

@@ -11,7 +11,8 @@ description: Unit and integration test patterns - pyramid, AAA, mocking, test da
 ## 1. Running the Suite and Reporting
 
 `{{CMD:redevkit-test}}` maps the acceptance scenarios of `specs/NNN-name/spec.md` to tests,
-writes the missing ones, runs the full suite and **appends** a dated run to
+writes the missing ones, runs the active spec's tests (the whole suite inside
+`{{CMD:redevkit-verify}}`) and **appends** a dated run to
 `specs/NNN-name/test-report.md` (template `reports/test-report.md`: use
 `.redevkit/templates/overrides/reports/test-report.md` if it exists, otherwise
 `.redevkit/templates/reports/test-report.md`). Write the report in the project language
@@ -19,7 +20,7 @@ writes the missing ones, runs the full suite and **appends** a dated run to
 
 How to run:
 
-1. The full suite runs as `{{CMD:redevkit-test}}` step 3 says: Python found →
+1. The tests run as `{{CMD:redevkit-test}}` step 3 says: Python found →
    `.redevkit/audits/test_runner.py` per `.redevkit/audits/README.md` (exit `3` → the
    `tech.md` test command); no Python → the `tech.md` test command. While implementing, run
    only the tests you touched (light verification, `{{SKILL:lint-and-validate}}`).

@@ -9,18 +9,20 @@ type: test-report
 
 <!--
 Somente acréscimo (append-only). Adicione uma seção "Execução" no fim deste arquivo a cada
-rodada. Nunca edite nem apague uma execução anterior. Só contam execuções da feature inteira
-(Escopo: feature): a última delas é a que o redevkit-verify (passo 1) pode reaproveitar, e a
-referência do redevkit-deploy é escolhida como redevkit-test/references/code-state.md
-descreve; os dois comparam o estado do código ali.
-Mantenha estes tokens em inglês: PASS, FAIL, SKIPPED, MISSING, clean, dirty, e as classes de
-falha product-defect, not-implemented, test-defect, environment.
+rodada. Nunca edite nem apague uma execução anterior. Escopo spec: o redevkit-test rodou só
+os testes desta feature (spec (full suite) quando o comando de teste não seleciona arquivos).
+Escopo global: o redevkit-verify (passo 1) rodou a suíte inteira. Só execuções da suíte
+inteira podem ser reaproveitadas pelo redevkit-verify; o deploy nunca usa uma execução de
+teste como referência (usa o último verify, redevkit-test/references/code-state.md).
+Mantenha estes tokens em inglês: PASS, FAIL, SKIPPED, MISSING, clean, dirty, os escopos e as
+classes de falha product-defect, not-implemented, test-defect, environment, baseline.
 -->
 
 ## Execução [AAAA-MM-DD HH:MM] — [PASS | FAIL]
 
 - **Executado por**: [redevkit-test | redevkit-verify (step 1)]
-- **Escopo**: [feature | arquivo ou cenário: …]
+- **Escopo**: [spec | spec (full suite) | global]
+- **Conjunto de testes da spec** (escopo spec): [arquivos de teste passados ao runner, ou o motivo de a suíte inteira ter rodado]
 
 ### Estado do código
 
@@ -48,8 +50,10 @@ Tree fingerprint é igual.
 
 - **Total**: [N] · **Aprovados**: [N] · **Falharam**: [N] · **Ignorados**: [N]
 - **Falhas** (uma linha cada, com a classe):
-  - `[ID DO TESTE]` — [product-defect | not-implemented | test-defect | environment] — [trecho da asserção ou do erro]
+  - `[ID DO TESTE]` — [product-defect | not-implemented | test-defect | environment | baseline] — [trecho da asserção ou do erro]
 - **Classe da falha** (todas as que restam numa execução FAIL; nenhuma em PASS): [product-defect | not-implemented | test-defect | environment | nenhuma]
+- **Falhas de baseline** (escopo global, antes da primeira execução da suíte inteira toda verde do projeto; nunca tornam a execução FAIL): [teste — arquivo, ou nenhuma]
+- **Fora da spec** (testes gerados a pedido para comportamento fora da spec e, no escopo spec (full suite), todo outro teste da suíte; nunca tornam a execução FAIL, o verify os julga): [teste — arquivo — resultado, ou nenhum]
 
 ```text
 [TRECHO CURTO DA SAÍDA: linhas finais do resumo ou a asserção que falhou]
@@ -76,9 +80,10 @@ Tree fingerprint é igual.
 **[PASS | FAIL]** — [uma frase com a evidência decisiva].
 
 <!--
-PASS somente quando todos os comandos saíram com 0, nenhum teste falhou e todo cenário de
-aceite automatizável tem um teste aprovado. Qualquer outra situação é FAIL. Cenários que não
+PASS somente quando todos os comandos saíram com 0 (escopo global: ou falharam só por falhas
+de baseline), nenhum outro teste falhou e todo cenário de aceite automatizável tem um teste
+aprovado. Qualquer outra situação é FAIL. Cenários que não
 podem ser automatizados aqui vão para Não verificado: não tornam a execução FAIL e nunca são PASS.
 -->
 
-- **Próximo passo**: [PASS: redevkit-verify quando há um verify pendente, senão redevkit-deploy, sugerindo redevkit-verify antes | FAIL, por classe: environment → corrigir o ambiente e rodar de novo; not-implemented → redevkit-create; product-defect → redevkit-debug | dentro do redevkit-verify: a verificação continua (PASS) ou termina como failed (FAIL)]
+- **Próximo passo**: [PASS: redevkit-verify (o único caminho para o deploy), ou redevkit-plan para a próxima feature | FAIL, por classe: environment → corrigir o ambiente e rodar de novo; not-implemented → redevkit-create; product-defect → redevkit-debug (test cycle N/5) | dentro do redevkit-verify: a verificação continua (PASS) ou termina como failed (FAIL)]

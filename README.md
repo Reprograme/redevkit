@@ -154,30 +154,35 @@ flowchart TD
     PLAN -->|"G2: plan approval"| KIND{"New feature or change?"}
     KIND -->|new| CR["create"]
     KIND -->|change| EN["enhance"]
-    CR --> TS["test"]
+    CR --> TS["test · spec scope<br/>the active spec's tests"]
     EN --> TS
-    TS -->|PASS| DONE["review; verify suggested"]
-    TS -->|"PASS · verify pending"| VF
-    TS -->|"FAIL · bug"| DB["debug"]
+    TS -->|"PASS"| VF["verify · global scope<br/>whole suite, convergence,<br/>execution, audits"]
+    TS -.->|"PASS · next feature"| PLAN
+    TS -->|"FAIL · bug"| DBS["debug"]
+    DBS -->|"spec loop"| TS
     TS -->|"FAIL · not built yet"| CR
-    DB --> VF["verify · mandatory after debug<br/>re-runs tests, convergence,<br/>execution, audits"]
-    DONE -.-> VF
     VF -->|gaps| KIND
-    VF -->|failed| DB
+    VF -->|"failed · bug"| DBG["debug"]
+    DBG -->|"global loop"| VF
     VF -->|converged+verified| READY["ready"]
-    VF -.->|"G5: correction cycle<br/>does not converge"| ASK["stop and ask you"]
+    TS -.->|"G5: 5 debug rounds"| ASK["stop and ask you"]
+    VF -.->|"G5: 3 debug rounds<br/>or 3 rounds without convergence"| ASK
     READY -.->|"you invoke it"| DP["deploy<br/>G6, rollback plan, smoke test"]
 ```
 
 `redevkit-status` reports facts at any time; `redevkit-preview` starts, stops or checks the
 local dev server on demand.
 
-With `--auto`, the chain runs on its own: new → plan → create/enhance → test. A red test goes
-where its failure class says: a bug goes to debug → verify (which re-runs the tests on the
-fixed code), behavior that was not built goes back to create, and an environment problem or a
-blocked task stops the chain. After a debug, or a verify that ended in `gaps` or `failed`, a
-green test goes on to verify, so the loop closes by itself. It always stops at the gates, and
-deploy is never part of the chain:
+`redevkit-test` tests only the active spec, so you can move on to a new `redevkit-plan` as
+soon as it is green; `redevkit-verify` runs the whole suite plus convergence, execution and
+audits, and only its `converged+verified` opens the deploy. A feature you leave without a
+verify goes to the Unverified list, and the next verify covers it.
+
+With `--auto`, the chain runs on its own: new → plan → create/enhance → test → verify. A red
+test goes where its failure class says: a bug goes to debug and back to the test (spec loop),
+behavior that was not built goes back to create, and an environment problem or a blocked task
+stops the chain. A failed verify goes to debug and back to the verify (global loop). It always
+stops at the gates, and deploy is never part of the chain:
 
 | Gate | When the chain stops |
 | --- | --- |
@@ -185,7 +190,7 @@ deploy is never part of the chain:
 | G2 | Plan approval (end of `redevkit-plan`) |
 | G3 | Constitution violation detected |
 | G4 | Destructive or irreversible action |
-| G5 | Correction cycle without convergence: 2 `failed` verifies after a debug, or 3 verifies in a row without `converged+verified` ([rules](docs/metodo.md#ciclo-de-correção-e-g5)) |
+| G5 | A test loop hit its limit: 5 debug rounds in the spec loop, or 3 debug rounds or 3 verifies without `converged+verified` in the global loop ([rules](docs/metodo.md#laços-de-teste-e-g5)) |
 | G6 | Deploy (only you trigger it) |
 | G7 | Choice about legacy memory |
 
@@ -202,11 +207,11 @@ Invoke them as `/redevkit-<name>` in Claude Code and `$redevkit-<name>` in Codex
 | `redevkit-plan` | Spec, domain routing, plan, `DESIGN.md` gate, TDD tasks, analysis and approval |
 | `redevkit-create` | Implements the approved tasks of a new feature, one persona per task, tests first |
 | `redevkit-enhance` | Changes existing behavior: spec delta and appended tasks; large changes go to `redevkit-plan` |
-| `redevkit-test` | Maps scenarios to tests, writes the missing ones, runs the suite and records `test-report.md` |
+| `redevkit-test` | Maps scenarios to tests, writes the missing ones, runs the active spec's tests and records `test-report.md` |
 | `redevkit-debug` | Reproduces, finds the root cause, writes a regression test first, fixes and records the bug |
-| `redevkit-verify` | Runs the tests (or reuses a run on the same code state), checks convergence with the spec, executes the app, runs audits and gives a verdict |
+| `redevkit-verify` | Runs the whole suite (or reuses a run on the same code state), checks convergence with the spec, executes the app, runs audits and gives the verdict the deploy requires |
 | `redevkit-preview` | Starts, stops or checks the local dev server |
-| `redevkit-deploy` | User-invoked only: preconditions, rollback plan, confirmation and smoke test |
+| `redevkit-deploy` | User-invoked only: requires a `converged+verified` verify on the current code, rollback plan, confirmation and smoke test |
 | `redevkit-status` | Facts only: active feature, progress, last test and verify, bugs, git |
 
 The memory skill `redevkit-memanager` can also be invoked directly and answers requests such as

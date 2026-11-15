@@ -140,8 +140,8 @@ File to edit: UserService.ts
 
 ## Verification and Audits
 
-This skill runs no scripts. One rule covers tests and audits: the full suite runs as
-`{{CMD:redevkit-test}}` step 3 says (test runner audit when Python is found, otherwise the
+This skill runs no scripts. One rule covers tests and audits: the tests run as
+`{{CMD:redevkit-test}}` step 3 says (the spec's tests; the whole suite in the verify) (test runner audit when Python is found, otherwise the
 `tech.md` test command), and the audits (`.redevkit/audits/*.py`) run inside
 `{{CMD:redevkit-verify}}` step 4.
 

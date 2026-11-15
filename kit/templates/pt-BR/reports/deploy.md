@@ -21,22 +21,22 @@ failed, rolled-back, aborted, clean, dirty.
 
 | Verificação | Referência (do relatório) | Atual | Resultado |
 | --- | --- | --- | --- |
-| Verify pending | [não / sim: debug <slug>, gaps ou failed] | — | OK / BLOCKED |
-| Execução de referência | [test-report.md, execução AAAA-MM-DD HH:MM, executada por redevkit-test / redevkit-verify (passo 1)] | — | — |
-| Veredito da referência | [PASS] | — | OK / BLOCKED |
+| Execução de referência | [verification.md, execução AAAA-MM-DD HH:MM] | — | — |
+| Veredito da referência | [converged+verified] | — | OK / BLOCKED |
+| Features não verificadas | — | [none / specs/NNN-nome, …] | OK / BLOCKED |
 | Tree fingerprint | `sha256:[HASH]` | `sha256:[HASH]` | OK / BLOCKED |
 | Commit (HEAD) | `[SHA]` | `[SHA]` | — |
 | Árvore de trabalho | [clean / dirty] | [clean / dirty] | — |
 
 - **Status das pré-condições**: OK / BLOCKED / OVERRIDDEN
-- **Verify sugerido**: [não necessário (o último verify é converged+verified sobre este mesmo código) / sugerido, o usuário escolheu: verify antes ou deploy agora]
 - **Motivo do override**: [obrigatório quando OVERRIDDEN, nas palavras do usuário; senão, nenhum]
 
 <!--
 Execução de referência e comparação: redevkit-test/references/code-state.md (a definição
-única). BLOCKED quando há um verify pendente, quando não há referência, quando a última
-execução de testes da feature inteira não é PASS, quando o Tree fingerprint difere (o código
-mudou depois dela) ou quando o estado do código não pode ser calculado. Commit e árvore de
+única). A referência é o último verify da feature ativa, nunca uma execução de teste.
+BLOCKED quando não há execução de verify, quando ela não é converged+verified, quando ainda há
+feature não verificada (Unverified), quando o Tree fingerprint difere (o código mudou depois
+dela) ou quando o estado do código não pode ser calculado. Commit e árvore de
 trabalho são só contexto.
 -->
 

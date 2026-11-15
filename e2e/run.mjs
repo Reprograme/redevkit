@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // REDEVKIT E2E (PLANO §15.2): scenarios × 2 runtimes, real `claude -p` and `codex exec`.
-// A and B are the acceptance scenarios; C, D and E cover the pipeline routes between create,
-// test, debug and verify (untracked code, the gaps loop, the full --auto chain).
+// A and B are the acceptance scenarios; C, D, E and F cover the pipeline routes between create,
+// test, debug and verify (untracked code, the gaps loop, the full --auto chain, the global loop).
+// Kit 1.2.0: redevkit-test runs the active spec's tests (loop test → debug → test) and
+// redevkit-verify runs the whole suite (loop verify → debug → verify).
 // The work dir uses the long Windows path (realpath): Claude Code refuses writes through 8.3
 // short names such as RICARD~1.
-// Usage: node e2e/run.mjs --scenario A|B|C|D|E --runtime claude|codex [--out <dir>] [--work <dir>]
-//        node e2e/run.mjs --check <workDir> --scenario A|B|C|D|E --runtime claude|codex   (checks only)
+// Usage: node e2e/run.mjs --scenario A|B|C|D|E|F --runtime claude|codex [--out <dir>] [--work <dir>]
+//        node e2e/run.mjs --check <workDir> --scenario A|B|C|D|E|F --runtime claude|codex   (checks only)
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -28,6 +30,8 @@ const NONINTERACTIVE =
 const B_NEW = { id: "new", cmd: "redevkit-new", text: `projeto existente. Há memória legada em memory-bank/: escolho importar e arquivar (gate G7). ${NONINTERACTIVE} Eu aprovo a constituição proposta (gate G1).` };
 const B_ENHANCE = `adicionar endpoint GET /health que responde {"status":"ok","uptime":<segundos>}. ${NONINTERACTIVE} Eu aprovo o plano da mudança.`;
 const B_ABOUT_TESTS = "Gere também os testes que faltam para comportamentos existentes sem cobertura registrados na memória (o /about não tem testes).";
+const B_DEBUG = { id: "debug", cmd: "redevkit-debug", text: `corrija as falhas do último test-report. ${NONINTERACTIVE} Pare antes do próximo comando.` };
+const B_RETEST = { id: "retest", cmd: "redevkit-test", text: `${NONINTERACTIVE} Pare antes do redevkit-verify.` };
 
 /**
  * Harness step for scenario D: appends a task marked done whose claim is false (no README
@@ -55,6 +59,42 @@ export const injectFalseDoneTask = (workDir) => {
   return `T${task} appended as done to specs/${feature}/tasks.md (README.md does not exist)`;
 };
 
+/**
+ * Harness step for scenarios B and C: after the enhance, breaks the feature's own route in the
+ * code the agent wrote ("/health" → "/healthz" in src/). The spec tests must go red in the spec
+ * scope, the debug must fix it and hand back to redevkit-test (spec loop).
+ */
+export const injectSpecBug = (workDir) => {
+  const changed = [];
+  for (const rel of filesUnder(path.join(workDir, "src"))) {
+    if (!/\.[cm]?[jt]s$/.test(rel)) continue;
+    const file = path.join(workDir, "src", rel);
+    const text = fs.readFileSync(file, "utf8");
+    const next = text.replace(/(["'`])\/health\1/g, "$1/healthz$1");
+    if (next !== text) {
+      fs.writeFileSync(file, next);
+      changed.push(`src/${rel}`);
+    }
+  }
+  if (!changed.length) throw new Error('inject-spec-bug: no "/health" route literal found under src/');
+  return `"/health" → "/healthz" in ${changed.join(", ")} (the spec tests of GET /health must fail)`;
+};
+
+/**
+ * Harness step for scenario F: breaks GET /items/:id in src/app.js, a file the feature changed
+ * (it added /health there), after the spec tests passed. Only test/items.test.js, a file the
+ * feature never touched, catches it: the spec scope cannot see it, the global scope must, and it
+ * must be a product-defect (the failure points at code the feature changed), not baseline.
+ */
+export const injectRegression = (workDir) => {
+  const file = path.join(workDir, "src", "app.js");
+  const text = fs.readFileSync(file, "utf8");
+  const before = 'pathname.split("/")[2]';
+  if (!text.includes(before)) throw new Error("inject-regression: GET /items/:id lookup not found in src/app.js");
+  fs.writeFileSync(file, text.replace(before, 'pathname.split("/")[1]'));
+  return "src/app.js: GET /items/:id now reads the wrong path segment (test/items.test.js must fail)";
+};
+
 export const SCENARIOS = {
   A: {
     title: "Projeto novo: jogo de nave 2D para web",
@@ -72,24 +112,28 @@ export const SCENARIOS = {
     steps: [
       { id: "new", cmd: "redevkit-new", text: `projeto existente. Há memória legada em memory-bank/: escolho importar e arquivar (gate G7). ${NONINTERACTIVE} Eu aprovo a constituição proposta (gate G1).` },
       { id: "enhance", cmd: "redevkit-enhance", text: `adicionar endpoint GET /health que responde {"status":"ok","uptime":<segundos>}. ${NONINTERACTIVE} Eu aprovo o plano da mudança. Pare antes do redevkit-test.` },
-      { id: "test", cmd: "redevkit-test", text: `Gere também os testes que faltam para comportamentos existentes sem cobertura registrados na memória (o /about não tem testes). ${NONINTERACTIVE} Não corrija código neste comando.` },
-      { id: "debug", cmd: "redevkit-debug", text: `corrija as falhas do último test-report. ${NONINTERACTIVE} Pare antes do redevkit-verify.` },
+      { id: "inject-spec-bug", mutate: injectSpecBug },
+      { id: "test", cmd: "redevkit-test", text: `${NONINTERACTIVE} Não corrija código neste comando.` },
+      B_DEBUG,
+      B_RETEST,
       { id: "verify", cmd: "redevkit-verify", text: `${NONINTERACTIVE}` },
     ],
   },
   // Same route as B, but nothing is committed: every file is untracked. The old code state
-  // (git status + git diff) did not change when the debug fixed the code, so the verify reused
-  // the stale FAIL run and the correction cycle ran into G5.
+  // (git status + git diff) did not change when the debug fixed the code, so a stale FAIL run was
+  // reused and the correction cycle ran into G5.
   C: {
-    title: "Repositório sem commit: debug corrige arquivo não rastreado e o verify roda os testes de novo",
+    title: "Repositório sem commit: debug corrige arquivo não rastreado, o test e o verify rodam os testes de novo",
     fixture: "api-b",
     commitFixture: false,
     expects: { bug: true },
     steps: [
       B_NEW,
       { id: "enhance", cmd: "redevkit-enhance", text: `${B_ENHANCE} Pare antes do redevkit-test.` },
-      { id: "test", cmd: "redevkit-test", text: `${B_ABOUT_TESTS} ${NONINTERACTIVE} Não corrija código neste comando.` },
-      { id: "debug", cmd: "redevkit-debug", text: `corrija as falhas do último test-report. ${NONINTERACTIVE} Pare antes do redevkit-verify.` },
+      { id: "inject-spec-bug", mutate: injectSpecBug },
+      { id: "test", cmd: "redevkit-test", text: `${NONINTERACTIVE} Não corrija código neste comando.` },
+      B_DEBUG,
+      B_RETEST,
       { id: "verify", cmd: "redevkit-verify", text: `${NONINTERACTIVE}` },
     ],
   },
@@ -107,28 +151,44 @@ export const SCENARIOS = {
       { id: "verify", cmd: "redevkit-verify", text: `--auto ${NONINTERACTIVE} Siga a cadeia do --auto até o fim, parando só nos gates.`, timeoutMin: 90 },
     ],
   },
-  // The whole --auto chain in one invocation: enhance → test (red) → debug → verify.
+  // The whole --auto chain in one invocation. The /about tests asked for in the test step cover
+  // behavior outside the spec: the spec scope leaves them to the verify, whose whole suite catches
+  // the latent /about bug: enhance → test (spec PASS) → verify failed → debug → verify.
   E: {
-    title: "Cadeia --auto completa: enhance → test vermelho → debug → verify",
+    title: "Cadeia --auto completa: enhance → test (spec) → verify failed → debug → verify",
     fixture: "api-b",
-    expects: { bug: true },
+    expects: { regression: true },
     steps: [
       B_NEW,
-      { id: "enhance-auto", cmd: "redevkit-enhance", text: `--auto ${B_ENHANCE} No redevkit-test da cadeia: ${B_ABOUT_TESTS} Siga a cadeia do --auto até o fim, parando só nos gates.`, timeoutMin: 120 },
+      { id: "enhance-auto", cmd: "redevkit-enhance", text: `--auto ${B_ENHANCE} No redevkit-test da cadeia: ${B_ABOUT_TESTS} Siga a cadeia do --auto até o fim, parando só nos gates.`, timeoutMin: 150 },
+    ],
+  },
+  // The global loop: the spec tests pass, then a regression only the whole suite sees; the verify
+  // fails, the debug hands back to the verify (not to the test), and the verify converges.
+  F: {
+    title: "Laço global: regressão fora da spec → verify failed → debug → verify, com --auto",
+    fixture: "api-b",
+    expects: { regression: true },
+    steps: [
+      B_NEW,
+      { id: "enhance", cmd: "redevkit-enhance", text: `${B_ENHANCE} Pare antes do redevkit-test.` },
+      { id: "test", cmd: "redevkit-test", text: `${NONINTERACTIVE} Não corrija código neste comando.` },
+      { id: "inject-regression", mutate: injectRegression },
+      { id: "verify", cmd: "redevkit-verify", text: `--auto ${NONINTERACTIVE} Siga a cadeia do --auto até o fim, parando só nos gates.`, timeoutMin: 120 },
     ],
   },
 };
 
 /** Steps used with --resume, following the handoffs of a red test (D26). */
 const EXTRA_STEPS = {
-  debug: { id: "debug", cmd: "redevkit-debug", text: `corrija as falhas do último test-report. ${NONINTERACTIVE} Pare antes do redevkit-verify.` },
+  debug: { id: "debug", cmd: "redevkit-debug", text: `corrija as falhas do último test-report. ${NONINTERACTIVE} Pare antes do próximo comando.` },
   verify: { id: "verify", cmd: "redevkit-verify", text: `${NONINTERACTIVE}` },
   test: { id: "test", cmd: "redevkit-test", text: `${NONINTERACTIVE}` },
 };
 
 const CLAUDE_TOOLS = [
   "Read", "Write", "Edit", "Glob", "Grep", "Skill", "Agent", "TodoWrite",
-  "Bash(npm *)", "Bash(npx *)", "Bash(node *)", "Bash(mv memory-bank *)", "PowerShell(Move-Item memory-bank *)", "Bash(python *)", "Bash(py *)", "Bash(ls *)", "Bash(mkdir *)", "Bash(cat *)", "Bash(cd *)",
+  "Bash(npm *)", "Bash(npx *)", "Bash(node *)", "Bash(mv memory-bank *)", "Bash(mv memory-bank/*)", "Bash(rmdir memory-bank)", "PowerShell(Move-Item memory-bank *)", "Bash(python *)", "Bash(py *)", "Bash(ls *)", "Bash(mkdir *)", "Bash(cat *)", "Bash(cd *)",
   "Bash(git status *)", "Bash(git diff *)", "Bash(git log *)", "Bash(git rev-parse *)", "Bash(git branch *)", "Bash(git hash-object *)", "Bash(git show *)",
   "PowerShell(npm *)", "PowerShell(node *)", "PowerShell(python *)", "PowerShell(git status *)", "PowerShell(git diff *)", "PowerShell(git rev-parse *)",
 ];
@@ -189,6 +249,18 @@ const filesUnder = (dir, base = dir) => {
 /** Verdicts of the dated runs, in order: "## Run|Execução YYYY-MM-DD HH:MM — <verdict>". */
 export const runVerdicts = (text) =>
   [...String(text).matchAll(/^##\s+(?:Run|Execução)\b[^\n]*?[—-]\s*([A-Za-z+-]+)\s*$/gm)].map((m) => m[1]);
+
+/** The dated runs of a test report: verdict, Scope (spec, spec (full suite), global) and Run by. */
+export const testRuns = (text) =>
+  String(text)
+    .split(/^(?=##\s+(?:Run|Execução)\b)/m)
+    .filter((r) => /^##\s+(?:Run|Execução)\b/.test(r))
+    .map((r) => ({
+      text: r,
+      verdict: runVerdicts(r)[0] ?? "",
+      scope: /\*\*(?:Scope|Escopo)\*\*:\s*`?(spec \(full suite\)|spec|global)/.exec(r)?.[1] ?? "",
+      by: /\*\*(?:Run by|Executado por)\*\*:\s*`?(redevkit-verify|redevkit-test)/.exec(r)?.[1] ?? "",
+    }));
 
 const readIf = (p) => (fs.existsSync(p) ? fs.readFileSync(p, "utf8") : "");
 
@@ -286,19 +358,31 @@ export const check = ({ scenario, workDir, transcripts, commitsBefore }) => {
     const vr = runVerdicts(doc("verification.md"));
     ok("verification.md converged+verified (last run)", vr.at(-1) === "converged+verified", vr.join(" → ") || "missing");
     const tv = runVerdicts(doc("test-report.md"));
-    const runs = doc("test-report.md").split(/^(?=##\s+(?:Run|Execução)\b)/m).filter((r) => /^##\s+(?:Run|Execução)\b/.test(r));
+    const runs = testRuns(doc("test-report.md"));
+    const trail = runs.map((r) => `${r.verdict}/${r.scope || "?"}/${r.by || "?"}`).join(" → ");
+    const lastFail = runs.map((r) => r.verdict).lastIndexOf("FAIL");
+    ok("every test run records its Scope (spec or global) and Run by", runs.length > 0 && runs.every((r) => r.scope && r.by), trail);
+    ok(
+      "scopes match the commands (redevkit-test → spec, redevkit-verify → global)",
+      runs.every((r) => (r.by === "redevkit-test" ? r.scope.startsWith("spec") : r.scope === "global" || r.scope === "spec (full suite)")),
+      trail,
+    );
+    // The verify ran the whole suite on the final code: a global PASS run by redevkit-verify after
+    // the last red run (or it reused a spec run that already ran the whole suite).
+    const finalGlobal = runs.slice(lastFail + 1).some((r) => r.verdict === "PASS" && (r.scope === "global" || r.scope === "spec (full suite)"));
+    ok("verify ran the whole suite on the final code (global PASS after the last FAIL)", finalGlobal, trail);
     if (expects.bug) {
       const bugs = fs.existsSync(path.join(workDir, ".redevkit", "bugs")) ? fs.readdirSync(path.join(workDir, ".redevkit", "bugs")) : [];
       ok(".redevkit/bugs/<slug>/{assessment,fix,test}.md", bugs.some((b) => ["assessment.md", "fix.md", "test.md"].every((f) => fs.existsSync(path.join(workDir, ".redevkit", "bugs", b, f)))), bugs.join(", ") || "none");
       ok("test went red before debug (bug exposed)", tv.includes("FAIL"), tv.join(" → "));
-      // The verify after a debug runs the tests again on the fixed code (step 1) and appends the run.
-      const lastRun = runs.at(-1) ?? "";
+      // Spec loop: the debug hands back to redevkit-test, which runs the spec tests again.
+      const firstFail = runs.findIndex((r) => r.verdict === "FAIL");
       ok(
-        "verify re-ran the tests after debug (last test run PASS, run by redevkit-verify)",
-        tv.at(-1) === "PASS" && tv.indexOf("FAIL") < tv.length - 1 && /redevkit-verify/.test(lastRun),
-        tv.join(" → "),
+        "spec loop: after the debug, redevkit-test ran the spec tests again (spec PASS after the FAIL)",
+        firstFail >= 0 && runs.slice(firstFail + 1).some((r) => r.by === "redevkit-test" && r.scope.startsWith("spec") && r.verdict === "PASS"),
+        trail,
       );
-      const redRun = runs.find((r) => /^##[^\n]*FAIL\s*$/m.test(r)) ?? "";
+      const redRun = runs.find((r) => r.verdict === "FAIL")?.text ?? "";
       ok("red test run names a failure class", /product-defect|not-implemented|test-defect|environment/.test(redRun), redRun ? "" : "no FAIL run");
     }
     if (expects.gaps) {
@@ -310,12 +394,28 @@ export const check = ({ scenario, workDir, transcripts, commitsBefore }) => {
       // The chain reached the second verify through create → test: a test run exists after the first one.
       ok("test ran again between the two verifies", tv.length >= 2 && tv.at(-1) === "PASS", tv.join(" → "));
     }
+    if (expects.regression) {
+      ok("the spec tests passed before the regression (first run: spec PASS by redevkit-test)", runs[0]?.by === "redevkit-test" && runs[0]?.scope.startsWith("spec") && runs[0]?.verdict === "PASS", trail);
+      ok("verify failed on the regression, then converged+verified", vr.slice(0, -1).includes("failed"), vr.join(" → ") || "missing");
+      const globalFail = runs.findIndex((r) => r.verdict === "FAIL" && r.scope === "global");
+      const failText = runs[globalFail]?.text ?? "";
+      ok("the global run caught it as a product-defect, not baseline", globalFail >= 0 && /product-defect/.test(failText), globalFail >= 0 ? "" : "no global FAIL run");
+      ok(
+        "global loop: the debug handed back to the verify (no redevkit-test run after the global FAIL)",
+        globalFail >= 0 && runs.slice(globalFail + 1).every((r) => r.by === "redevkit-verify"),
+        trail,
+      );
+      const bugs = fs.existsSync(path.join(workDir, ".redevkit", "bugs")) ? fs.readdirSync(path.join(workDir, ".redevkit", "bugs")) : [];
+      ok(".redevkit/bugs/<slug>/{assessment,fix,test}.md", bugs.some((b) => ["assessment.md", "fix.md", "test.md"].every((f) => fs.existsSync(path.join(workDir, ".redevkit", "bugs", b, f)))), bugs.join(", ") || "none");
+    }
     ok("correction cycle recorded in active.md", /Correction cycle|Ciclo de correção/i.test(mem("active.md")));
-    // New contract: content fingerprint in every test run, and the verify-pending flag cleared
-    // only by the converged+verified verify.
-    ok("every test run records a Tree fingerprint", runs.length > 0 && runs.every((r) => /Tree fingerprint[^\n]*sha256:[0-9a-f]{64}/.test(r)), `${runs.length} run(s)`);
-    const pending = /^- Verify pending:\s*(.*)$/m.exec(mem("active.md"))?.[1]?.trim() ?? "missing";
-    ok("Verify pending cleared after converged+verified", /^(no|não)\b/i.test(pending), pending);
+    ok("every test run records a Tree fingerprint", runs.length > 0 && runs.every((r) => /Tree fingerprint[^\n]*sha256:[0-9a-f]{64}/.test(r.text)), `${runs.length} run(s)`);
+    // 1.2.0 loop lines: Failing scope, Test cycle, Correction cycle and Unverified; no Verify pending.
+    const active = mem("active.md");
+    const lines = ["Failing scope", "Test cycle", "Correction cycle", "Unverified"].filter((l) => !new RegExp(`^- ${l}:`, "m").test(active));
+    ok("active.md has the loop lines and no Verify pending", lines.length === 0 && !/^- Verify pending:/m.test(active), lines.length ? `missing: ${lines.join(", ")}` : "");
+    const unverified = /^- Unverified:\s*(.*)$/m.exec(active)?.[1]?.trim() ?? "missing";
+    ok("Unverified is none after converged+verified", /^(none|nenhuma)\b/i.test(unverified), unverified);
   }
   return res;
 };

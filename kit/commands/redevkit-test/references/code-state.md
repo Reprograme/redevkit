@@ -2,7 +2,7 @@
 
 The code state ties a test or verify run to the exact code it ran on. The test and verify
 commands record it in the **Code state** table of their report run; the verify command (step
-1, to reuse a test run) and the deploy command recompute it and compare.
+1, to reuse a test run), the status command and the deploy command recompute it and compare.
 
 Two code states are the **same** when their **Tree fingerprint** is equal. The fingerprint is
 a hash of the contents of the project's files, so it changes whenever a file is added,
@@ -37,7 +37,7 @@ Changed files and Tree fingerprint (`sha256:…`).
   (HEAD), Branch and Working tree from `git rev-parse HEAD`, `git branch --show-current` and
   `git status --porcelain` when git exists.
 
-## Compare (verify step 1, status and deploy)
+## Compare (verify step 1, status, deploy and the Unverified list)
 
 Give the recorded fingerprint to the script; it prints `Compare: SAME` (exit 0) or
 `Compare: DIFFERENT` (exit 1):
@@ -56,17 +56,16 @@ Give the recorded fingerprint to the script; it prints `Compare: SAME` (exit 0) 
 The single definition; the deploy command and its template refer here. Look only at the active
 feature:
 
-1. **Verify pending:** `active.md` › Last results › `- Verify pending:` names this feature
-   (after a debug, or after a verify that ended in `gaps` or `failed`; rule in
-   `redevkit-verify` step 6). Then there is no reference: `BLOCKED` until `redevkit-verify`
-   ends in `converged+verified`.
-2. Otherwise the reference is the **latest feature-wide** run (Scope `feature`) of its
-   `test-report.md` (standalone or run by verify step 1), and it must be `PASS`.
-3. No active feature, or no test run → no reference: `BLOCKED`.
-4. Same code state as the reference and a `PASS` reference → every row of the Preconditions
-   table is `OK`. Anything else → `BLOCKED`: the current code was not tested. Require
-   `redevkit-verify` when a verify is pending, otherwise `redevkit-test`.
-5. The code state cannot be computed (no Python interpreter): `BLOCKED` with the reason
-   `code state unavailable`. Running the tests again does not change that: ask the user to
+1. **Reference:** the latest run of the active feature's `verification.md`. A test run never
+   is the reference: the test command runs the spec scope only, and only the verify runs the
+   whole suite with the convergence and the audits.
+2. It must be `converged+verified`, and `active.md` › Last results › `- Unverified:` must be
+   `none` (rules in [loops](loops.md)). No active feature, no verify run, another verdict or
+   a feature still listed as Unverified → `BLOCKED`: require `redevkit-verify`.
+3. Same code state as the reference → every row of the Preconditions table is `OK`. A
+   different code state → `BLOCKED`: the current code was not verified; require
+   `redevkit-verify`.
+4. The code state cannot be computed (no Python interpreter): `BLOCKED` with the reason
+   `code state unavailable`. Running the verify again does not change that: ask the user to
    install Python 3.9 or newer, or to override stating that the code did not change since the
    reference run.

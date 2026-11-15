@@ -78,8 +78,9 @@ result. By result:
 - `failed` → name the evidence in `test.md`; the next debug opens a new bug directory linked
   to this one.
 
-Whatever the result, the calling command finishes and continues to `{{CMD:redevkit-verify}}`
-(mandatory after debug). Never start a new assessment inside the same debug run: the loop is
-bounded by the correction cycle of the verify command (G5).
+Whatever the result, the calling command finishes and hands back to the loop that sent the
+failure: `{{CMD:redevkit-test}}` (spec scope) or `{{CMD:redevkit-verify}}` (global scope).
+Never start a new assessment inside the same debug run: each loop is bounded by G5 (rules in
+`{{SKILLDIR:redevkit-test}}/references/loops.md`).
 
 The calling command records open or closed bugs in `.redevkit/memory/active.md`.

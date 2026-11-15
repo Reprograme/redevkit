@@ -5,11 +5,19 @@ Runs the project's tests based on project type.
 
 Usage:
     python test_runner.py <project_path> [--coverage] [--timeout SECONDS] [--log FILE]
+                                         [--paths FILE [FILE ...]]
 
 Supports:
     - Node.js: npm test, jest, vitest (project-local binaries only, no downloads)
     - Python: pytest, unittest (the project's .venv/venv interpreter when it exists,
       otherwise the current interpreter)
+
+``--paths`` runs only the given test files (relative to the project). vitest, jest
+(directly or through ``npm test --``), a ``node --test`` script without positional
+arguments, pytest and unittest take test files; any other
+test command cannot, so the whole suite runs and the output says so (``Scope: full
+suite (...)``, JSON ``"scope": "full suite"`` with ``"paths_ignored"``). A path that does
+not exist or lies outside the project is a usage error (exit 2).
 
 Executables are resolved with shutil.which (npm resolves to npm.cmd on
 Windows). The test command runs through audit_common.run_external: it cannot
@@ -43,7 +51,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
 if str(Path(__file__).resolve().parent) not in sys.path:
@@ -60,6 +68,9 @@ VITEST_COVERAGE_PROVIDERS = ("@vitest/coverage-v8", "@vitest/coverage-istanbul")
 COVERAGE_PROVIDER_MISSING = "coverage provider not installed"
 COVERAGE_UNSUPPORTED = "coverage not supported for this test command"
 NO_TEST_RESULT = "the test command exited 0 but its output shows no test result"
+# A test script that is only `node --test` plus flags takes test files after `npm test --`;
+# with a positional argument (a folder, a glob) the files would run in addition to it.
+NODE_TEST_SCRIPT = re.compile(r"^node --test(?: --[A-Za-z][\w-]*(?:=\S+)?)*$")
 
 
 def utf8_stdio() -> None:
@@ -216,6 +227,8 @@ def detect_test_framework(project_path: Path) -> Dict[str, Any]:
             return result
         elif has_script:
             npm = which("npm")
+            if not framework and isinstance(test_script, str) and NODE_TEST_SCRIPT.match(test_script.strip()):
+                framework = "node --test"
             result["framework"] = framework or "npm test"
             if npm:
                 result["cmd"] = [npm, "test"]
@@ -252,6 +265,47 @@ def detect_test_framework(project_path: Path) -> Dict[str, Any]:
             result["cmd"] = [python, "-m", "unittest", "discover", "-v", *_unittest_discover_args(project_path)]
             result["skip_reason"] = None
     return result
+
+
+def scoped_command(cmd: List[str], framework: Optional[str], paths: Sequence[str]) -> Optional[List[str]]:
+    """``cmd`` restricted to the test files ``paths``, or None when the runner cannot take files.
+
+    ``npm test`` passes the files after ``--`` only when the framework is known (vitest, jest,
+    or a script that is only ``node --test`` plus flags): an arbitrary test script may ignore
+    or misread them.
+    """
+    if framework in ("vitest", "node --test"):
+        extra = list(paths)
+    elif framework == "jest":
+        extra = ["--runTestsByPath", *paths]
+    elif framework == "pytest":
+        extra = list(paths)
+    elif framework == "unittest":
+        return [cmd[0], "-m", "unittest", "-v", *paths]  # file paths replace discovery
+    else:
+        return None
+    if len(cmd) == 2 and cmd[1] == "test":  # npm test
+        return [*cmd, "--", *extra]
+    return [*cmd, *extra]
+
+
+def resolve_paths(project_path: Path, paths: Sequence[str]) -> Tuple[List[str], List[str]]:
+    """Project-relative POSIX paths and the list of invalid entries (missing or outside)."""
+    relative: List[str] = []
+    invalid: List[str] = []
+    for raw in paths:
+        candidate = Path(raw)
+        full = (candidate if candidate.is_absolute() else project_path / candidate).resolve()
+        try:
+            rel = full.relative_to(project_path)
+        except ValueError:
+            invalid.append(f"{raw} (outside the project)")
+            continue
+        if not full.exists():
+            invalid.append(f"{raw} (not found)")
+            continue
+        relative.append(rel.as_posix())
+    return relative, invalid
 
 
 # --------------------------------------------------------------------------
@@ -451,6 +505,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help=f"Time limit of the test command (default {TIMEOUT_SECONDS}); the process tree is killed when it expires",
     )
     parser.add_argument("--log", type=Path, metavar="FILE", help="Write the full combined test output to FILE")
+    parser.add_argument(
+        "--paths", nargs="+", metavar="FILE",
+        help="Run only these test files (relative to the project); runners that cannot take files run the whole suite",
+    )
     args = parser.parse_args(argv)
     timeout = TIMEOUT_SECONDS if args.timeout is None else args.timeout
 
@@ -458,6 +516,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if not project_path.is_dir():
         print(json.dumps({"error": f"Directory not found: {project_path}"}))
         return EXIT_USAGE
+    paths: List[str] = []
+    if args.paths:
+        paths, invalid = resolve_paths(project_path, args.paths)
+        if invalid:
+            print(json.dumps({"error": "invalid --paths: " + "; ".join(invalid)}))
+            return EXIT_USAGE
 
     print(f"\n{'=' * 60}")
     print("[TEST RUNNER] Unified Test Execution")
@@ -491,6 +555,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         cmd, coverage = info["coverage_cmd"], "collected"
     elif args.coverage:
         coverage = f"skipped ({info['coverage_skip_reason']})"
+    scope = "full suite"
+    paths_ignored: Optional[str] = None
+    if paths:
+        scoped = scoped_command(cmd, info["framework"], paths)
+        if scoped:
+            cmd, scope = scoped, f"paths ({len(paths)})"
+        else:
+            paths_ignored = f"{info['framework'] or 'this test command'} cannot run selected test files"
+            scope = f"full suite ({paths_ignored})"
+    print(f"Scope: {scope}")
     print(f"Running: {' '.join(cmd)}")
     print(f"Time limit: {timeout:g}s")
     if coverage.startswith("skipped"):
@@ -539,7 +613,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "tests_failed": result["tests_failed"],
         "counts_parsed": result["counts_parsed"],
         "coverage": coverage,
+        "scope": "paths" if scope.startswith("paths") else "full suite",
     })
+    if paths:
+        output["paths"] = paths
+    if paths_ignored:
+        output["paths_ignored"] = paths_ignored
     if result["status"] != "passed":
         output["reason"] = result["error"]
     if log_path and not log_error:
