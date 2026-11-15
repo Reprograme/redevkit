@@ -6,6 +6,45 @@ All notable changes to REDEVKIT are documented in this file. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-15
+
+The test and verify commands split into a spec scope and a global scope.
+
+### Changed
+
+- **`redevkit-test` tests only the active spec** (spec scope): the scenario-mapped tests
+  (including the ones it generates), the test files of its tasks and the regression tests of
+  its bugs; tests requested for behavior outside the spec are left to the verify. It takes no feature, file or scenario argument any more. A `PASS` hands off to
+  `redevkit-verify` or to a new `redevkit-plan`, never to the deploy. A `product-defect` loops
+  test → debug → test, at most 5 debug rounds before G5.
+- **`redevkit-verify` runs the whole suite** (global scope) before convergence, execution and
+  audits, and covers the active feature plus every feature on the new `- Unverified:` line. A
+  `failed` verdict loops verify → debug → verify; G5 now fires after 3 debug rounds (was 2
+  failed verifies after a debug) or 3 rounds without convergence (`gaps`, or `failed` sent to
+  create). Gaps of an Unverified feature become Convergence tasks of the active feature.
+- **The deploy requires a `converged+verified` verify** on the current code, with no
+  Unverified feature; a test run is never its reference.
+- **`redevkit-debug` hands back to the loop that sent the failure** (`- Failing scope:` in
+  `active.md`); called outside a loop, it asks whether to go to the test or the verify and
+  recommends one from the context.
+- Before the project's first fully green whole-suite run, failing tests in files the features
+  did not touch, whose failure does not point at code they changed, are classified `baseline`
+  (pre-existing) and do not fail the run. In scope `spec (full suite)`, failures outside the
+  spec test set are listed as Outside the spec and do not fail the test run.
+- A debug that sends a failure back as a wrong test counts as a debug round, and a test that
+  disagrees asks the user instead of sending it to debug again.
+- `active.md` › Last results: new lines `- Failing scope:`, `- Test cycle:` and
+  `- Unverified:`; `- Correction cycle:` counts debug rounds. The `- Verify pending:` line is
+  removed (an old one is deleted on the next save).
+- Single definition of both loops and of G5 in
+  `kit/commands/redevkit-test/references/loops.md`.
+
+### Added
+
+- `test_runner.py --paths FILE [FILE ...]`, and `node --test` scripts without positional
+  arguments take test files.
+- E2E scenario F (global loop: a regression only the whole suite sees).
+
 ## [1.1.0] - 2026-11-12
 
 ### Fixed

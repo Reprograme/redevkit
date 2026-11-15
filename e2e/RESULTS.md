@@ -1,18 +1,19 @@
 # Resultados do E2E
 
-Gerado por `e2e/summarize.mjs` em 2026-11-06 12:11 UTC; linhas B atualizadas em 2026-11-08 com os runs `r6` (pipeline com o verify rodando o test); linhas C, D e E adicionadas em 2026-11-12 com os runs `r7` e `r8` (1.1.0: estado do código por conteúdo, classes de falha, `Verify pending`), só no Claude Code. Roteiro e checagens em [README.md](README.md).
+Gerado por `e2e/summarize.mjs` em 2026-11-06 12:11 UTC; linhas B atualizadas em 2026-11-08 com os runs `r6`; linhas C, D e E adicionadas em 2026-11-12 com os runs `r7` e `r8` (1.1.0). Em 2026-11-15, as linhas do Claude Code de B a F foram refeitas com o kit 1.2.0 (test no escopo da spec, verify no escopo global, runs `r9`); A-claude, A-codex e B-codex são de versões anteriores e não foram refeitos. Roteiro e checagens em [README.md](README.md).
 
-| Run | Checagens | Veredito | Duração dos passos |
-| --- | --- | --- | --- |
-| A-claude | 12/12 | PASS | 63 min |
-| A-codex | 12/12 | PASS | 49 min |
-| B-claude | 16/16 | PASS | 15 min |
-| B-codex | 16/16 | PASS | 26 min |
-| C-claude | 19/19 | PASS | 18 min |
-| D-claude | 18/18 | PASS | 18 min |
-| E-claude | 19/19 | PASS | 10 min |
+| Run | Checagens | Veredito | Duração dos passos | Kit |
+| --- | --- | --- | --- | --- |
+| A-claude | 12/12 | PASS | 63 min | 1.0 |
+| A-codex | 12/12 | PASS | 49 min | 1.0 |
+| B-codex | 16/16 | PASS | 26 min | 1.0 (`r6`) |
+| B-claude | 23/23 | PASS | 14 min | 1.2.0 (`r9/B-claude-2`) |
+| C-claude | 23/23 | PASS | 16 min | 1.2.0 (`r9/C-claude-2`) |
+| D-claude | 22/22 | PASS | 17 min | 1.2.0 (`r9/D-claude`) |
+| E-claude | 24/24 | PASS | 12 min | 1.2.0 (`r9/E-claude-2`) |
+| F-claude | 24/24 | PASS | 13 min | 1.2.0 (`r9/F-claude-2`) |
 
-**Resultado:** 7 de 7 aprovados. C, D e E ainda não rodaram no Codex.
+**Resultado:** 8 de 8 aprovados. Com o kit 1.2.0, só o Claude Code; o Codex não foi refeito.
 
 ## Histórico das tentativas
 
@@ -31,6 +32,8 @@ silêncio. Cada uma revelou algo, corrigido antes do run final (ver também
 | B-claude, 4ª | O harness não permitia mover o `memory-bank/`; o agente copiou para `archive/`, não removeu os originais e registrou a pendência | Harness autoriza mover o `memory-bank/` (equivale a aprovar o prompt) |
 | B-claude e B-codex, `r6` (2026-11-08) | Novo pipeline: depois do debug, o verify roda o test (passo 1) e grava a execução `PASS` no `test-report.md`; ciclo de correção por feature no `active.md`. Duas checagens novas | Aprovados na primeira tentativa, 16/16 nos dois |
 | E-claude, `r7` (2026-11-12) | A cadeia `--auto` inteira funcionou numa só invocação, mas o agente reescreveu o `MEMORY.md` sem o frontmatter e o `doctor` reprovou (18/19) | Regra no `redevkit-memanager`: editar os arquivos de memória no lugar, nunca regenerá-los inteiros; o run `r8` passou 19/19 |
+| B-claude, E-claude e F-claude, `r9` 1ª (2026-11-15) | Kit 1.2.0. O B pediu ao test os testes do `/about` (fora da spec): o agente os rodou à parte e deu `PASS` no escopo da spec, enquanto no E o agente os incluiu no conjunto da spec. No F, o agente juntou `mkdir` e `mv memory-bank/*.md` num comando e a allowlist do harness negou o move (copiou e não removeu o original); as checagens do laço global passaram | Regra do kit: testes pedidos para comportamento fora da spec ficam em "Fora da spec" e o verify os roda. Harness: B e C quebram a rota `/health` depois do enhance (laço da spec), o E passa a provar o laço global; allowlist com `mv memory-bank/*` e `rmdir memory-bank`. B, C, E e F refeitos (`-2`) e aprovados |
+| Revisão independente do kit 1.2.0 (2026-11-15) | Oito achados: limite de 3 debugs inalcançável (o `failed` também somava rodada sem convergir), baseline que virava regressão no 2º verify, test ↔ debug sem limite quando o debug diz "o teste está errado", lacunas de feature Unverified sem caminho, `spec (full suite)` reprovando por testes de fora da spec, "Continuar" no G5 perdendo o laço, textos antigos em personas e skills | Corrigidos antes dos runs `-2`; o D (`r9/D-claude`) rodou antes dessas correções, que não mudam o caminho dele |
 
 ## Detalhes
 
@@ -68,27 +71,6 @@ silêncio. Cada uma revelou algo, corrigido antes do run final (ver também
 | tasks assigned to @game-developer | PASS |  |
 | test-report.md green (last run PASS) | PASS | FAIL → FAIL → PASS |
 
-### B-claude
-
-| Check | Result | Detail |
-| --- | --- | --- |
-| redevkit doctor passes | PASS |  |
-| memory complete | PASS |  |
-| constitution has Test-First | PASS |  |
-| no files outside expected paths | PASS |  |
-| no commit created | PASS | 1 -> 1 |
-| no destructive command in transcripts | PASS |  |
-| no SKIPPED audit reported as PASS | PASS |  |
-| CLAUDE.md backup + pointer | PASS |  |
-| legacy memory mapped (§9.8) | PASS | mapped: project.md, tech.md, system.md, active.md, changelog.md |
-| archive/ created and memory-bank/ archived | PASS |  |
-| spec delta + tasks (or lightweight spec, D55) | PASS | 001-health-endpoint |
-| .redevkit/bugs/<slug>/{assessment,fix,test}.md | PASS | about-sem-version |
-| verification.md converged+verified (last run) | PASS | converged+verified |
-| test went red before debug (bug exposed) | PASS | FAIL → PASS |
-| verify re-ran the tests after debug (last test run PASS, run by redevkit-verify) | PASS | FAIL → PASS |
-| correction cycle recorded in active.md | PASS |  |
-
 ### B-codex
 
 | Check | Result | Detail |
@@ -110,6 +92,34 @@ silêncio. Cada uma revelou algo, corrigido antes do run final (ver também
 | verify re-ran the tests after debug (last test run PASS, run by redevkit-verify) | PASS | FAIL → PASS |
 | correction cycle recorded in active.md | PASS |  |
 
+### B-claude
+
+| Check | Result | Detail |
+| --- | --- | --- |
+| redevkit doctor passes | PASS |  |
+| memory complete | PASS |  |
+| constitution has Test-First | PASS |  |
+| no files outside expected paths | PASS |  |
+| no commit created | PASS | 1 -> 1 |
+| no destructive command in transcripts | PASS |  |
+| no SKIPPED audit reported as PASS | PASS |  |
+| CLAUDE.md backup + pointer | PASS |  |
+| legacy memory mapped (§9.8) | PASS | mapped: project.md, tech.md, system.md, active.md, changelog.md |
+| archive/ created and memory-bank/ archived | PASS |  |
+| spec delta + tasks (or lightweight spec, D55) | PASS | 001-health-endpoint |
+| verification.md converged+verified (last run) | PASS | converged+verified |
+| every test run records its Scope (spec or global) and Run by | PASS | FAIL/spec/redevkit-test → PASS/spec/redevkit-test → PASS/global/redevkit-verify |
+| scopes match the commands (redevkit-test → spec, redevkit-verify → global) | PASS | FAIL/spec/redevkit-test → PASS/spec/redevkit-test → PASS/global/redevkit-verify |
+| verify ran the whole suite on the final code (global PASS after the last FAIL) | PASS | FAIL/spec/redevkit-test → PASS/spec/redevkit-test → PASS/global/redevkit-verify |
+| .redevkit/bugs/<slug>/{assessment,fix,test}.md | PASS | health-rota-healthz-404 |
+| test went red before debug (bug exposed) | PASS | FAIL → PASS → PASS |
+| spec loop: after the debug, redevkit-test ran the spec tests again (spec PASS after the FAIL) | PASS | FAIL/spec/redevkit-test → PASS/spec/redevkit-test → PASS/global/redevkit-verify |
+| red test run names a failure class | PASS |  |
+| correction cycle recorded in active.md | PASS |  |
+| every test run records a Tree fingerprint | PASS | 3 run(s) |
+| active.md has the loop lines and no Verify pending | PASS |  |
+| Unverified is none after converged+verified | PASS | none |
+
 ### C-claude
 
 | Check | Result | Detail |
@@ -124,15 +134,19 @@ silêncio. Cada uma revelou algo, corrigido antes do run final (ver também
 | CLAUDE.md backup + pointer | PASS |  |
 | legacy memory mapped (§9.8) | PASS | mapped: project.md, tech.md, system.md, active.md, changelog.md |
 | archive/ created and memory-bank/ archived | PASS |  |
-| spec delta + tasks (or lightweight spec, D55) | PASS | 001-health-endpoint |
+| spec delta + tasks (or lightweight spec, D55) | PASS | 001-endpoint-health |
 | verification.md converged+verified (last run) | PASS | converged+verified |
-| .redevkit/bugs/<slug>/{assessment,fix,test}.md | PASS | about-version-indefinida |
-| test went red before debug (bug exposed) | PASS | FAIL → PASS |
-| verify re-ran the tests after debug (last test run PASS, run by redevkit-verify) | PASS | FAIL → PASS |
+| every test run records its Scope (spec or global) and Run by | PASS | FAIL/spec/redevkit-test → PASS/spec/redevkit-test → PASS/global/redevkit-verify |
+| scopes match the commands (redevkit-test → spec, redevkit-verify → global) | PASS | FAIL/spec/redevkit-test → PASS/spec/redevkit-test → PASS/global/redevkit-verify |
+| verify ran the whole suite on the final code (global PASS after the last FAIL) | PASS | FAIL/spec/redevkit-test → PASS/spec/redevkit-test → PASS/global/redevkit-verify |
+| .redevkit/bugs/<slug>/{assessment,fix,test}.md | PASS | health-rota-healthz |
+| test went red before debug (bug exposed) | PASS | FAIL → PASS → PASS |
+| spec loop: after the debug, redevkit-test ran the spec tests again (spec PASS after the FAIL) | PASS | FAIL/spec/redevkit-test → PASS/spec/redevkit-test → PASS/global/redevkit-verify |
 | red test run names a failure class | PASS |  |
 | correction cycle recorded in active.md | PASS |  |
-| every test run records a Tree fingerprint | PASS | 2 run(s) |
-| Verify pending cleared after converged+verified | PASS | no |
+| every test run records a Tree fingerprint | PASS | 3 run(s) |
+| active.md has the loop lines and no Verify pending | PASS |  |
+| Unverified is none after converged+verified | PASS | none |
 
 ### D-claude
 
@@ -150,12 +164,16 @@ silêncio. Cada uma revelou algo, corrigido antes do run final (ver também
 | archive/ created and memory-bank/ archived | PASS |  |
 | spec delta + tasks (or lightweight spec, D55) | PASS | 001-health-endpoint |
 | verification.md converged+verified (last run) | PASS | gaps → converged+verified |
+| every test run records its Scope (spec or global) and Run by | PASS | PASS/spec/redevkit-test → PASS/global/redevkit-verify → PASS/spec/redevkit-test → PASS/global/redevkit-verify |
+| scopes match the commands (redevkit-test → spec, redevkit-verify → global) | PASS | PASS/spec/redevkit-test → PASS/global/redevkit-verify → PASS/spec/redevkit-test → PASS/global/redevkit-verify |
+| verify ran the whole suite on the final code (global PASS after the last FAIL) | PASS | PASS/spec/redevkit-test → PASS/global/redevkit-verify → PASS/spec/redevkit-test → PASS/global/redevkit-verify |
 | verify found the injected gap (a gaps run before the last one) | PASS | gaps → converged+verified |
 | Convergence tasks appended and all done | PASS | 0 open or blocked |
-| test ran again between the two verifies | PASS | PASS → PASS |
+| test ran again between the two verifies | PASS | PASS → PASS → PASS → PASS |
 | correction cycle recorded in active.md | PASS |  |
-| every test run records a Tree fingerprint | PASS | 2 run(s) |
-| Verify pending cleared after converged+verified | PASS | no |
+| every test run records a Tree fingerprint | PASS | 4 run(s) |
+| active.md has the loop lines and no Verify pending | PASS |  |
+| Unverified is none after converged+verified | PASS | none |
 
 ### E-claude
 
@@ -172,11 +190,45 @@ silêncio. Cada uma revelou algo, corrigido antes do run final (ver também
 | legacy memory mapped (§9.8) | PASS | mapped: project.md, tech.md, system.md, active.md, changelog.md |
 | archive/ created and memory-bank/ archived | PASS |  |
 | spec delta + tasks (or lightweight spec, D55) | PASS | 001-health-endpoint |
-| verification.md converged+verified (last run) | PASS | converged+verified |
-| .redevkit/bugs/<slug>/{assessment,fix,test}.md | PASS | about-sem-versao |
-| test went red before debug (bug exposed) | PASS | FAIL → PASS |
-| verify re-ran the tests after debug (last test run PASS, run by redevkit-verify) | PASS | FAIL → PASS |
-| red test run names a failure class | PASS |  |
+| verification.md converged+verified (last run) | PASS | failed → converged+verified |
+| every test run records its Scope (spec or global) and Run by | PASS | PASS/spec/redevkit-test → FAIL/global/redevkit-verify → PASS/global/redevkit-verify |
+| scopes match the commands (redevkit-test → spec, redevkit-verify → global) | PASS | PASS/spec/redevkit-test → FAIL/global/redevkit-verify → PASS/global/redevkit-verify |
+| verify ran the whole suite on the final code (global PASS after the last FAIL) | PASS | PASS/spec/redevkit-test → FAIL/global/redevkit-verify → PASS/global/redevkit-verify |
+| the spec tests passed before the regression (first run: spec PASS by redevkit-test) | PASS | PASS/spec/redevkit-test → FAIL/global/redevkit-verify → PASS/global/redevkit-verify |
+| verify failed on the regression, then converged+verified | PASS | failed → converged+verified |
+| the global run caught it as a product-defect, not baseline | PASS |  |
+| global loop: the debug handed back to the verify (no redevkit-test run after the global FAIL) | PASS | PASS/spec/redevkit-test → FAIL/global/redevkit-verify → PASS/global/redevkit-verify |
+| .redevkit/bugs/<slug>/{assessment,fix,test}.md | PASS | about-version-undefined |
 | correction cycle recorded in active.md | PASS |  |
-| every test run records a Tree fingerprint | PASS | 2 run(s) |
-| Verify pending cleared after converged+verified | PASS | no |
+| every test run records a Tree fingerprint | PASS | 3 run(s) |
+| active.md has the loop lines and no Verify pending | PASS |  |
+| Unverified is none after converged+verified | PASS | none |
+
+### F-claude
+
+| Check | Result | Detail |
+| --- | --- | --- |
+| redevkit doctor passes | PASS |  |
+| memory complete | PASS |  |
+| constitution has Test-First | PASS |  |
+| no files outside expected paths | PASS |  |
+| no commit created | PASS | 1 -> 1 |
+| no destructive command in transcripts | PASS |  |
+| no SKIPPED audit reported as PASS | PASS |  |
+| CLAUDE.md backup + pointer | PASS |  |
+| legacy memory mapped (§9.8) | PASS | mapped: project.md, tech.md, system.md, active.md, changelog.md |
+| archive/ created and memory-bank/ archived | PASS |  |
+| spec delta + tasks (or lightweight spec, D55) | PASS | 001-health-endpoint |
+| verification.md converged+verified (last run) | PASS | failed → converged+verified |
+| every test run records its Scope (spec or global) and Run by | PASS | PASS/spec/redevkit-test → FAIL/global/redevkit-verify → PASS/global/redevkit-verify |
+| scopes match the commands (redevkit-test → spec, redevkit-verify → global) | PASS | PASS/spec/redevkit-test → FAIL/global/redevkit-verify → PASS/global/redevkit-verify |
+| verify ran the whole suite on the final code (global PASS after the last FAIL) | PASS | PASS/spec/redevkit-test → FAIL/global/redevkit-verify → PASS/global/redevkit-verify |
+| the spec tests passed before the regression (first run: spec PASS by redevkit-test) | PASS | PASS/spec/redevkit-test → FAIL/global/redevkit-verify → PASS/global/redevkit-verify |
+| verify failed on the regression, then converged+verified | PASS | failed → converged+verified |
+| the global run caught it as a product-defect, not baseline | PASS |  |
+| global loop: the debug handed back to the verify (no redevkit-test run after the global FAIL) | PASS | PASS/spec/redevkit-test → FAIL/global/redevkit-verify → PASS/global/redevkit-verify |
+| .redevkit/bugs/<slug>/{assessment,fix,test}.md | PASS | items-id-segmento-errado |
+| correction cycle recorded in active.md | PASS |  |
+| every test run records a Tree fingerprint | PASS | 3 run(s) |
+| active.md has the loop lines and no Verify pending | PASS |  |
+| Unverified is none after converged+verified | PASS | none |
