@@ -45,7 +45,8 @@ fs.writeFileSync(
 if (process.platform === "win32") {
   fs.writeFileSync(path.join(FAKE_BIN, "codex.cmd"), `@"${process.execPath}" "%~dp0agent.js" %*\r\n`);
 } else {
-  fs.writeFileSync(path.join(FAKE_BIN, "codex"), `#!/bin/sh\nexec "${process.execPath}" "$(dirname "$0")/agent.js" "$@"\n`, { mode: 0o755 });
+  // Absolute paths only: the test PATH holds just this folder, so not even `dirname` is found.
+  fs.writeFileSync(path.join(FAKE_BIN, "codex"), `#!/bin/sh\nexec "${process.execPath}" "${path.join(FAKE_BIN, "agent.js")}" "$@"\n`, { mode: 0o755 });
 }
 
 /** An env whose PATH is only the fake bin folder (every PATH spelling removed first). */
