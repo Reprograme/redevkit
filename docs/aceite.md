@@ -299,6 +299,12 @@ cinco cenários aprovados: B e C (laço da spec), D (laço de lacunas), E (cadei
 inteira até o laço global) e F (laço global com regressão fora da spec). Testes: 63 Node e 189
 Python; `validate-kit` e markdownlint sem achados. Não refeito: o E2E no Codex e o cenário A.
 
+Kit 1.3.0 (`e2e/runs/r11`, 2026-11-25): os cenários A–F e R, no Claude Code e no Codex, 14
+de 14 aprovados ([RESULTS.md](../e2e/RESULTS.md)). A rodada achou três problemas, corrigidos
+antes das repetições: o fingerprint gravado em prosa pelo verify (F no Codex), acentos
+corrompidos ao passar um script por pipe do PowerShell (F no Codex) e a allowlist do harness,
+que negava o `mv` do arquivamento da memória legada (C e F no Claude).
+
 ## 9. Segunda auditoria das regras do kit (2026-11-25)
 
 Origem: os achados B05, B06, B07, B17, B21, N03 e N04 da segunda auditoria verificada. Cada

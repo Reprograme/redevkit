@@ -81,7 +81,9 @@ All notable changes to REDEVKIT are documented in this file. The format follows
   - *Found by the real E2E (round r11):* every test run, the verify's included, keeps the
     template's `Tree fingerprint` row (never a prose line); the `AGENTS.md` block forbids
     piping text with accents into another program (`@'…'@ | python -` turned them into `?`);
-    the harness allows the equivalent spellings of the legacy-memory move.
+    the harness allows the legacy-memory move however the agent spells it (`mv`, `Move-Item`),
+    still watched by the destructive-command check. Round r11: 14 of 14 runs pass (A–F and R on
+    Claude Code and Codex), after reruns of C and F on Claude and F on Codex.
   - *E2E:* a step timeout is recorded as a failure, kills the process tree and bounds the
     output drain; every required step must exit 0 (a later successful retry of the same step
     recovers it; `--check` without the round's `steps.json` is INCONCLUSIVE, exit 3, never
