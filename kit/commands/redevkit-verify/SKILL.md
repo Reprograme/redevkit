@@ -93,7 +93,9 @@ reused run counts as it stands: a reused `spec (full suite)` `PASS` with no fail
 **Test procedure.** Execute steps 1–6 of `{{SKILLDIR:redevkit-test}}/SKILL.md` in the
 **global scope** (map the active feature's scenarios and generate its missing tests, run the
 whole suite, classify the failures, `baseline` included, record the code state, append the
-run to `test-report.md` with **Run by** `redevkit-verify (step 1)` and Scope `global`). Skip
+run to `test-report.md` with **Run by** `redevkit-verify (step 1)` and Scope `global`, as a
+full run section of the template: its Code state table keeps the `Tree fingerprint` row,
+never a prose summary, because this step and the deploy look the fingerprint up there). Skip
 that file's memory phases, handoff and `--auto` continuation: this command does the memory
 and the handoff once.
 

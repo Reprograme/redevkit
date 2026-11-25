@@ -79,7 +79,8 @@ Subagents never ask the user; they return questions to the caller.
 - Test suites, builds and audits run non-interactively and bounded: never watch mode or a
   prompt, and a timeout above the expected duration (or a background run you wait for).
 - Write every file as UTF-8. Prefer the file-editing tool; on Windows never write artifacts through
-  shell redirection without an explicit UTF-8 encoding (accents get corrupted).
+  shell redirection without an explicit UTF-8 encoding, and never pipe text with accents into
+  another program (`@'…'@ | python -`, `echo … |`): the shell re-encodes it and accents become `?`.
 
 ## Safety
 

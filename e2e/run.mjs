@@ -371,6 +371,9 @@ const EXTRA_STEPS = {
 const CLAUDE_TOOLS = [
   "Read", "Write", "Edit", "Glob", "Grep", "Skill", "Agent", "TodoWrite",
   "Bash(npm *)", "Bash(npx *)", "Bash(node *)", "Bash(mv memory-bank *)", "Bash(mv memory-bank/*)", "Bash(rmdir memory-bank)", "PowerShell(Move-Item memory-bank *)", "Bash(python *)", "Bash(py *)", "Bash(ls *)", "Bash(mkdir *)", "Bash(cat *)", "Bash(cd *)",
+  // The legacy-memory archive (redevkit-new, G7) moves memory-bank/: equivalent spellings the
+  // agent uses for the same move, and read-only checks around it (E2E r11 C-claude was denied).
+  "Bash(test *)", "Bash(diff *)", "PowerShell(Move-Item -Path memory-bank *)", 'PowerShell(Move-Item -Path "memory-bank" *)', "PowerShell(New-Item -ItemType Directory *)", "PowerShell(Get-ChildItem *)",
   "Bash(git status *)", "Bash(git diff *)", "Bash(git log *)", "Bash(git rev-parse *)", "Bash(git branch *)", "Bash(git hash-object *)", "Bash(git show *)",
   "PowerShell(npm *)", "PowerShell(node *)", "PowerShell(python *)", "PowerShell(git status *)", "PowerShell(git diff *)", "PowerShell(git rev-parse *)",
 ];

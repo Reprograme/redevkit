@@ -78,6 +78,10 @@ All notable changes to REDEVKIT are documented in this file. The format follows
     automatable scenario still without a test is a `test-defect`; the verify's fix policy and
     templates match its handoff.
   - *Audit README:* the PowerShell Python detection works in Windows PowerShell 5.1.
+  - *Found by the real E2E (round r11):* every test run, the verify's included, keeps the
+    template's `Tree fingerprint` row (never a prose line); the `AGENTS.md` block forbids
+    piping text with accents into another program (`@'…'@ | python -` turned them into `?`);
+    the harness allows the equivalent spellings of the legacy-memory move.
   - *E2E:* a step timeout is recorded as a failure, kills the process tree and bounds the
     output drain; every required step must exit 0 (a later successful retry of the same step
     recovers it; `--check` without the round's `steps.json` is INCONCLUSIVE, exit 3, never

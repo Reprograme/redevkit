@@ -305,6 +305,18 @@ test("N04: both verification templates offer the test-defect next step", () => {
   assert.match(raw("templates/pt-BR/reports/test-report.md"), /test-defect → responder a pergunta que ela nomeia/);
 });
 
+test("E2E r11 (F-codex): every run, the verify's included, keeps the Tree fingerprint row of the template", () => {
+  const verify = read("commands/redevkit-verify/SKILL.md");
+  assert.match(verify, /full run section of the template: its Code state table keeps the `Tree fingerprint` row, never a prose summary/);
+  const testSkill = read("commands/redevkit-test/SKILL.md");
+  assert.match(testSkill, /Code state table \(the template's rows, `Tree fingerprint` included; never a prose line/);
+  for (const lang of ["en", "pt-BR"]) assert.match(raw(`templates/${lang}/reports/test-report.md`), /\| Tree fingerprint \|/);
+});
+
+test("E2E r11 (F-codex rerun): the AGENTS.md block forbids piping text with accents into another program", () => {
+  assert.match(read("context/AGENTS.block.md"), /never pipe text with accents into another program \(`@'…'@ \| python -`, `echo … \|`\): the shell re-encodes it and accents become `\?`/);
+});
+
 test("the second-audit rules survive rendering on both targets and languages", () => {
   for (const lang of LANGS) {
     const { perTarget } = renderAll({ targets: ["claude", "codex"], lang });

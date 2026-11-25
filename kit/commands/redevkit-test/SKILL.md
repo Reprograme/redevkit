@@ -169,7 +169,8 @@ in pt-BR; date and time read from the system clock, never guessed) to
 missing; the file is append-only, never edit a past run): **Run by** (`redevkit-test`, or
 `redevkit-verify (step 1)` inside the verify command; literal values, in English in every
 language), **Scope** (`spec`, `spec (full suite)` or `global`), the spec test set in scope
-`spec`, Code state table, commands executed, results with the class of each failure,
+`spec`, Code state table (the template's rows, `Tree fingerprint` included; never a prose
+line: the verify and the deploy read the fingerprint from that row), commands executed, results with the class of each failure,
 baseline failures (scope `global`), acceptance-scenario coverage (`PASS`, `FAIL`,
 `SKIPPED (reason)`, `MISSING`), tests generated and corrected, verdict and next step. Tokens
 stay in English in every language.
