@@ -1,7 +1,6 @@
 // File-system helpers: atomic writes, symlink-safe removal, hashing, path normalization.
 import crypto from "node:crypto";
 import fs from "node:fs";
-import fsp from "node:fs/promises";
 import path from "node:path";
 
 /** Temp files created by atomic writes that are still in flight (cleaned on SIGINT, C2). */
@@ -64,8 +63,6 @@ export const readText = (p) => {
   return raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
 };
 
-export const readIfExists = (p) => (exists(p) ? fs.readFileSync(p) : null);
-
 /**
  * True when `abs` or any directory between `root` and `abs` is a symbolic link or junction.
  * Used before writing or deleting so we never follow a link out of the project (Y3, Y9).
@@ -118,6 +115,29 @@ export const writeInside = (root, rel, data) => {
   const abs = resolveInside(root, rel);
   if (crossesLink(root, abs)) throw new Error(`Refusing to write through a symbolic link: ${rel}`);
   atomicWrite(abs, data);
+};
+
+/**
+ * Preflight of writeInside/removeInside: throws the same error they would, without touching the
+ * disk. Commands check every path first so a refusal never leaves a half-applied operation.
+ */
+export const assertWritable = (root, rel) => {
+  const abs = resolveInside(root, rel);
+  if (crossesLink(root, abs)) throw new Error(`Refusing to write through a symbolic link: ${rel}`);
+  return abs;
+};
+
+export const assertRemovable = (root, rel) => {
+  const abs = resolveInside(root, rel);
+  if (crossesLink(root, path.dirname(abs))) throw new Error(`Refusing to delete through a symbolic link: ${rel}`);
+  let st = null;
+  try {
+    st = fs.lstatSync(abs);
+  } catch {
+    // absent: nothing to delete
+  }
+  if (st?.isDirectory()) throw new Error(`Refusing to delete a directory as a file: ${rel}`);
+  return abs;
 };
 
 /** Delete one project-relative file, never following links; prune empty parents up to root. */
@@ -210,10 +230,5 @@ export const cleanupPendingTemps = () => {
   pendingTemps.clear();
 };
 
+/** Test hook: number of atomic-write temp files still in flight (used by test/core.test.js). */
 export const pendingTempCount = () => pendingTemps.size;
-
-export const copyFileInside = (root, srcAbs, rel) => {
-  writeInside(root, rel, fs.readFileSync(srcAbs));
-};
-
-export const mkdirp = (p) => fsp.mkdir(p, { recursive: true });

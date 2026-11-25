@@ -19,9 +19,9 @@ for (const dir of dirs) {
   const steps = fs.existsSync(path.join(dir, "steps.json")) ? JSON.parse(fs.readFileSync(path.join(dir, "steps.json"), "utf8")).steps : [];
   const minutes = Math.round(steps.reduce((s, x) => s + (x.seconds ?? 0), 0) / 60);
   const passed = r.results.filter((x) => x.ok).length;
-  rows.push(`| ${r.id} | ${passed}/${r.results.length} | ${r.passed ? "PASS" : "FAIL"} | ${minutes} min |`);
+  rows.push(`| ${r.id} | ${passed}/${r.results.length} | ${r.verdict ?? (r.passed ? "PASS" : "FAIL")} | ${minutes} min |`);
   details.push(`### ${r.id}`, "", "| Check | Result | Detail |", "| --- | --- | --- |");
-  for (const x of r.results) details.push(`| ${x.name} | ${x.ok ? "PASS" : "FAIL"} | ${String(x.detail ?? "").replace(/\|/g, "/").replace(/\n/g, " ").slice(0, 160)} |`);
+  for (const x of r.results) details.push(`| ${x.name} | ${x.ok === null ? "SKIPPED" : x.ok ? "PASS" : "FAIL"} | ${String(x.detail ?? "").replace(/\|/g, "/").replace(/\n/g, " ").slice(0, 160)} |`);
   details.push("");
 }
 const allPass = rows.every((r) => r.includes("| PASS |"));

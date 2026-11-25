@@ -10,8 +10,11 @@ export const packFiles = () => {
   // Fixed command string, no user input: a shell is needed on Windows to resolve npm.cmd.
   const r = spawnSync("npm pack --dry-run --json --ignore-scripts", { cwd: root, encoding: "utf8", shell: true });
   if (r.status !== 0) throw new Error(`npm pack failed: ${r.stderr}`);
-  const data = JSON.parse(r.stdout.slice(r.stdout.indexOf("[")));
-  return data[0].files.map((f) => f.path.replace(/\\/g, "/"));
+  // npm ≤ 11 prints an array of packages; npm ≥ 12 prints an object keyed by package name.
+  const start = r.stdout.search(/^[[{]/m);
+  const data = JSON.parse(r.stdout.slice(start < 0 ? 0 : start));
+  const pkg = Array.isArray(data) ? data[0] : Object.values(data)[0];
+  return pkg.files.map((f) => f.path.replace(/\\/g, "/"));
 };
 
 export const checkPack = (files) => {

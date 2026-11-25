@@ -19,7 +19,7 @@ pacotes.]
 
 - Instalação: `[comando]`
 - Build: `[comando]`
-- Teste: `[comando]`
+- Teste: `[comando]` (escreva `{paths}` onde entram os arquivos de teste, quando o comando os aceita)
 - Servidor de desenvolvimento: `[comando]`
 - Porta do preview: [porta]
 - Project type: [web | fullstack | api | mobile | game | cli | library | desktop | other]

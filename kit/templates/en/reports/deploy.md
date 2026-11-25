@@ -10,6 +10,7 @@ type: deploy
 - **Triggered by**: [USER] (deploys run only when the user invokes them)
 - **Features**: `specs/[NNN-short-name]/`
 - **Outcome**: [succeeded | failed | rolled-back | aborted]
+- **Rollback of**: [the report this `--rollback` run rolled back, or none]
 
 <!--
 Never write secrets (tokens, passwords, keys, connection strings) in this file.
@@ -23,6 +24,7 @@ failed, rolled-back, aborted, clean, dirty.
 | --- | --- | --- | --- |
 | Reference run | [verification.md, run YYYY-MM-DD HH:MM] | — | — |
 | Reference verdict | [converged+verified] | — | OK / BLOCKED |
+| Test runs after the reference | [test-report.md, run YYYY-MM-DD HH:MM it used] | [none / all PASS / FAIL run YYYY-MM-DD HH:MM] | OK / BLOCKED |
 | Unverified features | — | [none / specs/NNN-name, …] | OK / BLOCKED |
 | Tree fingerprint | `sha256:[HASH]` | `sha256:[HASH]` | OK / BLOCKED |
 | Commit (HEAD) | `[SHA]` | `[SHA]` | — |
@@ -34,8 +36,8 @@ failed, rolled-back, aborted, clean, dirty.
 <!--
 Reference run and comparison: redevkit-test/references/code-state.md (the single
 definition). The reference is the latest verify of the active feature, never a test run.
-BLOCKED when there is no verify run, when it is not converged+verified, when a feature is
-still Unverified, when the Tree fingerprint differs (the code changed after it) or when the
+BLOCKED when there is no verify run, when it is not converged+verified, when a test run after
+the one it used is FAIL (even on the same code), when a feature is still Unverified, when the Tree fingerprint differs (the code changed after it) or when the
 code state cannot be computed. Commit and working tree are context only.
 -->
 

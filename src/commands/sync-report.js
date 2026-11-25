@@ -18,8 +18,11 @@ export const printPlan = (sync, { verbose = false, out = console.log } = {}) => 
   }
 };
 
+/** Messages printConfigPreview already showed before the run: printed once, not again after it. */
+export const PREVIEWED = new Set(["configInvalid", "configKept", "configSkipped"]);
+
 export const printMessages = (messages, { out = console.log } = {}) => {
-  for (const m of messages) out(`${m.level === "warn" ? "! " : ""}${t(m.key, m.vars)}`);
+  for (const m of messages.filter((x) => !PREVIEWED.has(x.key))) out(`${m.level === "warn" ? "! " : ""}${t(m.key, m.vars)}`);
 };
 
 /** Managed files that stay missing after this run: how many, and the command that restores them. */
@@ -50,6 +53,7 @@ export const printConfigPreview = (sync, { out = console.log } = {}) => {
     if (!c.ok) out(`! ${t("configInvalid", { file, err: c.error })}`);
     else if (c.changed) out(`  config ${file}: +${c.added.length}`);
     for (const k of c.kept ?? []) out(`  ${t("configKept", { file, key: `${k.table}.${k.key}`, val: JSON.stringify(k.userValue) })}`);
+    for (const k of c.skipped ?? []) out(`! ${t("configSkipped", { file, key: `${k.table}.${k.key}`, table: k.table, val: k.value })}`);
   }
 };
 

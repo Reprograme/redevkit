@@ -59,6 +59,7 @@ and Audits sections are SKIPPED (test run FAIL).
 | --- | --- | --- | --- |
 | Build | `[COMMAND]` | [EXIT CODE] | [compiled without errors, or the error] |
 | App start | `[COMMAND]` | [EXIT CODE] | [listening on URL, or the error], or SKIPPED ([REASON]) |
+| App stop (after the audits) | `[COMMAND]` | [EXIT CODE] | [port free], or SKIPPED ([REASON]) |
 
 #### Critical flows
 
@@ -106,4 +107,4 @@ failed: the test run is FAIL, or the build, a critical flow or a blocking audit 
 
 - **Correction cycle** (after this run): debug rounds [N]/3 · rounds without convergence [N]/3
 - **Unverified** (after this run): [none | specs/NNN-name, …]
-- **Next step**: [redevkit-deploy (user-triggered) or redevkit-plan | redevkit-create or redevkit-enhance (gaps) | redevkit-debug (failed) | redevkit-create (failed: not-implemented) | fix the environment and run redevkit-verify again (failed: environment) | G5 reached: waiting for the user]
+- **Next step**: [redevkit-deploy (user-triggered) or redevkit-plan | redevkit-create or redevkit-enhance (gaps) | redevkit-debug (failed) | redevkit-create (failed: not-implemented) | fix the environment and run redevkit-verify again (failed: environment) | answer the question the test run names, then run redevkit-verify again (failed: test-defect) | G5 reached: waiting for the user]

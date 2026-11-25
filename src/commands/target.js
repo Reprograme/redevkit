@@ -1,9 +1,16 @@
 // redevkit target add|remove <claude|codex>  (§10). AGENTS.md always stays.
 import { t } from "../core/i18n.js";
+import { withWriteLock } from "../core/lock.js";
 import { CliError } from "./init.js";
 import { requireManifest, runSync } from "./update.js";
 
 export const runTarget = async (action, target, opts, { log = console.log, projectDir = process.cwd() } = {}) => {
+  if (opts.dryRun) return planTarget(action, target, opts, log, projectDir);
+  return withWriteLock(projectDir, `target ${action} ${target}`, () => planTarget(action, target, opts, log, projectDir), { log });
+};
+
+/** The last-target rule is checked against the manifest read under the lock (B14). */
+const planTarget = (action, target, opts, log, projectDir) => {
   const manifest = requireManifest(projectDir);
   if (!["claude", "codex"].includes(target)) throw new CliError(t("invalidTarget", { v: target }), 2);
   let targets;

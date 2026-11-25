@@ -44,7 +44,7 @@ updated: "YYYY-MM-DD"
 ## Últimos resultados
 
 - Test: [PASS | FAIL (classes da falha)] — [AAAA-MM-DD HH:MM] — [escopo spec | spec (full suite) | global] — [executado por redevkit-test | redevkit-verify (step 1)] — [comando] — [caminho do relatório]
-- Verify: [converged+verified | gaps | failed] — [AAAA-MM-DD HH:MM] — [caminho do relatório]
+- Verify: [converged+verified | gaps | failed] — [AAAA-MM-DD HH:MM] — [caminho do relatório] [· invalidated by test FAIL AAAA-MM-DD HH:MM]
 - Debug: [specs/NNN-nome] — [slug do bug] — [AAAA-MM-DD HH:MM] — [verified | partial | failed] — [.redevkit/bugs/slug/]
 - Failing scope: [specs/NNN-nome] — [spec | global | none]
 - Test cycle: [specs/NNN-nome] — debug rounds [N]/5 [· G5 reached AAAA-MM-DD HH:MM, waiting for the user]

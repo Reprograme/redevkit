@@ -12,7 +12,7 @@ invocation: user-only
 
 Arguments: the environment (asked when missing); `--check` runs the preconditions and the
 pre-flight only; `--rollback` executes the rollback plan of the latest deploy report for that
-environment. Write artifacts in {{LANG}}; answer the user in the user's language.
+environment that changed it (§ Rollback mode). Write artifacts in {{LANG}}; answer the user in the user's language.
 
 ## Purpose
 
@@ -28,9 +28,10 @@ chain and never triggered by another command's handoff.
 3. **Verified evidence on the current code.** Choose the reference run and compare it with
    the current code exactly as `{{SKILLDIR:redevkit-test}}/references/code-state.md` § Deploy
    reference run describes: the latest run of the active feature's `verification.md` must be
-   `converged+verified`, have the Tree fingerprint of the current code, and no feature may be
-   listed on `active.md` › `- Unverified:`. A test run is never enough: it covers the active
-   spec only.
+   `converged+verified`, have the Tree fingerprint of the current code, no run of the active
+   feature's `test-report.md` after the test run it used may be `FAIL` (a later red test
+   invalidates it, even on the same code), and no feature may be listed on `active.md` ›
+   `- Unverified:`. A test run is never enough: it covers the active spec only.
    - All true → precondition status `OK`.
    - Anything else → `BLOCKED`: refuse and require `{{CMD:redevkit-verify}}`; when the code
      state cannot be computed, say so instead of asking for another verify. The only way past
@@ -84,8 +85,8 @@ the answer and stop. No report is written, because nothing was deployed.
 
 Write `.redevkit/deploys/YYYY-MM-DD-<environment>.md` from the template (if that file already
 exists, add `-2`, `-3`, … before `.md`; never overwrite a report): Preconditions table
-(reference verify run, Unverified features, Tree fingerprint, HEAD, working tree,
-`OK`/`BLOCKED`/`OVERRIDDEN`, override reason), deploy plan, rollback plan.
+(reference verify run, test runs after it, Unverified features, Tree fingerprint, HEAD,
+working tree, `OK`/`BLOCKED`/`OVERRIDDEN`, override reason), deploy plan, rollback plan.
 Never write secrets.
 
 ### 4. Confirm (G6)
@@ -118,9 +119,15 @@ or `aborted`. Tokens stay in English in every language.
 
 ### Rollback mode
 
-`--rollback`: read the latest report for the environment, show its rollback plan, confirm
-(G6, and G4 for data), execute, smoke test, and write a new report for today whose outcome is
-`rolled-back` (or `failed`).
+`--rollback`: read the latest report for the environment whose outcome shows that the
+environment was changed and still is: `succeeded`, or `failed` when its execution log shows
+that the publication step completed (a later step or the smoke test failed and no rollback
+ran). Skip `aborted` reports and `failed` reports that stopped before any step changed the
+environment. When a newer rollback report (outcome `rolled-back`) names that report as the
+one it rolled back, the publication was already undone: say so and roll back further only
+from a report the user names. Show the chosen report and its rollback plan, confirm (G6, and
+G4 for data), execute, smoke test, and write a new report for today that names the report it
+rolled back and whose outcome is `rolled-back` (or `failed`).
 
 ## Gates that apply
 

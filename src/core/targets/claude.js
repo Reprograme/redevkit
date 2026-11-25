@@ -2,7 +2,6 @@
 import { asList, stringifyFrontmatter } from "../frontmatter.js";
 
 export const id = "claude";
-export const label = "Claude Code";
 
 export const paths = {
   skillDir: (name) => `.claude/skills/${name}`,

@@ -19,7 +19,7 @@ manifest.]
 
 - Install: `[command]`
 - Build: `[command]`
-- Test: `[command]`
+- Test: `[command]` (write `{paths}` where test files go when the command takes them)
 - Dev server: `[command]`
 - Preview port: [port]
 - Project type: [web | fullstack | api | mobile | game | cli | library | desktop | other]

@@ -288,7 +288,8 @@ Nenhum comando declara sucesso sem evidência: o comando que rodou e o resultado
   de aceite da spec (e do `quickstart.md`) para um teste, gera os que faltam sem mexer no
   código da aplicação e roda o **conjunto de testes da spec**: os testes mapeados, os gerados
   nesta execução, os arquivos de teste das tarefas e os testes de regressão dos bugs da
-  feature. Roda pelo `test_runner.py --paths` quando há Python, ou pelo comando de teste do
+  feature. Roda pelo `test_runner.py --paths` quando há Python (com `--cmd` quando o `tech.md`
+  registra o comando de teste, o que serve para qualquer suíte), ou pelo comando de teste do
   projeto, sempre de forma não interativa e com limite de tempo; quando o comando de teste não
   aceita arquivos, roda a suíte inteira e registra o escopo `spec (full suite)`. O veredito é
   `PASS` só quando todos os comandos saíram com 0, nenhum teste falhou e todo cenário
@@ -303,11 +304,15 @@ Nenhum comando declara sucesso sem evidência: o comando que rodou e o resultado
   o laço que mandou a falha: o test (escopo `spec`) ou o verify (escopo `global`); chamado fora
   de um laço, pergunta para onde ir e recomenda pelo contexto. Quando a causa não é um bug do
   código (o teste está errado, o comportamento nunca foi construído, o ambiente não deixa a
-  suíte rodar), o debug para sem corrigir e devolve ao test, ao create ou a você.
+  suíte rodar), o debug para sem corrigir e devolve ao laço de origem (test ou verify, que
+  julga o teste de novo), ao create ou a você.
 - **Verify** (`redevkit-verify`): verifica no **escopo global**. Começa pela **suíte
   inteira**: se a última execução da suíte inteira no `test-report.md` (escopo `global`, ou um
   `PASS` em `spec (full suite)`) foi sobre o mesmo estado do código atual (o mesmo Tree
-  fingerprint), ela é reaproveitada (um `PASS` segue, um `FAIL` encerra com `failed`); senão,
+  fingerprint), ela é reaproveitada: um `PASS` global segue; um `PASS` em `spec (full suite)`
+  segue só se não listou falhas fora da spec; um `FAIL` global encerra com `failed`, exceto
+  quando tem a classe `environment` ou `test-defect` ou houve devolução do debug depois dele;
+  um `PASS` seguido de uma execução `FAIL` nunca é reaproveitado. Senão,
   o verify executa o procedimento do `redevkit-test` no escopo `global` e grava a execução no
   `test-report.md`. Com os testes verdes, a fase `redevkit-converge` compara o código com
   spec, plano e tarefas da feature ativa e de cada feature da lista
@@ -331,8 +336,8 @@ classe a cada falha e a registra no relatório (**Failure class**); o handoff se
 | Classe | Quando | Para onde vai |
 | --- | --- | --- |
 | `environment` | A suíte não rodou ou não terminou: dependência ou ferramenta ausente, quebra antes de qualquer teste, tempo esgotado (`[TIMEOUT]`), porta ocupada | Não é bug. Corrige-se o ambiente e roda-se o test de novo; nunca vai para o debug |
-| `baseline` | Só no escopo `global`, enquanto o projeto nunca teve uma execução da suíte inteira toda verde (`PASS` sem nenhuma falha de baseline): um teste num arquivo que as features no escopo não criaram nem alteraram, cuja falha não aponta para código que elas mudaram | Já falhava antes. Fica listado em **Falhas de baseline** e em Não verificado; não vira tarefa, não vai ao debug e não reprova a execução. Depois da primeira execução da suíte inteira toda verde, todo teste vermelho é regressão |
-| `test-defect` | O teste está errado: contradiz a spec ou falha por erro próprio | O próprio test corrige o teste (nunca o código), citando o cenário da spec como evidência, e roda a suíte mais uma vez |
+| `baseline` | Só no escopo `global`, enquanto o projeto nunca teve uma execução da suíte inteira toda verde (`PASS` global sem nenhuma falha de baseline, ou `PASS` em `spec (full suite)` sem falha em Fora da spec, também quando o verify o reaproveitou): um teste num arquivo que as features no escopo não criaram nem alteraram, cuja falha não aponta para código que elas mudaram | Já falhava antes. Fica listado em **Falhas de baseline** e em Não verificado; não vira tarefa, não vai ao debug e não reprova a execução. Depois da primeira execução da suíte inteira toda verde, todo teste vermelho é regressão |
+| `test-defect` | O teste está errado: contradiz a spec ou falha por erro próprio; ou falta: um cenário automatizável continua `MISSING` depois da geração | O próprio test corrige o teste (nunca o código), citando o cenário da spec como evidência, e roda a suíte mais uma vez; um teste ausente ganha mais uma tentativa de geração. Quando a correção depende de você (decisão de spec, ou como testar o cenário), pergunta; a resposta vai para os Esclarecimentos da `spec.md` e as próximas execuções a seguem. Depois de responder, rode de novo o comando que roda aquele teste (o test, ou o verify quando a execução é `global`): o verify nunca reaproveita um `FAIL` por `test-defect` |
 | `not-implemented` | O comportamento pertence a uma tarefa aberta `[ ]` ou bloqueada `[!]` | `redevkit-create` |
 | `product-defect` | O teste bate com a spec e o código se comporta de outro jeito | `redevkit-debug`, que devolve ao laço de onde veio |
 
@@ -367,7 +372,8 @@ ativa (os rótulos ficam em inglês):
   para o debug é contado pelas rodadas de debug, para que o limite de 3 debugs valha. Execuções de testes não
   mexem nesse contador, então o ciclo gaps → create → test → verify também chega ao limite. Um
   `failed` só por `environment`, ou que reaproveitou um `FAIL` sobre o mesmo código, não altera
-  os contadores. O G5 dispara num `failed` com 3 rodadas de debug, ou com 3 rodadas sem
+  os contadores; um `FAIL` por `environment` nunca é reaproveitado, e um teste devolvido como
+  errado numa falha `global` volta ao verify e conta como rodada de debug. O G5 dispara num `failed` com 3 rodadas de debug, ou com 3 rodadas sem
   convergir.
 
 No G5 a cadeia para, mesmo no `--auto`, e pergunta:
@@ -411,8 +417,10 @@ não o altera. O verify usa esse valor para decidir se reaproveita a última exe
 inteira. Sem Python o fingerprint fica `n/a`, nada é reaproveitado e o deploy pede que você
 instale o Python ou confirme por override. A referência do deploy é sempre o **último verify**
 da feature ativa, nunca uma execução de teste (o test cobre só a spec ativa): ele precisa ser
-`converged+verified`, ter o mesmo estado do código atual, e a lista `- Unverified:` precisa
-estar vazia.
+`converged+verified`, ter o mesmo estado do código atual, nenhuma execução do
+`test-report.md` posterior à que ele usou pode ser `FAIL` (um test vermelho depois do verify o
+invalida, mesmo sobre o mesmo código, e o test marca a linha `- Verify:` como `invalidated by
+test FAIL`), e a lista `- Unverified:` precisa estar vazia.
 
 Qualquer outra situação deixa o deploy `BLOCKED`. A única saída é um override com o motivo
 registrado no relatório (`OVERRIDDEN`), e mesmo assim a confirmação do gate G6 continua.

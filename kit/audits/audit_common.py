@@ -54,7 +54,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
+from typing import Callable, Dict, Iterable, Iterator, List, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 DEFAULT_EXCLUDED_DIRS: Tuple[str, ...] = (
     # version control, editors and agent folders
@@ -331,6 +331,12 @@ class PathFilter:
         return self._dir_excluded(rel) if is_dir else self._decide(rel, False)
 
     def is_excluded(self, path: Path | str, is_dir: Optional[bool] = None) -> bool:
+        """True when ``path`` (absolute or relative to the root) or one of its parents is excluded.
+
+        Public convenience API: the audits call ``excluded_rel`` (they already hold the posix
+        relative path); this wrapper takes any path, finds out whether it is a folder when
+        ``is_dir`` is None, and is what the regression tests use. Keep it.
+        """
         rel = self.relative(path)
         if rel is None:
             return False
@@ -338,15 +344,20 @@ class PathFilter:
             is_dir = (self.root / rel).is_dir() if rel else True
         return self.excluded_rel(rel, is_dir)
 
-    def walk(self, start: Path | str | None = None) -> Iterator[Path]:
-        """Yield every non-excluded file under ``start`` (default: the root), sorted."""
+    def walk(self, start: Path | str | None = None,
+             onerror: Optional[Callable[[OSError], None]] = None) -> Iterator[Path]:
+        """Yield every non-excluded file under ``start`` (default: the root), sorted.
+
+        ``onerror`` receives the error of a folder that cannot be listed (``os.walk``);
+        without it such a folder is skipped.
+        """
         top = Path(start) if start is not None else self.root
         if not top.is_absolute():
             top = self.root / top
         top_rel = self.relative(top)
         if top_rel is None or (top_rel and self.excluded_rel(top_rel, True)):
             return
-        for current, dirs, files in os.walk(str(top)):
+        for current, dirs, files in os.walk(str(top), onerror=onerror):
             current_rel = self.relative(current) or ""
             prefix = f"{current_rel}/" if current_rel else ""
             dirs[:] = sorted(d for d in dirs if not self._dir_excluded(prefix + d))

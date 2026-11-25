@@ -12,6 +12,8 @@ code only: no git history, no branch comparison.
 ## Input (from the calling command)
 
 - Feature directory (default: the active feature in `.redevkit/memory/active.md`).
+- The `tasks.md` that receives appended tasks: the feature's own by default; the active
+  feature's when `{{CMD:redevkit-verify}}` converges an Unverified feature.
 
 ## Prerequisites
 
@@ -25,8 +27,8 @@ template, skip the constitution checks and say so.
 ## Append-only contract
 
 The only write this phase may make is appending one new
-`## Phase N: Convergence` (`## Fase N: Convergência` in pt-BR) section at the end of
-`tasks.md`. It must not:
+`## Phase N: Convergence` (`## Fase N: Convergência` in pt-BR) section at the end of the
+receiving `tasks.md` (Input). It must not:
 
 - modify `spec.md` or `plan.md`;
 - rewrite, renumber, reorder or delete any existing task, including earlier Convergence
@@ -62,6 +64,15 @@ When nothing remains, `tasks.md` stays byte-for-byte unchanged (no empty header)
    phase or anywhere else in `tasks.md`) is not a new finding: list it in the report with
    that task ID (for example "covered by T042", or "covered by blocked T042") and do not
    append it again.
+
+   When the receiving `tasks.md` is another feature's (an Unverified feature analyzed by the
+   verify), only an open or blocked task of the **receiving** file covers a gap, since the
+   create command runs the active feature's tasks only. A gap covered only by a task of the
+   analyzed feature's own `tasks.md` is a new finding: append one task that carries it (same
+   description, paths, persona and VERIFY, citing `specs/<feature>/tasks.md` and the original
+   ID, for example "carries 004-cart T010"; a blocked original is carried as `- [!]` with its
+   `BLOCKED` note). A carried task that is still open or blocked covers the gap afterwards: it
+   is never carried twice.
 4. **Assign severity.** CRITICAL: violates a constitution MUST, or a `missing`/`contradicts`
    gap that blocks a P1 story. HIGH: `missing` or `partial` on a core requirement. MEDIUM:
    `partial` on a secondary requirement, or `unrequested` with unclear justification. LOW:

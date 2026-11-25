@@ -101,17 +101,21 @@ Every run is non-interactive and bounded:
    `py -3` on Windows, then `python3`; each validated by running `--version`).
 2. Python found → run
    `<PY> .redevkit/audits/test_runner.py . --log .redevkit/tmp/test-output.log` from the
-   project root; in scope `spec` add `--paths` followed by the spec test set. Add `--coverage`
-   to collect coverage, `--timeout SECONDS` when the suite needs more than 300 seconds. Exit
-   `3` means SKIPPED, never PASS: fall back to the project command. A `[TIMEOUT]` line is an
-   `environment` failure (step 4): do not run the same command again unchanged. The runner
-   prints `Scope: paths (N)`, or `Scope: full suite (reason)` when the test command cannot
-   take files: then the report's Scope is `spec (full suite)`.
+   project root. The runner drives any test suite: when `tech.md` › Dev environment records
+   the test command, pass it as `--cmd "<command>"` (a `{paths}` word in it marks where test
+   files go); otherwise the runner detects it. In scope `spec` add `--paths` followed by the
+   spec test set. Add `--coverage` to collect coverage, `--timeout SECONDS` when the suite
+   needs more than 300 seconds. Exit `3` means SKIPPED, never PASS: fall back to step 3. Exit
+   `2` with `invalid --cmd` means the command needs a shell (`&&`, a pipe): run it as step 3
+   says. A `[TIMEOUT]` line is an `environment` failure (step 4): do not run the same command
+   again unchanged. The runner prints `Scope: paths (N)`, or `Scope: full suite (reason)` when
+   the test command cannot take files: then the report's Scope is `spec (full suite)`.
 3. No Python, or the runner cannot drive this project → run the project test command from
    `tech.md` › Dev environment, with the spec test set as file arguments when the command
    takes them (otherwise the whole suite, Scope `spec (full suite)`). If `tech.md` has none,
-   detect it (`package.json` `scripts.test`, `pytest`, `go test ./...`, `cargo test`,
-   `dotnet test`, …) and record it.
+   record the command the runner printed (`Running:`, with the bare executable name and
+   `{paths}` where files go), or detect it (`package.json` `scripts.test`, `pytest`,
+   `vendor/bin/phpunit`, `go test ./...`, `cargo test`, `dotnet test`, …).
 4. Collect coverage when the tool provides it. Capture for each command: the command line,
    exit code, duration, passed/failed/skipped counts and the message of each failing test.
 
@@ -123,23 +127,31 @@ exactly one class; the first row that fits wins:
 | Class | When | What happens |
 | --- | --- | --- |
 | `environment` | The suite could not run or finish: missing dependency or tool, runner crash before any test, `[TIMEOUT]`, port in use, no test framework | Not a bug. Fix it now when that needs no application code (install per `tech.md`, a one-shot flag, a longer `--timeout`, freeing a port this run took) and run once more; otherwise report what is needed |
-| `baseline` | Scope `global` only, while the project has never had a fully green whole-suite run (no run of any `specs/*/test-report.md` with Scope `global`, or kit 1.1's `feature`, that is `PASS` with no baseline failure): a test in a file that neither the active feature nor an Unverified feature created or changed (the in-scope files of `{{SKILLDIR:redevkit-verify}}/references/execution.md` § Audits step 6), whose failure does not point at code those features changed (the stack trace or the module under test is outside their in-scope files) | Pre-existing, not this feature's. Listed under **Baseline failures** and in Not verified; never a task, never debugged, never makes the run FAIL. After the first fully green whole-suite run every red test is a regression and this class no longer applies |
-| `test-defect` | The test is wrong: it contradicts the spec, or fails by its own error (syntax, test helper import, fixture, selector) while the behavior it targets is right | Correct the test code only: {{DELEGATE:test-engineer}}. Cite the spec scenario or the error as evidence, list it under Tests corrected and run once more |
+| `baseline` | Scope `global` only, while the project has never had a fully green whole-suite run (no run of any `specs/*/test-report.md` with Scope `global`, or kit 1.1's `feature`, that is `PASS` with no baseline failure, and none with Scope `spec (full suite)` that is `PASS` with no failure under **Outside the spec**: the whole suite ran and passed, also when the verify reused that run): a test in a file that neither the active feature nor an Unverified feature created or changed (the in-scope files of `{{SKILLDIR:redevkit-verify}}/references/execution.md` § Audits step 6), whose failure does not point at code those features changed (the stack trace or the module under test is outside their in-scope files) | Pre-existing, not this feature's. Listed under **Baseline failures** and in Not verified; never a task, never debugged, never makes the run FAIL. After the first fully green whole-suite run every red test is a regression and this class no longer applies |
+| `test-defect` | The test is wrong: it contradicts the spec, or fails by its own error (syntax, test helper import, fixture, selector) while the behavior it targets is right. Also a missing test: a scenario that can be automated and is still `MISSING` after step 2 | Correct the test code only: {{DELEGATE:test-engineer}}. Cite the spec scenario or the error as evidence, list it under Tests corrected and run once more. A missing test gets one more attempt to generate it (step 2); still `MISSING` → ask the user how to test it, or whether it cannot be automated here (`SKIPPED (reason)`) |
 | `not-implemented` | The behavior belongs to an open `[ ]` or blocked `[!]` task of `tasks.md` | Not a bug: it goes to the create command |
 | `product-defect` | The test matches the spec and the code behaves differently | It goes to the debug command (the loop) |
 
 Limits: one extra run for environment fixes and one for test corrections; what is still red
 after that keeps its class. When the debug command sent a failure back as a wrong test (its
-handoff names the test and the evidence) and you still judge it a `product-defect`, the spec
-is unclear: it stays `test-defect` and you ask the user; never send it to the debug command
-again.
+handoff, or the `assessment.md` of its bug folder, names the test and the evidence; in scope
+`global` it comes back through the verify command) and you still judge it a
+`product-defect`, the spec is unclear: it stays `test-defect` and you ask the user; never send
+it to the debug command again before the user answers. Record each answer to a `test-defect`
+question (a spec decision, how to test a `MISSING` scenario) in `spec.md` ›
+`## Clarifications` / `## Esclarecimentos` as `{{SKILL:redevkit-clarify}}` step 6 does; every
+later run follows it and never asks it again: a test that contradicts the answer is corrected
+(`test-defect`), code that contradicts it is a `product-defect` that goes to the debug command
+with the answer as evidence, and a scenario the answer says cannot be automated here is
+`SKIPPED (reason)`.
 
 **Outside the spec.** A test outside the spec test set is not this run's: the tests generated
 on request for behavior outside the spec, and, in scope `spec (full suite)` (the whole suite
 ran only because the test command cannot select files), every other test of the suite. A
 failure there is not this run's.
 List it under **Outside the spec** (in Not verified) without a class; it never makes the run
-FAIL. The verify command judges the whole suite. A test whose correction needs a spec decision (spec and test
+FAIL. The verify command judges the whole suite: it never reuses a run whose **Outside the
+spec** lists a failure. A test whose correction needs a spec decision (spec and test
 disagree and the spec is unclear) stays `test-defect`: stop and ask the user. Record the class
 of each failure and the classes that remain in the report (**Failure class**).
 
@@ -157,16 +169,18 @@ in pt-BR; date and time read from the system clock, never guessed) to
 missing; the file is append-only, never edit a past run): **Run by** (`redevkit-test`, or
 `redevkit-verify (step 1)` inside the verify command; literal values, in English in every
 language), **Scope** (`spec`, `spec (full suite)` or `global`), the spec test set in scope
-`spec`, Code state table, commands executed, results with the class of each failure,
+`spec`, Code state table (the template's rows, `Tree fingerprint` included; never a prose
+line: the verify and the deploy read the fingerprint from that row), commands executed, results with the class of each failure,
 baseline failures (scope `global`), acceptance-scenario coverage (`PASS`, `FAIL`,
 `SKIPPED (reason)`, `MISSING`), tests generated and corrected, verdict and next step. Tokens
 stay in English in every language.
 
-Verdict: **PASS** only when every command exited 0 (in scope `global`, or failed only by
-`baseline` failures), no other test failed and every acceptance scenario that can be
-automated maps to a passing test. Anything else is **FAIL**, including a suite that could not
-run or an automatable scenario left `MISSING`; a `FAIL` run always names its failure classes,
-and the handoff follows them.
+Verdict: **PASS** only when no test of this run's scope failed: every command exited 0, or its
+only failures are `baseline` failures (scope `global`) or tests listed under **Outside the
+spec** (scope `spec (full suite)`; the verify judges them), and every acceptance scenario that
+can be automated maps to a passing test. Anything else is **FAIL**, including a suite that
+could not run or an automatable scenario left `MISSING` (class `test-defect`: the test is
+missing, step 4); a `FAIL` run always names its failure classes, and the handoff follows them.
 
 A scenario that cannot be automated in this environment (human visual review, a reference
 device, real OS or browser events the harness cannot produce) is `SKIPPED (reason)` and is
@@ -192,14 +206,18 @@ failing test, and debug cannot fix a missing human check), but it is never count
 Save per `{{SKILL:redevkit-memanager}}`: `active.md` › Last results › Test (date, verdict,
 scope, failure classes on `FAIL`, run by, command, link to the run), Failing scope and Test
 cycle as [loops](references/loops.md) defines (`PASS` resets the debug rounds), and Known
-issues (failing tests on `FAIL`); `tech.md` when the test command was detected or changed;
+issues (failing tests on `FAIL`). On `FAIL`, when `- Verify:` of the active feature is
+`converged+verified`, append `· invalidated by test FAIL YYYY-MM-DD HH:MM` to that line: the
+deploy no longer accepts that verify, even on the same code, until a new verify runs
+([code-state](references/code-state.md) § Deploy reference run). `tech.md` when the test command was detected or changed;
 `MEMORY.md`. Print `💾 Memory updated (files).`
 
 ## Evidence rule
 
 The verdict comes only from commands that ran and their exit codes and counts, copied into the
 report. A step that did not run is `SKIPPED (reason)`, never `PASS`. Never write `PASS` when
-a test that is not `baseline` failed, errored or was not executed because the runner crashed.
+a test of this run's scope (not `baseline`, not listed under **Outside the spec**) failed,
+errored or was not executed because the runner crashed.
 
 ## Handoff
 
@@ -210,7 +228,8 @@ a test that is not `baseline` failed, errored or was not executed because the ru
 - `FAIL`, by failure class; the first that applies wins:
   - `environment` → no command: name what must be fixed, then run `{{CMD:redevkit-test}}`
     again. Never send an environment failure to the debug command.
-  - `test-defect` left → no command: the question about the spec is pending for the user.
+  - `test-defect` left → no command: the question for the user is pending (a spec decision, or
+    how to test a scenario still `MISSING`); once answered, run `{{CMD:redevkit-test}}` again.
   - `not-implemented` → `{{CMD:redevkit-create}}` for the open tasks. When only blocked `[!]`
     tasks cover it, name them and what each needs; the user resolves that or revises the
     plan with `{{CMD:redevkit-plan}}`.

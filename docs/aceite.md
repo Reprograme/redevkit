@@ -210,7 +210,7 @@ verde segue para o deploy sugerindo o verify. Decisões tomadas com o solicitant
 
 | Decisão | Onde está |
 | --- | --- |
-| O verify decide pelo estado do código: reaproveita a última execução do `test-report.md` sobre o mesmo código (`PASS` segue, `FAIL` dá `failed`); senão executa o procedimento do test | `kit/commands/redevkit-verify/SKILL.md` passo 1 |
+| O verify decide pelo estado do código: reaproveita a última execução do `test-report.md` sobre o mesmo código (`PASS` global, ou `spec (full suite)` sem falha fora da spec, segue, desde que nenhuma execução `FAIL` venha depois; `FAIL` global sem `environment`, sem `test-defect` e sem devolução do debug dá `failed`); senão executa o procedimento do test | `kit/commands/redevkit-verify/SKILL.md` passo 1 |
 | Com o test verde, o verify continua (convergência, execução sem rodar a suíte de novo, auditorias); com o test vermelho, para e vai ao debug | Passos 1–4 do verify |
 | Ciclo de correção: 2 `failed` após debug (qualquer causa) ou 3 verify sem `converged+verified` disparam o G5; execuções de testes não zeram o contador | Passo 6 do verify (definição única) |
 | Deploy: com verify pendente, `BLOCKED` até um verify `converged+verified`; senão, a última execução do `test-report.md` precisa ser `PASS` sobre o código atual | `kit/commands/redevkit-test/references/code-state.md` § Deploy reference run |
@@ -282,11 +282,12 @@ laço test ↔ debug com limite. Decisões tomadas com o solicitante:
 | --- | --- |
 | O test roda só o conjunto de testes da spec ativa, sem argumento de arquivo ou cenário; laço test → debug → test só para `product-defect`, G5 depois de 5 rodadas de debug | `kit/commands/redevkit-test/SKILL.md`; `references/loops.md` (definição única dos laços e do G5) |
 | O verify roda a suíte inteira, mais convergência, execução e auditorias; laço verify → debug → verify, G5 depois de 3 rodadas de debug ou 3 rodadas sem convergir | `kit/commands/redevkit-verify/SKILL.md`; `loops.md` |
-| O deploy exige o último verify `converged+verified` sobre o código atual e nenhuma feature Unverified; a bandeira `- Verify pending:` sai | `references/code-state.md` § Deploy reference run; `redevkit-deploy` |
+| O deploy exige o último verify `converged+verified` sobre o código atual, nenhuma execução `FAIL` do `test-report.md` depois da que ele usou e nenhuma feature Unverified; a bandeira `- Verify pending:` sai | `references/code-state.md` § Deploy reference run; `redevkit-deploy` |
 | Um test verde permite um novo plan; a feature anterior entra em `- Unverified:` e o próximo verify a converge e audita | Fase `redevkit-specify`; `loops.md` § Unverified |
 | O debug devolve ao laço de onde veio (`- Failing scope:`); fora de um laço, pergunta e recomenda pelo contexto | `kit/commands/redevkit-debug/SKILL.md` § Handoff |
-| Antes da primeira execução da suíte inteira toda verde, falhas em testes que as features não tocaram são `baseline` | `redevkit-test` passo 4 |
+| Antes da primeira execução da suíte inteira toda verde (`PASS` global sem baseline, ou `PASS` em `spec (full suite)` sem falha fora da spec), falhas em testes que as features não tocaram são `baseline` | `redevkit-test` passo 4 |
 | `test_runner.py --paths`; scripts `node --test` sem argumentos posicionais aceitam arquivos | `test-audits/test_s21_test_runner_paths.py` |
+| `test_runner.py` agnóstico da suíte: `--cmd` com o comando de teste do `tech.md` (`{paths}` para os arquivos); detecção de PHP (PHPUnit, Pest, `composer test`), Go, Rust, .NET, Ruby e Maven | `test-audits/test_s22_test_runner_agnostic.py` |
 
 Uma revisão independente do kit encontrou oito problemas, todos corrigidos antes do E2E final
 (ver [e2e/RESULTS.md](../e2e/RESULTS.md), histórico). O E2E também mostrou que testes pedidos
@@ -297,3 +298,25 @@ Evidência de execução: E2E real no Claude Code com o kit 1.2.0 (`e2e/runs/r9`
 cinco cenários aprovados: B e C (laço da spec), D (laço de lacunas), E (cadeia `--auto`
 inteira até o laço global) e F (laço global com regressão fora da spec). Testes: 63 Node e 189
 Python; `validate-kit` e markdownlint sem achados. Não refeito: o E2E no Codex e o cenário A.
+
+Kit 1.3.0 (`e2e/runs/r11`, 2026-11-25): os cenários A–F e R, no Claude Code e no Codex, 14
+de 14 aprovados ([RESULTS.md](../e2e/RESULTS.md)). A rodada achou três problemas, corrigidos
+antes das repetições: o fingerprint gravado em prosa pelo verify (F no Codex), acentos
+corrompidos ao passar um script por pipe do PowerShell (F no Codex) e a allowlist do harness,
+que negava o `mv` do arquivamento da memória legada (C e F no Claude).
+
+## 9. Segunda auditoria das regras do kit (2026-11-25)
+
+Origem: os achados B05, B06, B07, B17, B21, N03 e N04 da segunda auditoria verificada. Cada
+regra corrigida tem um teste de guarda em `test/kit-rules.test.js`, que falha se a regra sair
+do kit:
+
+| Achado | Correção | Onde está |
+| --- | --- | --- |
+| B05: o verify reaproveitava um `FAIL` por `test-defect` e repetia a pergunta sobre a spec | O verify nunca reaproveita um `FAIL` por `test-defect`; a resposta vai para os Esclarecimentos da `spec.md` e as execuções seguintes a seguem; o status aponta a resposta e o comando que roda o teste de novo, também depois de um verify `failed` | `redevkit-verify` passo 1 e Handoff; `redevkit-test` passo 4; `redevkit-status` § Handoff; `loops.md` |
+| B06: um verify verde anterior a um test vermelho liberava o deploy | Um `FAIL` no `test-report.md` depois da execução usada pelo verify deixa o deploy `BLOCKED`, mesmo sobre o mesmo código; o test marca a linha `- Verify:` como `invalidated by test FAIL`; o verify não reaproveita um `PASS` seguido de `FAIL` | `code-state.md` § Deploy reference run; `redevkit-deploy`; `redevkit-test` fase de memória 3 |
+| B07: um `PASS` em `spec (full suite)` não encerrava a baseline | Também conta como a primeira execução da suíte inteira toda verde, inclusive quando o verify o reaproveita | `redevkit-test` passo 4; `redevkit-verify` passo 1; templates `test-report.md` |
+| B17: `--rollback` podia usar o relatório de um deploy cancelado | Usa o último relatório do ambiente que o alterou (`succeeded`, ou `failed` depois da publicação), ignorando `aborted` e falhas anteriores à mudança; o novo relatório nomeia o que desfez | `redevkit-deploy` § Rollback mode; templates `deploy.md` |
+| B21: cenário automatizável `MISSING` sem próxima etapa | É `test-defect` (teste ausente): mais uma tentativa de gerar e, persistindo, uma pergunta ao usuário | `redevkit-test` passo 4 e Handoff; `redevkit-verify` Handoff; templates `test-report.md` |
+| N03: a Fix policy do verify contradizia o `SKILL.md` | Mesmas classes, destinos e ordem do Handoff do verify | `redevkit-verify/references/execution.md` § Fix policy |
+| N04: o template `verification.md` não tinha próximo passo para `test-defect` | Opção acrescentada nas duas línguas | `templates/{en,pt-BR}/reports/verification.md` |

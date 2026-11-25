@@ -60,16 +60,21 @@ Tells the debug command where to hand back.
 ### Correction cycle (global scope)
 
 - **Debug rounds:** the debug command adds 1 whenever it hands back to `redevkit-verify`
-  (after changing code or tests, or sending the failure back as a wrong test). Reset to 0 by a
-  verify that ends in `converged+verified` or `gaps`.
+  (after changing code or tests, or sending the failure back as a wrong test: a wrong test of
+  a `global` failure always goes back to `redevkit-verify`, never to `redevkit-test`, so the
+  whole suite judges it again). Reset to 0 by a verify that ends in `converged+verified` or
+  `gaps`. A verify that follows a debug handback never reuses the old `FAIL` test run
+  (`redevkit-verify` step 1), so every round is judged on a new run.
 - **Rounds without convergence:** the verify command adds 1 for a `gaps` verdict and for a
   `failed` verdict that hands off to the create command (`not-implemented`), and resets it to 0
   on `converged+verified`. A `failed` verdict that hands off to the debug command is counted by
   the debug rounds instead, so the limit of 3 debug rounds is the one that applies to a code
   defect. Test runs never change it, so a gaps → create → test → verify loop still reaches
   G5. A `failed` verdict whose only failure class is `environment`, or that reused a `FAIL`
-  test run on the same code (nothing changed since), changes neither counter: the code was
-  not judged.
+  test run on the same code (nothing changed and no debug handback since), changes neither
+  counter: the code was not judged. An `environment` `FAIL` is never reused, so the next
+  verify runs the suite again; neither is a `test-defect` `FAIL`, whose test correction or
+  question for the user only the test procedure resolves.
 - **G5:** a verify reaches G5 when its verdict is `failed` while debug rounds is 3 or more, or
   when rounds without convergence reaches 3.
 
@@ -88,7 +93,10 @@ convergence and the audits.
 - The verify command converges and audits the active feature and every listed feature, and
   writes `none` when it ends in `converged+verified`. A gap found in a listed feature becomes a
   Convergence task of the **active** feature's `tasks.md` (citing the listed feature's spec),
-  because the create and test commands work on the active feature only.
+  because the create and test commands work on the active feature only. An open or blocked
+  task in the listed feature's own `tasks.md` does not cover the gap: it is carried into the
+  active feature's `tasks.md` once (`redevkit-converge` step 3), so each round has work the
+  create command can run.
 - The deploy is `BLOCKED` while the line lists any feature. To drop a feature that was
   abandoned, the user asks `redevkit-memanager` to remove it from the line; the reason goes to
   `changelog.md`.

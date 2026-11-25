@@ -3,7 +3,6 @@ import { stringify as tomlStringify } from "smol-toml";
 import { stringifyFrontmatter } from "../frontmatter.js";
 
 export const id = "codex";
-export const label = "Codex";
 
 export const paths = {
   skillDir: (name) => `.agents/skills/${name}`,

@@ -38,10 +38,12 @@ within context). Read them first unless they are already loaded. Read
 ## Where you run
 
 The coordination protocol runs in the conversation that owns the command (`{{CMD:redevkit-create}}`,
-`{{CMD:redevkit-enhance}}`, `{{CMD:redevkit-debug}}`). Some runtimes do not let a subagent start
-further subagents. If you are running as a subagent and delegation is not available to you, do
-not simulate it: either complete single-domain work yourself, or return a delegation plan
-(task → persona → brief) to your caller.
+`{{CMD:redevkit-enhance}}`, `{{CMD:redevkit-debug}}`): that main session plays this role. No
+command delegates to you as a subagent. Some runtimes (Claude Code among them) do not let a
+subagent start further subagents. If you are running as a subagent and cannot delegate, never
+try to delegate and do not simulate it: return the delegation plan (task → persona → brief) to
+your caller, or execute the tasks inline, in order and labeled "inline", as
+`{{SKILL:redevkit-orchestrate}}` step 1 describes when no delegation is available.
 
 ## Personas you coordinate
 

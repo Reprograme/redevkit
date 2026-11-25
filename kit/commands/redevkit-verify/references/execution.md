@@ -2,7 +2,7 @@
 
 Steps 3 and 4 of redevkit-verify. The test suite is not part of this reference: step 1 of
 redevkit-verify runs the whole suite through the test procedure in the global scope (or
-reuses a run on the same code). The **features in scope** are the active feature and every
+reuses a run on the same code, under the rules of its step 1). The **features in scope** are the active feature and every
 feature on the `- Unverified:` line of `active.md`. Principle: code that exists is not code that works. Verify
 by running it; never by inspection or assumption.
 
@@ -32,8 +32,8 @@ folders after a debug).
 2. When the Project Type has a runtime (`web`, `fullstack`, `api`, `mobile` web preview,
    `game` for the web): start the application in the background as the preview command's
    start procedure describes, wait for the HTTP health check, walk the critical flows of
-   `quickstart.md` of each feature in scope (happy path and at least one error path), then
-   stop it.
+   `quickstart.md` of each feature in scope (happy path and at least one error path), and
+   keep it running until the audits of step 4 end: they take its URL.
 3. Anything that cannot be automated goes to **Not verified**, with the reason.
 
 ### Checklist by Project Type
@@ -53,9 +53,9 @@ folders after a debug).
 
    | Project Type | Audit | Runtime flag |
    | --- | --- | --- |
-   | `web`, `fullstack`, `mobile`, `game` with the app running | `verify_all.py` with the app URL | none |
-   | `web`, `fullstack`, `mobile`, `game` without a running app | `checklist.py` | `--no-runtime` |
-   | `api` | `checklist.py` | `--no-runtime` unless the server is running |
+   | `web`, `fullstack`, `mobile`, `game` with the app running (the one step 3 started) | `verify_all.py` with the app URL | none |
+   | `web`, `fullstack`, `mobile`, `game` whose app did not start in step 3 | `checklist.py` | `--no-runtime` |
+   | `api` | `checklist.py` | `--url` of the server step 3 started; `--no-runtime` when it did not start |
    | `cli`, `library`, `desktop`, `other` | `checklist.py` | `--no-runtime` |
 
    Always add `--no-tests`: step 1 already ran or reused the test suite, so the orchestrator
@@ -94,6 +94,11 @@ folders after a debug).
    that the user add a gitignore-style pattern to `.redevkit/audit-ignore` (one per line),
    which every audit reads, or pass `--exclude PATTERN` for a single run. Never create or
    edit that file without the user's approval.
+7. When the orchestrator run ends (pass, fail, timeout or error), stop the application step 3
+   started, as the preview command's stop procedure describes, and confirm its port is free.
+   The same applies whenever the verification leaves steps 3–4 early (a failure, a gate, an
+   interruption): an application the verify started never outlives the run. Record the stop
+   in the execution evidence.
 
 Priority when reading failures: Security → Lint → Schema → Tests → UX → SEO →
 Lighthouse/E2E.
@@ -109,9 +114,13 @@ only: Audits step 6; baseline and out-of-scope findings never count) become eith
   feature), same grammar as the other tasks; or
 - **failed** — a `FAIL` test run (step 1), build failure, application that does not start,
   broken critical flow, or a Security or Lint failure of error severity. The handoff follows
-  the cause: a test run that failed by `environment` is fixed outside the code, one that
-  failed by `not-implemented` goes to the create command, everything else to the debug
-  command, which hands back to the verify (global loop, G5 after 3 debug rounds).
+  the cause, as the verify command's Handoff lists it (the first that applies wins): a test
+  run that failed by `environment` → no command, fixed outside the code, then the verify
+  again; by `test-defect` → no command, the question for the user is pending, then the verify
+  again (its test procedure corrects the test or follows the answer); by `not-implemented` →
+  the create command; everything else (a `product-defect`, build, start, flow or blocking
+  audit) → the debug command, which hands back to the verify (global loop, G5 after 3 debug
+  rounds).
   Test failures classified `baseline` (pre-existing, before the project's first fully green
   whole-suite run) never count as failed.
 
