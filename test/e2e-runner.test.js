@@ -25,7 +25,7 @@ fs.writeFileSync(
     'const fs = require("node:fs");',
     'const path = require("node:path");',
     "const mode = process.env.FAKE_MODE;",
-    "const hold = Number(process.env.FAKE_HOLD_MS || 8000);",
+    "const hold = Number(process.env.FAKE_HOLD_MS || 20000);",
     "const pidFile = process.env.FAKE_PID_FILE;",
     "// A holder that inherits stdout/stderr and keeps them open; it records its pid for cleanup.",
     'const holder = () => spawn(process.execPath, ["-e", `require("fs").appendFileSync(${JSON.stringify(pidFile)}, process.pid + "\\\\n"); setTimeout(() => {}, ${hold})`], { stdio: ["ignore", "inherit", "inherit"], detached: true }).unref();',
@@ -100,6 +100,15 @@ const guardedRun = async (mode, timeoutMs, drainMs, name) => {
   }
 };
 
+/**
+ * How long the holder keeps stdout open, and the bound a step must settle within: the timeout,
+ * the drain cap and an allowance for killing the tree (taskkill on a loaded CI runner can take
+ * seconds). The bound stays far below HOLD_MS, so passing proves the runner did not wait for it.
+ */
+const HOLD_MS = 20000;
+const KILL_ALLOWANCE_MS = 4000;
+const settleBound = (timeoutMs, drainMs) => timeoutMs + drainMs + KILL_ALLOWANCE_MS;
+
 test.after(() => fs.rmSync(BASE, { recursive: true, force: true }));
 
 test("safety: the test PATH resolves only the fake codex", () => {
@@ -125,7 +134,7 @@ test("B13: the agent exits 0 but a detached grandchild holds stdout: the drain i
   const drainMs = 1000;
   const { r, elapsed, log, pids } = await guardedRun("orphan-exit", timeoutMs, drainMs, "orphan-exit");
   assert.equal(pids.length, 1, "the holder started");
-  assert.ok(elapsed < 2 * timeoutMs + drainMs, `settled after ${elapsed} ms (holder keeps stdout for 8 s)`);
+  assert.ok(elapsed < settleBound(timeoutMs, drainMs), `settled after ${elapsed} ms (the holder keeps stdout for ${HOLD_MS / 1000} s)`);
   assert.equal(r.code, 0, JSON.stringify(r));
   assert.equal(r.timedOut, undefined, "the agent exited in time");
   assert.equal(r.drainCut, true);
@@ -139,7 +148,7 @@ test("B13: the agent never exits: timeout kills the tree, the step fails and the
   const { r, elapsed, log, pids } = await guardedRun("hang", timeoutMs, drainMs, "hang");
   assert.equal(pids.length, 1, "the holder started");
   assert.ok(elapsed >= timeoutMs - 50, `settled after ${elapsed} ms`);
-  assert.ok(elapsed < 2 * timeoutMs + drainMs, `settled after ${elapsed} ms (agent sleeps 60 s, holder 8 s)`);
+  assert.ok(elapsed < settleBound(timeoutMs, drainMs), `settled after ${elapsed} ms (agent sleeps 60 s, holder ${HOLD_MS / 1000} s)`);
   assert.equal(r.timedOut, true, JSON.stringify(r));
   assert.notEqual(r.code, 0);
   assert.equal(stepFailed(r), true);

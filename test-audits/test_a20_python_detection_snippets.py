@@ -90,11 +90,15 @@ class TestA20Snippets(unittest.TestCase):
                 folder = project.root / "fake"
                 folder.mkdir()
                 for name, version in fakes(versions).items():
-                    if version is None:
-                        continue
-                    stream = " >&2" if version.startswith("Python 2") else ""
                     path = folder / name
-                    path.write_text(f'#!/bin/sh\necho "{version}"{stream}\n', encoding="utf-8", newline="\n")
+                    if version is None:
+                        # "Not installed" for the snippet means the command fails like a missing one
+                        # (127). A shadow is needed: the PATH keeps /usr/bin for `timeout`, and a CI
+                        # runner (Ubuntu) has a real python there.
+                        path.write_text("#!/bin/sh\nexit 127\n", encoding="utf-8", newline="\n")
+                    else:
+                        stream = " >&2" if version.startswith("Python 2") else ""
+                        path.write_text(f'#!/bin/sh\necho "{version}"{stream}\n', encoding="utf-8", newline="\n")
                     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
                 script = project.root / "detect.sh"
                 script.write_text(
