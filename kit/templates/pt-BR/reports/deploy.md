@@ -10,6 +10,7 @@ type: deploy
 - **Disparado por**: [USUÁRIO] (deploys só rodam quando o usuário os invoca)
 - **Features**: `specs/[NNN-nome-curto]/`
 - **Desfecho**: [succeeded | failed | rolled-back | aborted]
+- **Rollback de**: [o relatório que esta execução `--rollback` desfez, ou nenhum]
 
 <!--
 Nunca grave segredos (tokens, senhas, chaves, strings de conexão) neste arquivo.
@@ -23,6 +24,7 @@ failed, rolled-back, aborted, clean, dirty.
 | --- | --- | --- | --- |
 | Execução de referência | [verification.md, execução AAAA-MM-DD HH:MM] | — | — |
 | Veredito da referência | [converged+verified] | — | OK / BLOCKED |
+| Execuções de teste depois da referência | [test-report.md, execução AAAA-MM-DD HH:MM que ela usou] | [nenhuma / todas PASS / execução FAIL AAAA-MM-DD HH:MM] | OK / BLOCKED |
 | Features não verificadas | — | [none / specs/NNN-nome, …] | OK / BLOCKED |
 | Tree fingerprint | `sha256:[HASH]` | `sha256:[HASH]` | OK / BLOCKED |
 | Commit (HEAD) | `[SHA]` | `[SHA]` | — |
@@ -34,7 +36,8 @@ failed, rolled-back, aborted, clean, dirty.
 <!--
 Execução de referência e comparação: redevkit-test/references/code-state.md (a definição
 única). A referência é o último verify da feature ativa, nunca uma execução de teste.
-BLOCKED quando não há execução de verify, quando ela não é converged+verified, quando ainda há
+BLOCKED quando não há execução de verify, quando ela não é converged+verified, quando uma
+execução de teste posterior à que ela usou é FAIL (mesmo sobre o mesmo código), quando ainda há
 feature não verificada (Unverified), quando o Tree fingerprint difere (o código mudou depois
 dela) ou quando o estado do código não pode ser calculado. Commit e árvore de
 trabalho são só contexto.

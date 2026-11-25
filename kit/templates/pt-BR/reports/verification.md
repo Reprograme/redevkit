@@ -59,6 +59,7 @@ Convergência, Evidência de execução e Auditorias ficam SKIPPED (test run FAI
 | --- | --- | --- | --- |
 | Build | `[COMANDO]` | [CÓDIGO DE SAÍDA] | [compilou sem erros, ou o erro] |
 | Subida da aplicação | `[COMANDO]` | [CÓDIGO DE SAÍDA] | [ouvindo em URL, ou o erro], ou SKIPPED ([MOTIVO]) |
+| Parada da aplicação (depois das auditorias) | `[COMANDO]` | [CÓDIGO DE SAÍDA] | [porta liberada], ou SKIPPED ([MOTIVO]) |
 
 #### Fluxos críticos
 
@@ -110,4 +111,4 @@ bloqueante falha.
 
 - **Ciclo de correção** (depois desta execução): debug rounds [N]/3 · rounds without convergence [N]/3
 - **Unverified** (depois desta execução): [none | specs/NNN-nome, …]
-- **Próximo passo**: [redevkit-deploy (disparado pelo usuário) ou redevkit-plan | redevkit-create ou redevkit-enhance (gaps) | redevkit-debug (failed) | redevkit-create (failed: not-implemented) | corrigir o ambiente e rodar o redevkit-verify de novo (failed: environment) | G5 atingido: aguardando o usuário]
+- **Próximo passo**: [redevkit-deploy (disparado pelo usuário) ou redevkit-plan | redevkit-create ou redevkit-enhance (gaps) | redevkit-debug (failed) | redevkit-create (failed: not-implemented) | corrigir o ambiente e rodar o redevkit-verify de novo (failed: environment) | responder a pergunta que a execução de testes nomeia e rodar o redevkit-verify de novo (failed: test-defect) | G5 atingido: aguardando o usuário]

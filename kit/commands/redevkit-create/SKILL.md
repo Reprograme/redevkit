@@ -90,7 +90,8 @@ Follow `{{SKILL:redevkit-implement}}`, which drives `{{SKILL:redevkit-orchestrat
   constitution waives TDD by amendment.
 - UI tasks build against the tokens and components in `DESIGN.md`.
 - Mark a task `[X]` only after its `VERIFY:` criterion was observed (command and result). A
-  task still failing when its retry budget is spent is marked `[!]` with its `BLOCKED` note
+  Convergence task that carries another feature's task ("carries <feature> T0NN") also
+  marks that original `[X]` in its own `tasks.md` (the only edit there). A task still failing when its retry budget is spent is marked `[!]` with its `BLOCKED` note
   (`{{SKILL:redevkit-orchestrate}}` step 7); it is never left as a plain `[ ]`.
 - A task that would violate the constitution stops the run (G3). A destructive or
   irreversible action (deleting files or data, dropping tables, rewriting history) needs

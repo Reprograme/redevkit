@@ -132,19 +132,23 @@ class TestS17UnittestDiscovery(unittest.TestCase):
         self.assertEqual(json_tail(out)["status"], "failed")
 
     def test_other_layouts_keep_the_default_discovery(self):
+        # Every location with tests is a start (A08): see test_a08_unittest_all_locations.py.
         with TempProject("S17/root-tests") as project:
-            self.assertEqual(test_runner._unittest_discover_args(project.root), [])  # test files in the root
+            self.assertEqual(test_runner._unittest_start_dirs(project.root), ["."])  # test files in the root
             project.write("tests/test_more.py", "")
-            self.assertEqual(test_runner._unittest_discover_args(project.root), [])
+            self.assertEqual(test_runner._unittest_start_dirs(project.root), [".", "tests"])
         with TempProject() as project:
             project.write("tests/__init__.py", "")
             project.write("tests/test_pkg.py", "")
-            self.assertEqual(test_runner._unittest_discover_args(project.root), [])  # a package: found from the root
+            # A package below the root makes the root a start (B03): plain discovery finds it.
+            self.assertEqual(test_runner._unittest_start_dirs(project.root), ["."])
+            self.assertEqual(test_runner._unittest_command("py", project.root)[-2:], ["discover", "-v"])
             (project.root / "tests" / "__init__.py").unlink()
-            self.assertEqual(test_runner._unittest_discover_args(project.root), ["-s", "tests"])
+            self.assertEqual(test_runner._unittest_start_dirs(project.root), ["tests"])
         with TempProject() as project:
             project.write("test/test_x.py", "")
-            self.assertEqual(test_runner._unittest_discover_args(project.root), ["-s", "test"])
+            self.assertEqual(test_runner._unittest_start_dirs(project.root), ["test"])
+            self.assertEqual(test_runner._unittest_command("py", project.root)[-2:], ["-s", "test"])
 
 
 class TestS17ExitCodes(unittest.TestCase):

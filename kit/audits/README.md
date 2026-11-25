@@ -21,7 +21,9 @@ per session and reuse the result.
    `python3`.
 2. Validate each candidate by **executing** `<candidate> --version` with its output
    captured and a timeout of about 10 seconds. A candidate is valid only when the
-   command exits 0 and prints `Python 3.x`. Never accept a candidate just because it
+   command exits 0 and prints `Python 3.<minor>` with a minor version of 9 or more
+   (`Python 3.9.0` and newer). `Python 2.7.18` or `Python 3.8.10` is not valid: try the
+   next candidate. Never accept a candidate just because it
    exists on `PATH`: the Microsoft Store stub (`python.exe` or `python3.exe` under
    `WindowsApps`) prints nothing, exits non-zero (9009) or opens the Store, and can
    block when attached to a console, so a timeout counts as a failure.
@@ -34,7 +36,12 @@ per session and reuse the result.
 # POSIX shells (Git Bash included); `timeout` guards against a blocking stub
 PY=""
 for candidate in python "py -3" python3; do
-  if timeout 10 $candidate --version 2>/dev/null </dev/null | grep -q "^Python 3"; then
+  version=$(timeout 10 $candidate --version 2>/dev/null </dev/null) || continue
+  case "$version" in
+    "Python 3."*) minor=${version#Python 3.}; minor=${minor%%[!0-9]*} ;;
+    *) continue ;;
+  esac
+  if [ -n "$minor" ] && [ "$minor" -ge 9 ]; then
     PY="$candidate"; break
   fi
 done
@@ -52,8 +59,11 @@ foreach ($candidate in @('python', 'py -3', 'python3')) {
   $argList = @(@($rest) + '--version' | Where-Object { $_ })
   $p = Start-Process -FilePath $exe -ArgumentList $argList -NoNewWindow -PassThru `
     -RedirectStandardOutput $out -RedirectStandardError "$out.err"
+  $null = $p.Handle  # Windows PowerShell 5.1: without the handle ExitCode stays empty
   if (-not $p.WaitForExit(10000)) { $p.Kill(); continue }
-  if ($p.ExitCode -eq 0 -and (Get-Content $out -Raw) -match '^Python 3') { $PY = $candidate; break }
+  if ($p.ExitCode -eq 0 -and (Get-Content $out -Raw) -match '^Python 3\.(\d+)' -and [int]$Matches[1] -ge 9) {
+    $PY = $candidate; break
+  }
 }
 ```
 
@@ -68,6 +78,7 @@ Run from the project root. `<PY>` is the interpreter chosen above.
 <PY> .redevkit/audits/verify_all.py . --no-runtime --no-tests --exclude "prototypes/"
 <PY> .redevkit/audits/security_scan.py . --output summary  # one audit
 <PY> .redevkit/audits/test_runner.py . --timeout 600 --log test-output.log
+<PY> .redevkit/audits/test_runner.py . --cmd "php vendor/bin/phpunit {paths}" --paths tests/Unit/UserTest.php
 <PY> .redevkit/audits/code_state.py .                        # code state of a test or verify run
 ```
 
@@ -96,9 +107,10 @@ tools with their own configuration). Before each check they print
 | Option | Effect |
 | --- | --- |
 | `project` | Project directory (default `.`) |
-| `--timeout SECONDS` | Time limit of the test command (default `300`). When it expires the whole process tree is killed and the result is a timeout (see [Exit codes](#exit-codes)) |
+| `--cmd "COMMAND"` | The project's test command (`tech.md` › Dev environment › Test), any test suite, instead of detection; the time limit, log and verdict stay the same. A `{paths}` word marks where `--paths` files go (removed without `--paths`; without the word the whole suite runs, `paths_ignored`). The command runs without a shell: leading `NAME=value` words set environment variables; shell operators (`&&`, `\|`, `;`, redirections) and an empty command are a usage error (exit `2`), so put chained steps in a project script. An executable that is not found (PATH, then `node_modules/.bin` and `vendor/bin`) is SKIPPED (`command not found: …`). `--coverage` is then skipped: put the coverage flags in the command |
+| `--timeout SECONDS` | Time limit of the test command (default `300`): a finite number greater than 0 (`0`, `nan`, `inf` and values that overflow, such as `1e999`, are a usage error, exit `2`, before anything starts). When it expires the whole process tree is killed and the result is a timeout (see [Exit codes](#exit-codes)) |
 | `--log FILE` | Write the full combined output (stdout and stderr, in order) of the test command to `FILE`; the console shows only its last 40 lines |
-| `--paths FILE [FILE ...]` | Run only these test files (relative to the project): the spec scope of `redevkit-test`. Vitest, Jest (directly or through `npm test --`), a `node --test` script without positional arguments, pytest and unittest take files; any other test command runs the whole suite and the output says `Scope: full suite (<reason>)` (JSON `"scope": "full suite"`, `"paths_ignored"`). A missing path or one outside the project is a usage error (exit `2`) |
+| `--paths FILE [FILE ...]` | Run only these test files (relative to the project): the spec scope of `redevkit-test`. Vitest, Jest (directly or through `npm test --`), a `node --test` script without positional arguments, pytest, unittest, Pest, PHPUnit (several files from PHPUnit 10, one before), RSpec, `rails test`, `go test` (the packages of the files) and a `--cmd` with `{paths}` take files; any other test command runs the whole suite and the output says `Scope: full suite (<reason>)` (JSON `"scope": "full suite"`, `"paths_ignored"`). A missing path or one outside the project is a usage error (exit `2`) |
 | `--coverage` | Collect coverage when the tool for it is installed (Vitest with `@vitest/coverage-v8` or `@vitest/coverage-istanbul`, Jest, pytest with `pytest-cov`). Otherwise the suite runs without coverage and one line says `SKIPPED (coverage provider not installed)` or `SKIPPED (coverage not supported for this test command)` |
 
 ## Excluding paths
@@ -177,8 +189,12 @@ change when an untracked file was edited, which made a verify reuse a stale test
 | | |
 | --- | --- |
 | Files hashed in a git repository | Every tracked file, plus every untracked file that git does not ignore and that is not dependency, build or report output (the shared defaults of [Excluding paths](#excluding-paths)) |
+| Git submodules | A checked-out submodule counts with its own files, by the same rule, under its path: a local edit inside it and a checkout of another revision change the fingerprint. A submodule that is not checked out counts with the commit the index records for it. The recorded commit of a checked-out submodule is not hashed, so staging or committing a submodule bump after the run does not change the fingerprint (the content already did) |
+| Nested repositories | An untracked folder with its own `.git` that is not a submodule (a clone never added) counts with its own files (tracked plus untracked, not ignored), under its path, like a checked-out submodule |
 | Files hashed without git | Every file that the shared defaults and the project's `.gitignore` files do not exclude |
-| Never hashed | `.redevkit/`, `specs/`, `.claude/`, `.agents/`, `.codex/` and `.git/` at the project root: reports and memory are written after a run and must not make the code look changed |
+| Executable bit | A file whose git index mode is `100755` (an untracked file, or any file without git: an execute bit on a POSIX file system; Windows has none) is hashed as `<file sha256>+x  <path>`, so `chmod +x` or `git update-index --chmod=+x` changes the fingerprint. Other files keep the plain line: a project without executable files has the same fingerprint as before this rule |
+| A folder that cannot be listed | A nested repository git cannot read, or a folder the walk cannot open, is never left out in silence: `Tree fingerprint: n/a (code state unavailable: cannot list <folder>/ ...)`, and `--expect` prints `Compare: DIFFERENT (code state unavailable: ...)`, exit `1` |
+| Never hashed | `.redevkit/`, `specs/`, `.claude/`, `.agents/`, `.codex/` and `.git/` at the project root: reports and memory are written after a run and must not make the code look changed. When the project folder's file system ignores case (Windows, macOS by default; probed on the folder, not assumed from the OS) they match in any case, so `SPECs/` is excluded, and `Changed files` leaves it out too (`:(exclude,icase)`). On a case-sensitive file system `Specs/` is another folder than the `specs/` the kit writes, so it is code and stays hashed |
 | Independent of | The shell, the commit history and git being installed. A commit made after the run does not change it |
 | Line endings | Hashed as they are on disk: a CRLF checkout of the same code is a different state |
 
@@ -285,7 +301,7 @@ and `success` (true only for exit `0`); each entry of `results` has its own `sta
 | `lint_runner.py` | `npm run lint` or project-local `eslint`, project-local `tsc --noEmit`, `ruff`, `mypy`; a linter that exceeds 120 s fails with `[TIMEOUT]` | Each missing linter; all of them missing |
 | `type_coverage.py` | Explicit `any`, `@ts-ignore`, project-local `tsc`, Python annotation ratio | No TS or Python files; `tsc` missing or timed out (sub-check) |
 | `schema_validator.py` | Prisma naming, ids, `createdAt`, missing `@@index` (advisory). Drizzle files are only listed as "not validated" | No Prisma or Drizzle schema; Drizzle schemas only (nothing validated) |
-| `test_runner.py` | `npm test`, project-local vitest or jest, pytest or unittest with the project's `.venv`/`venv` interpreter when it exists, else `sys.executable` (see [Test Runner verdict](#test-runner-verdict)) | No test command (the `npm init` placeholder script counts as none), runner or declared framework not installed, no tests found, or exit 0 without any test result in the output |
+| `test_runner.py` | Any test suite: the declared `--cmd`, else a detected command: `npm test` or project-local vitest or jest; Pest or PHPUnit from `vendor/bin`, `composer test`; pytest or unittest with the project's `.venv`/`venv` interpreter when it exists, else `sys.executable`; `go test ./...`; `cargo test`; `dotnet test`; RSpec or `rails test`; Maven (see [Test Runner verdict](#test-runner-verdict)) | No test command (the `npm init` placeholder script counts as none), runner or declared framework not installed, no tests found, or exit 0 without any test result in the output |
 | `ux_audit.py` | UX laws, typography, color, motion and effect heuristics, also on PHP views | No frontend source files or PHP views |
 | `accessibility_checker.py` | Input and button labels, `<html lang>`, skip link (when the page has a `<nav>` or `<header>`), keyboard handlers, positive `tabIndex` (comments ignored), also on PHP views | No HTML, JSX, TSX or PHP view files |
 | `seo_checker.py` | `<title>`, meta description, Open Graph (files with a `<head>`), single H1, image alt, also on PHP views | No page files |
@@ -307,28 +323,82 @@ Every audit that scans files accepts `--exclude PATTERN` (repeatable) and
 `--no-gitignore`, walks the project once and applies the policy of
 [Excluding paths](#excluding-paths): by path segment, never by substring.
 
+### Thresholds and options of single audits
+
+The orchestrators run these audits with their defaults and do not forward the options
+below; pass them when you run the script on its own. An invalid value is a usage error
+(exit `2`).
+
+| Script | Option | Effect |
+| --- | --- | --- |
+| `bundle_analyzer.py` | `--file-warn-kib KIB` | An asset of at least this size (raw, KiB) is a `medium` finding (default `250`) |
+| `bundle_analyzer.py` | `--file-fail-kib KIB` | An asset of at least this size is a `high` finding (default `750`) |
+| `bundle_analyzer.py` | `--total-js-fail-kib KIB` | All JavaScript assets together of at least this size are a `high` finding (default `2048`). The three limits are whole numbers, `0` or more; `--fail-on` (default `high`) decides which severity fails |
+| `lighthouse_audit.py` | `--min-performance`, `--min-accessibility`, `--min-best-practices`, `--min-seo SCORE` | Minimum score of each category, an integer from `0` to `100` (defaults `50`, `80`, `80`, `80`); a lower score fails and is listed in `failed_thresholds` |
+| `lighthouse_audit.py` | `--timeout SECONDS` | Time limit of Lighthouse, greater than `0` (default `180`) |
+| `i18n_checker.py` | `--strict` | Scan hard-coded UI strings even when no i18n framework or locale file is detected; without it such a project is SKIPPED |
+| `playwright_runner.py` | `--timeout-ms MS` | Time limit of the page navigation in milliseconds, greater than `0` (default `30000`) |
+
+```bash
+<PY> .redevkit/audits/bundle_analyzer.py . --file-warn-kib 150 --file-fail-kib 500 --total-js-fail-kib 1024
+<PY> .redevkit/audits/lighthouse_audit.py http://localhost:3000 --min-performance 70 --min-seo 90
+<PY> .redevkit/audits/i18n_checker.py . --strict
+<PY> .redevkit/audits/playwright_runner.py http://localhost:3000 --timeout-ms 60000
+```
+
 ### Test Runner verdict
 
 `test_runner.py` decides from the exit code of the test command and from its output:
 
 | Result | When |
 | --- | --- |
-| PASS (`0`) | Exit 0 and the output shows that tests ran: a summary of unittest, pytest, Jest, Vitest, `node --test`, Mocha or a generic `N passed` with at least one test, or, for a format it cannot count, any sign of executed tests (`12 specs`, `ok 1`, a check mark, `PASS file`). The JSON then has `"counts_parsed": false` and zero counts |
-| SKIPPED (`3`) | No test command; `npm` or the declared framework is not installed (`vitest is not installed in node_modules/.bin (run the package install first)`); the summary says zero tests ran (`node --test` without test files, `Ran 0 tests`); Vitest or Jest found no test file; pytest or unittest exited 5; or the command exited 0 and printed no test result at all (`"test": "echo ok"`). Run the project's own test command and judge its output |
-| FAIL (`1`) | Any other non-zero exit code (exit 5 of a command that is not pytest or unittest included) and a timeout |
+| PASS (`0`) | Exit 0 and the output shows that tests ran: a summary of unittest, pytest, Jest, Vitest, `node --test`, Mocha, PHPUnit, Pest, RSpec, minitest, cargo, Maven Surefire, `dotnet test` or a generic `N passed` with at least one passed test and no failed one, or, for a format it cannot count, any sign of executed tests (`12 specs`, `ok 1`, a check mark, `PASS file`). The JSON then has `"counts_parsed": false` and zero counts |
+| SKIPPED (`3`) | No test command; the `--cmd` executable, the stack's tool (`npm`, `php`, `go`, …) or the declared framework is not installed (`vitest is not installed in node_modules/.bin (run the package install first)`, `phpunit is not installed in vendor/bin (run composer install first)`); the summary says zero tests ran (`node --test` without test files, `Ran 0 tests`) or that every test was skipped (0 passed, 0 failed and at least one skipped, pending, ignored, incomplete or todo test: `all tests were skipped (N skipped, 0 passed)`); Vitest or Jest found no test file; pytest or unittest exited 5; or the command exited 0 and printed no test result at all (`"test": "echo ok"`). Run the project's own test command and judge its output |
+| FAIL (`1`) | Any other non-zero exit code (exit 5 of a command that is not pytest or unittest included); a recognised summary with failed tests or errors even when the command exited 0 (a wrapper script that loses the exit code: the observed failures take precedence); and a timeout |
 
 Details:
 
-- Python: when the project root has no `test*.py` and `tests/` (or `test/`) is not a
-  package, unittest starts there (`discover -s tests`); from the root it would find
-  nothing and failing tests would look like "no tests found".
+- Detection (no `--cmd`) tries the stacks in order: Node, PHP, Python when it has test
+  modules or a pytest configuration, Go, Rust, .NET, Ruby, Java (Maven), then any other
+  Python project. A manifest without tests lets the next stack try: a Laravel
+  `package.json` without a test script does not hide PHPUnit, a helper `requirements.txt`
+  does not hide `go.mod`. Gradle is recognised but SKIPPED: it prints no test result by
+  default, so declare a command whose output shows them. Several `.sln` (or several
+  project files without a solution) at the root are SKIPPED: declare the command.
+- `dotnet` prints its summary in the OS language; the runner sets
+  `DOTNET_CLI_UI_LANGUAGE=en` and `VSLANG=1033` (a `NAME=value` word of `--cmd` overrides
+  them) so the counts stay readable.
+- PHPUnit exits 0 with `No tests executed!`: SKIPPED (`no tests found`).
+- Python: unittest discovery starts in every supported location that holds a `test*.py`:
+  the root when it holds one or a package below it does (`tests/` with `__init__.py`,
+  `mypkg/tests/`: from the root unittest enters packages only, at any depth), and each of
+  `tests/` and `test/` that is not a package (from the root unittest would not see them,
+  and failing tests would look like "no tests found"). One location runs `discover -v`
+  (`-s tests` for a folder); several run one after the other, each `discover -v -s <start>
+  -t <start>` in its own process (`Running: … -c "<unittest discover -s START, one process
+  per start>" . tests test`), so a start never imports the modules of another
+  (`tests/helpers.py` and `test/helpers.py`). Each start prints its own summary and the
+  counts are added up; the exit code is 1 when a start failed, 5 when no start ran a test.
+- pytest is the Python runner when the project declares it: `pytest.ini`, `conftest.py`,
+  a pytest section (`[tool.pytest.ini_options]`, `[tool:pytest]` in `setup.cfg`, `[pytest]`
+  in `tox.ini`), or `pytest` (or a `pytest-*` plugin) as a requirement in
+  `requirements*.txt`, the `pyproject.toml` dependency lists (`project.dependencies`,
+  `optional-dependencies`, `dependency-groups`, Poetry, PDM, Hatch, uv), `setup.cfg`
+  options or `tox.ini` `deps`. The word in a comment or in another tool's name
+  (`flake8-pytest-style`) does not count.
+- An output with several summaries of the same runner (several unittest starts, a script
+  that runs one suite after another) counts all of them: unittest, pytest, Jest/Vitest,
+  cargo, Maven Surefire and per-project `dotnet` summaries are added up, so a failure
+  printed before a later green summary still makes the run FAIL.
 - Node: `node_modules/.bin` is also looked up in the parent folders (workspaces).
 - The console shows the last 40 lines of the output (failures and the summary are at the
   end); `--log FILE` keeps all of it.
 - The JSON at the end of the output has `status` (`passed`, `failed`, `skipped`,
   `timeout`), `timed_out`, `exit_code`, `duration_seconds`, `tests_run`, `tests_passed`,
-  `tests_failed`, `counts_parsed`, `coverage`, `reason` (unless passed) and `log` (with
-  `--log`).
+  `tests_failed`, `tests_skipped`, `counts_parsed`, `coverage`, `reason` (unless passed)
+  and `log` (with `--log`). The `Tests:` line adds `, N skipped` when the runner reported
+  skipped tests; `tests_skipped` counts the skipped, pending, ignored, incomplete and todo
+  tests, which are never counted as passed.
 
 ## Tests
 

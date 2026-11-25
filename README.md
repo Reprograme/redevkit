@@ -293,13 +293,13 @@ Project trust:
 
 | Command | Options | What it does |
 | --- | --- | --- |
-| `redevkit init [dir]` | `--here`, `--target`, `--lang`, `--dry-run`, `--yes`, `--force`, `--verbose` | Installs the kit: renders the targets, writes the `AGENTS.md` block, migrates `CLAUDE.md`, merges the config and creates the manifest |
-| `redevkit update` | `--dry-run`, `--no-backup`, `--restore`, `--conflict-report <file>`, `--verbose` | Three-way update of the managed files (see [Updating and recovery](#updating-and-recovery)); `--restore` re-adds the managed files that are missing. Never touches memory, specs or `DESIGN.md` |
+| `redevkit init [dir]` | `--here`, `--target`, `--lang`, `--dry-run`, `--yes`, `--force`, `--verbose`, `--allow-downgrade` | Installs the kit: renders the targets, writes the `AGENTS.md` block, migrates `CLAUDE.md`, merges the config and creates the manifest |
+| `redevkit update` | `--dry-run`, `--no-backup`, `--restore`, `--conflict-report <file>`, `--verbose`, `--allow-downgrade` | Three-way update of the managed files (see [Updating and recovery](#updating-and-recovery)); `--restore` re-adds the managed files that are missing. Never touches memory, specs or `DESIGN.md`. Refuses an installation made by a newer CLI unless `--allow-downgrade` |
 | `redevkit rollback` | `--backup <id>`, `--list`, `--dry-run` | Restores a backup, saving the current state first |
 | `redevkit status` | `--quiet`, `--json` | Installed version, targets, language and changed or missing managed files; works offline |
 | `redevkit doctor` | `--json` | Checks tools, installation, `AGENTS.md`, `CLAUDE.md`, memory, `specs/` numbering, config and Codex trust; exits non-zero on errors |
-| `redevkit target add <claude\|codex>` | `--dry-run`, `--yes`, `--verbose` | Adds a target (`--yes` accepts the `CLAUDE.md` migration) |
-| `redevkit target remove <claude\|codex>` | `--dry-run`, `--verbose` | Removes a target; `AGENTS.md` and `CLAUDE.md` stay. Refuses to remove the last target |
+| `redevkit target add <claude\|codex>` | `--dry-run`, `--yes`, `--verbose`, `--allow-downgrade` | Adds a target (`--yes` accepts the `CLAUDE.md` migration) |
+| `redevkit target remove <claude\|codex>` | `--dry-run`, `--verbose`, `--allow-downgrade` | Removes a target; `AGENTS.md` and `CLAUDE.md` stay. Refuses to remove the last target |
 | `redevkit version` | `--check` | Prints the version; `--check` queries npm for the latest one |
 | `redevkit uninstall` | `--dry-run`, `--yes`, `--force` | Removes the managed files and config entries after a backup. Keeps `.redevkit/memory/`, `specs/`, `DESIGN.md`, your `AGENTS.md` notes and `CLAUDE.md`; managed files you changed stay unless `--force`. Requires `--yes` without a TTY |
 
@@ -339,12 +339,23 @@ or a template) as an error, and a missing knowledge skill or persona as a warnin
 ```bash
 redevkit rollback --list       # list backups
 redevkit rollback --dry-run    # preview the restore
-redevkit rollback              # restore the latest backup
+redevkit rollback              # undo the latest operation
 ```
 
-Before restoring, `rollback` saves the current state as `pre-rollback-<id>`. The default
-restore skips those safety backups; to undo a rollback, run
+Without `--backup`, `rollback` undoes the latest operation (the backup it created). With
+`--backup <id>` of an older operation, it undoes the chain, newest first, down to that one;
+when a link has no backup (a run with `--no-backup`), nothing changes. Every backup of the
+chain is checked before anything is written (an incomplete backup is refused), and after the
+restore every file of the restored manifest must exist. Before restoring, `rollback` saves the
+current state as `pre-rollback-<id>`; to undo a rollback, run
 `redevkit rollback --backup pre-rollback-<id>`.
+
+`init`, `update`, `target`, `rollback` and `uninstall` hold the lock `.redevkit/redevkit.lock`:
+a second command in the same project waits up to 15 s (`REDEVKIT_LOCK_WAIT_MS`) and then fails
+without changing anything; a stale lock (its process ended, or no activity for 5 min) is
+removed. `--dry-run`, `status` and `doctor` take no lock. The manifest's `targets` must list
+`claude` and/or `codex`. When the REDEVKIT block of `AGENTS.md` is malformed, `uninstall`
+(even with `--dry-run`) stops before removing anything.
 
 ## Troubleshooting
 

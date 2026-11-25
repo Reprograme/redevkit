@@ -39,6 +39,17 @@ def valid_url(value: str) -> str:
     return value
 
 
+def positive_ms(value: str) -> int:
+    """A navigation time limit in milliseconds, greater than 0 (0 would disable Playwright's limit)."""
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not an integer: {value}") from None
+    if number <= 0:
+        raise argparse.ArgumentTypeError("the time limit must be greater than 0 milliseconds")
+    return number
+
+
 def run_test(url: str, screenshot: bool, accessibility_only: bool, timeout_ms: int) -> dict:
     if sync_playwright is None:
         return {"url": url, "status": "skipped", "passed": False, "reason": "Playwright is not installed for this Python",
@@ -135,7 +146,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("url", type=valid_url)
     parser.add_argument("--screenshot", action="store_true")
     parser.add_argument("--a11y", action="store_true", help="Run only lightweight accessibility checks")
-    parser.add_argument("--timeout-ms", type=int, default=30000)
+    parser.add_argument("--timeout-ms", type=positive_ms, default=30000, metavar="MS",
+                        help="Time limit of the page navigation in milliseconds (default 30000)")
     args = parser.parse_args(argv)
     result = run_test(args.url, args.screenshot, args.a11y, args.timeout_ms)
     print(json.dumps(result, indent=2, ensure_ascii=False))

@@ -37,36 +37,79 @@ export const which = (cmd, env = process.env) => {
   return null;
 };
 
+/** cmd.exe metacharacters (the set cross-spawn escapes). */
+const CMD_META = /([()\][%!^"`<>&|;, *?])/g;
+
+/**
+ * One argument for a .cmd/.bat shim run through `cmd.exe /d /s /c`. Plain arguments pass as they are;
+ * anything else is quoted for the program's own argv parser (MSVCRT rules) and every cmd.exe
+ * metacharacter is caret-escaped twice: once for the `cmd /c` line and once more because the
+ * shim's `%*` is parsed by cmd.exe again. Spaces, quotes, &, |, % reach the program literally.
+ * A line break cannot cross cmd.exe at all: callers must send such text another way (stdin).
+ */
+export const cmdArg = (arg) => {
+  const a = String(arg);
+  if (/[\r\n]/.test(a)) throw new Error("a line break cannot be passed through cmd.exe");
+  if (/^[A-Za-z0-9_\-.:/\\=+@]+$/.test(a)) return a;
+  const quoted = `"${a.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, "$1$1")}"`;
+  return quoted.replace(CMD_META, "^$1").replace(CMD_META, "^$1");
+};
+
+export const isCmdShim = (exe) => process.platform === "win32" && /\.(cmd|bat)$/i.test(exe);
+
 /**
  * `cmd.exe /s /c` command line for a .cmd/.bat shim. `/s` strips the first and the last quote of
  * the whole line, so it needs an outer pair; without it a path with spaces (e.g. an npm shim in
  * C:\Users\<First Last>\AppData\Roaming\npm) is cut at the first space and never runs.
  */
-export const cmdLine = (exe, args = []) => `""${exe}"${args.map((a) => ` ${a}`).join("")}"`;
+export const cmdLine = (exe, args = []) => `""${exe}"${args.map((a) => ` ${cmdArg(a)}`).join("")}"`;
+
+/**
+ * [command, args, options] to spawn `exe args`: directly, or through `cmd.exe /d /s /c` for a
+ * .cmd/.bat shim (Node refuses to spawn those without a shell: EINVAL). Shared by probe and the E2E.
+ */
+export const spawnArgs = (exe, args = []) =>
+  isCmdShim(exe) ? [process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", cmdLine(exe, args)], { windowsVerbatimArguments: true }] : [exe, args, {}];
 
 /** Run `<cmd> <args>` and return trimmed output, or null when it does not actually run (R2/R3). */
 export const probe = (cmd, args = ["--version"], { timeout = 15000 } = {}) => {
   const exe = which(cmd);
   if (!exe) return null;
-  let r;
-  if (process.platform === "win32" && /\.(cmd|bat)$/i.test(exe)) {
-    r = spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", cmdLine(exe, args)], { encoding: "utf8", timeout, windowsVerbatimArguments: true });
-  } else {
-    r = spawnSync(exe, args, { encoding: "utf8", timeout });
-  }
+  const [command, argv, options] = spawnArgs(exe, args);
+  const r = spawnSync(command, argv, { ...options, encoding: "utf8", timeout });
   if (r.error || r.status !== 0) return null;
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   return out ? out.split(/\r?\n/)[0] : null;
 };
 
-/** Python detection used by the audits: python, py -3 (Windows), python3; validated by executing. */
-export const detectPython = () => {
+/** Oldest Python the audits support (kit/audits/README.md). */
+export const PYTHON_MIN = [3, 9];
+
+/** True for "Python X.Y..." output with X.Y >= PYTHON_MIN. */
+export const pythonCompatible = (versionText) => {
+  const m = /^Python (\d+)\.(\d+)/.exec(String(versionText ?? ""));
+  if (!m) return false;
+  const [major, minor] = [Number(m[1]), Number(m[2])];
+  return major > PYTHON_MIN[0] || (major === PYTHON_MIN[0] && minor >= PYTHON_MIN[1]);
+};
+
+/**
+ * Python detection for the doctor report (the audits themselves are run by the agents, as the kit
+ * describes): python, py -3 (Windows), python3, each validated by executing it. An interpreter older
+ * than PYTHON_MIN is skipped in favour of the next candidate (A20).
+ * Returns { python: {command, version} | null, incompatible: [{command, version}] }.
+ */
+export const detectPython = ({ probeFn = probe } = {}) => {
   const candidates = [["python", []], ...(process.platform === "win32" ? [["py", ["-3"]]] : []), ["python3", []]];
+  const incompatible = [];
   for (const [cmd, pre] of candidates) {
-    const v = probe(cmd, [...pre, "--version"]);
-    if (v && /^Python \d/.test(v)) return { command: [cmd, ...pre].join(" "), version: v };
+    const v = probeFn(cmd, [...pre, "--version"]);
+    if (!v || !/^Python \d/.test(v)) continue;
+    const found = { command: [cmd, ...pre].join(" "), version: v };
+    if (pythonCompatible(v)) return { python: found, incompatible };
+    incompatible.push(found);
   }
-  return null;
+  return { python: null, incompatible };
 };
 
 const codexHome = () => process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
@@ -107,6 +150,14 @@ const SECRET_PATTERNS = [
 const CORE = { "MEMORY.md": "index", "constitution.md": "constitution", "project.md": "project", "system.md": "system", "tech.md": "tech", "active.md": "active", "changelog.md": "changelog", "user.md": "user" };
 const TOPIC_TYPES = new Set(["user", "feedback", "project", "reference"]);
 const DATE = /^\d{4}-\d{2}-\d{2}/;
+
+/**
+ * Feature directory grammar shared by every specs/ check: a number of three or more digits (001-999,
+ * then 1000 and up), a dash and a slug (A18).
+ */
+export const FEATURE_NUMBER = "\\d{3,}";
+const FEATURE_DIR_RE = new RegExp(`^(${FEATURE_NUMBER})-`);
+const ACTIVE_FEATURE_RE = new RegExp(`^\\s*-\\s*(?:Feature|Feature ativa|Funcionalidade)\\s*:\\s*\`?(specs/${FEATURE_NUMBER}-[^\\s\`]+)\`?`, "im");
 
 /** Memory size limits, in lines (kit/memory/redevkit-memanager/SKILL.md › Prune). */
 export const MEMORY_LIMITS = { index: 256, file: 256, changelog: 512 };
@@ -171,7 +222,7 @@ export const checkMemory = (projectDir, lang) => {
   }
   const activePath = path.join(memDir, "active.md");
   if (exists(activePath)) {
-    const m = /^\s*-\s*(?:Feature|Feature ativa|Funcionalidade)\s*:\s*`?(specs\/\d{3}-[^\s`]+)`?/im.exec(readText(activePath));
+    const m = ACTIVE_FEATURE_RE.exec(readText(activePath));
     if (m && !exists(path.join(projectDir, ...m[1].replace(/\/$/, "").split("/")))) add("error", "active.md", `active feature path does not exist: ${m[1]}`);
   }
   return issues;
@@ -183,9 +234,10 @@ export const duplicateFeatureNumbers = (projectDir) => {
   if (!exists(dir)) return [];
   const seen = new Map();
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const m = /^(\d{3})-/.exec(e.name);
+    const m = FEATURE_DIR_RE.exec(e.name);
     if (!e.isDirectory() || !m) continue;
-    seen.set(m[1], [...(seen.get(m[1]) ?? []), e.name]);
+    const n = String(Number(m[1])).padStart(3, "0"); // 0999 and 999 are the same feature number
+    seen.set(n, [...(seen.get(n) ?? []), e.name]);
   }
   return [...seen.entries()].filter(([, v]) => v.length > 1).map(([n, v]) => ({ number: n, dirs: v }));
 };
@@ -196,12 +248,17 @@ export const runDoctor = async (opts, { log = console.log, projectDir = process.
   const tools = {
     node: process.version,
     git: probe("git"),
-    python: detectPython(),
+    python: null,
     claude: probe("claude"),
     codex: probe("codex"),
   };
+  const py = detectPython();
+  tools.python = py.python;
   if (!tools.git) add("warn", "tools", "git not found");
-  if (!tools.python) add("warn", "tools", "Python not found (audits will be SKIPPED; project commands are used instead)");
+  if (!tools.python && py.incompatible.length) {
+    const found = py.incompatible.map((x) => `${x.command}: ${x.version}`).join("; ");
+    add("warn", "tools", `only incompatible Python found (${found}); the audits need Python ${PYTHON_MIN.join(".")}+ (audits will be SKIPPED; project commands are used instead)`);
+  } else if (!tools.python) add("warn", "tools", "Python not found (audits will be SKIPPED; project commands are used instead)");
 
   const { manifest, error } = loadManifest(projectDir);
   if (error) add("error", ".redevkit/manifest.json", error);

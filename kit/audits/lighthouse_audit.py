@@ -44,6 +44,28 @@ def valid_url(value: str) -> str:
     return value
 
 
+def score_threshold(value: str) -> int:
+    """A minimum category score: an integer from 0 to 100 (Lighthouse scores are percentages)."""
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not an integer: {value}") from None
+    if not 0 <= number <= 100:
+        raise argparse.ArgumentTypeError(f"a score threshold must be between 0 and 100: {value}")
+    return number
+
+
+def positive_seconds(value: str) -> int:
+    """A time limit in whole seconds, greater than 0."""
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not an integer: {value}") from None
+    if number <= 0:
+        raise argparse.ArgumentTypeError("the time limit must be greater than 0")
+    return number
+
+
 def run_lighthouse(url: str, timeout: int = 180) -> dict:
     executable = shutil.which("lighthouse")
     if not executable:
@@ -105,11 +127,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     utf8_stdio()
     parser = argparse.ArgumentParser(description="Run Lighthouse and enforce score thresholds")
     parser.add_argument("url", type=valid_url)
-    parser.add_argument("--min-performance", type=int, default=50)
-    parser.add_argument("--min-accessibility", type=int, default=80)
-    parser.add_argument("--min-best-practices", type=int, default=80)
-    parser.add_argument("--min-seo", type=int, default=80)
-    parser.add_argument("--timeout", type=int, default=180)
+    parser.add_argument("--min-performance", type=score_threshold, default=50, metavar="SCORE",
+                        help="Minimum performance score, 0-100 (default 50)")
+    parser.add_argument("--min-accessibility", type=score_threshold, default=80, metavar="SCORE",
+                        help="Minimum accessibility score, 0-100 (default 80)")
+    parser.add_argument("--min-best-practices", type=score_threshold, default=80, metavar="SCORE",
+                        help="Minimum best-practices score, 0-100 (default 80)")
+    parser.add_argument("--min-seo", type=score_threshold, default=80, metavar="SCORE",
+                        help="Minimum SEO score, 0-100 (default 80)")
+    parser.add_argument("--timeout", type=positive_seconds, default=180, metavar="SECONDS",
+                        help="Time limit of Lighthouse (default 180)")
     args = parser.parse_args(argv)
 
     result = run_lighthouse(args.url, args.timeout)

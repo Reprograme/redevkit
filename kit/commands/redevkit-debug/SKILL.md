@@ -92,9 +92,13 @@ Not a bug in the code (decide it here, before any fix, and write no `- Debug:` o
 line):
 
 - **The test is wrong** (it contradicts the spec, or fails by its own error): stop and hand
-  off to `{{CMD:redevkit-test}}` with the evidence (test name, spec scenario or error); that
-  command corrects test defects, and asks the user when it disagrees. This handback counts as
-  a debug round of the loop (`loops.md`).
+  the test back, with the evidence (test name, spec scenario or error, also written to
+  `assessment.md`), to the loop that sent it, as § Handoff does after a fix: Failing scope
+  `spec` → `{{CMD:redevkit-test}}`; `global` → `{{CMD:redevkit-verify}}`, whose step 1 runs
+  the whole suite again (never the stale `FAIL`), so the disputed test is judged again. The
+  test procedure corrects test defects, and asks the user when it disagrees. This handback
+  counts as a debug round of that loop (Test cycle or Correction cycle, `loops.md`), so a
+  repeated disagreement reaches the question or G5.
 - **The behavior was never built** (it belongs to an open `[ ]` or blocked `[!]` task of
   `tasks.md`): stop and hand off to `{{CMD:redevkit-create}}`.
 - **The suite cannot run** (missing dependency or tool, timeout, port in use): stop and name
@@ -161,9 +165,10 @@ cause without a test that confirms it.
 
 - Cannot reproduce or `invalid` (step 2) → no handoff; the run ends with the question or the
   reason.
-- Not a bug in the code (step 2) → `{{CMD:redevkit-test}}` for a wrong test,
-  `{{CMD:redevkit-create}}` for behavior never built, no command for an environment problem;
-  `--auto` continues to those commands and stops on the environment problem.
+- Not a bug in the code (step 2) → for a wrong test, the command of the Failing scope as
+  below (`spec` → `{{CMD:redevkit-test}}`, `global` → `{{CMD:redevkit-verify}}`, otherwise
+  ask); `{{CMD:redevkit-create}}` for behavior never built; no command for an environment
+  problem. `--auto` continues to those commands and stops on the environment problem.
 - Otherwise, by the Failing scope of the active feature (whatever `test.md` says):
   - `spec` → `{{CMD:redevkit-test}}`: it runs the spec tests on the fixed code; its `PASS`
     leads to the verify.

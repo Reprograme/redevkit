@@ -70,9 +70,25 @@ run recorded without one, never counts as the same code state:
 
 | Latest whole-suite run | Same code state as now | Action |
 | --- | --- | --- |
-| `PASS` | yes | Reuse it; do not run the tests again |
-| `FAIL` with Scope `global` | yes | Reuse it, with its failure classes: the verdict is `failed`; go to step 5 |
+| `PASS` with Scope `global` | yes | Reuse it; do not run the tests again |
+| `PASS` with Scope `spec (full suite)` whose **Outside the spec** lists no failure | yes | Reuse it; do not run the tests again |
+| `FAIL` with Scope `global`, no `environment` class, no `test-defect` class and no debug handback since | yes | Reuse it, with its failure classes: the verdict is `failed`; go to step 5 |
 | Any other, or none | no, or no run | Run the test procedure below |
+
+Only a `global` verdict is reused as it stands. A `spec (full suite)` run never judged the
+failures outside the spec, so when its **Outside the spec** lists a failure the test procedure
+runs and classifies them by the global rules. A `FAIL` with the `environment` class is never
+reused: the environment may be fixed while the files stay the same, so the suite runs again.
+A `FAIL` with the `test-defect` class is never reused either: the test correction and the
+question for the user are resolved only by the test procedure, which runs again and follows
+the answer recorded in `spec.md` (`{{SKILLDIR:redevkit-test}}/SKILL.md` step 4). A debug
+handback since the `FAIL` (the debug command changed code or tests, or sent a test back as
+wrong: the Correction cycle debug rounds in `active.md` differ from the **Correction cycle**
+the latest `verification.md` run recorded) asks for a new judgment: the suite runs again. A
+`PASS` followed in `test-report.md` by a `FAIL` run is never reused: the suite runs again. A
+reused run counts as it stands: a reused `spec (full suite)` `PASS` with no failure under
+**Outside the spec** is a fully green whole-suite run for the `baseline` class, like a
+`global` `PASS` with no baseline failure.
 
 **Test procedure.** Execute steps 1–6 of `{{SKILLDIR:redevkit-test}}/SKILL.md` in the
 **global scope** (map the active feature's scenarios and generate its missing tests, run the
@@ -95,7 +111,9 @@ contracts, data model, tasks marked `[X]`). Each new gap becomes a task appended
 `tasks.md`, also for a gap of an Unverified feature (the task cites that feature's spec): the
 create and test commands work on the active feature only (append-only, same task grammar,
 `@persona` chosen with `{{SKILL:redevkit-route}}`); a gap already covered by an open or blocked
-task is cited, not appended. Outcome `tasks_appended`
+task of the **active** feature's `tasks.md` is cited, not appended. A task that covers a gap
+only in an Unverified feature's own `tasks.md` is carried into the active one, so the create
+command can run it (`{{SKILL:redevkit-converge}}` step 3). Outcome `tasks_appended`
 or `tasks_open` for any feature means gaps remain (verdict `gaps` at best); `converged` for
 all means none.
 
@@ -105,17 +123,20 @@ Prove the behavior by running it, with the method in [execution](references/exec
 identify what changed, pick the method per change type, run the build and — when the Project
 Type has a runtime — start the app in the background as `{{SKILL:redevkit-preview}}` describes
 for `start`, walk the critical flows of each feature's `quickstart.md` (happy path and error
-paths), then stop it. For bug fixes, reproduce the original scenario from
-`.redevkit/bugs/<slug>/assessment.md`. The test suite is not run again here: step 1 is its
-evidence. Delegate browser flows when needed: {{DELEGATE:qa-automation-engineer}}.
+paths), and keep it running: step 4 audits it by its URL. For bug fixes, reproduce the
+original scenario from `.redevkit/bugs/<slug>/assessment.md`. The test suite is not run again
+here: step 1 is its evidence. Delegate browser flows when needed: {{DELEGATE:qa-automation-engineer}}.
 
 ### 4. Audit
 
 Run the audits as [execution](references/execution.md) § Audits describes: Python detection
 per `.redevkit/audits/README.md`; `verify_all.py` or `checklist.py` chosen by the Project Type
-in `plan.md` (or `tech.md` for a lightweight spec); `--no-runtime` when no app is running or
-the type has no runtime; always `--no-tests` (step 1 is the test evidence). No Python →
-`SKIPPED (no Python interpreter)` plus the project's own lint and type-check commands.
+in `plan.md` (or `tech.md` for a lightweight spec), with `--url` of the app step 3 started;
+`--no-runtime` only when the type has no runtime or the app did not start; always
+`--no-tests` (step 1 is the test evidence). When the audits end, stop the app step 3 started
+and confirm its port is free; stop it also when the run leaves steps 3–4 early (an error, a
+gate, a timeout). No Python → `SKIPPED (no Python interpreter)` plus the project's own lint
+and type-check commands.
 Audit exit codes: `0` PASS, `1` FAIL, `2` usage error, `3` SKIPPED. Exit `3` is never a pass:
 record `SKIPPED (<reason printed by the script>)`. One orchestrator run is the suite; give
 the call a timeout above its duration or run it in the background, as the test procedure
@@ -136,7 +157,8 @@ template when missing; append-only, never edit a past run):
 - Test evidence: the `test-report.md` run used, whether it ran in step 1 or was reused, its
   failure classes when it is `FAIL`, and its baseline failures.
 - Convergence result per feature and the tasks appended.
-- Execution evidence: commands with exit codes and observed results; critical flows walked.
+- Execution evidence: commands with exit codes and observed results; critical flows walked;
+  the app stop after the audits (port free).
 - Audit table (`PASS`, `FAIL`, `SKIPPED (reason)`), runner and Project Type; in Notes, the
   findings counted as in scope, baseline and out of scope.
 - **Not verified** list with reasons, including the open items of domain checklists
@@ -180,7 +202,7 @@ G5: the chain stops, even in `--auto`.
 
 Save per `{{SKILL:redevkit-memanager}}`: `changelog.md` (verification event and verdict),
 `active.md` › Last results (Test when step 1 ran the test procedure; Verify: date, verdict,
-link; Failing scope; Correction cycle; Unverified) and Known issues (failing tests or checks on
+link, rewritten without the `invalidated by test FAIL` marker; Failing scope; Correction cycle; Unverified) and Known issues (failing tests or checks on
 `failed`; on `converged+verified`, every `- Bug <slug>: open` of the features in scope becomes
 `- Bug <slug>: closed (verify YYYY-MM-DD)`), `tech.md` when the test command was detected
 or changed, `MEMORY.md`. Print `💾 Memory updated (files).`
@@ -203,14 +225,20 @@ of scope or baseline aside).
   back to this command.
 - `failed` → by what failed; the first that applies wins:
   - a `FAIL` test run whose failure class is `environment` → no command: name what must be
-    fixed, then run `{{CMD:redevkit-verify}}` again;
-  - a `FAIL` test run with `test-defect` left → no command: the question about the spec is
-    pending for the user;
+    fixed, then run `{{CMD:redevkit-verify}}` again (its step 1 never reuses an `environment`
+    `FAIL`: the suite runs again);
+  - a `FAIL` test run with `test-defect` left → no command: the question for the user is
+    pending (a spec decision, or how to test a scenario still `MISSING`); once answered, run
+    `{{CMD:redevkit-verify}}` again: its step 1 never reuses a `test-defect` `FAIL`, so the
+    test procedure runs the whole suite again and corrects the test or follows the answer. This
+    holds also when the defective test is outside the active feature's spec test set: never
+    `{{CMD:redevkit-test}}` for it, whose spec scope does not run that test;
   - a `FAIL` test run with `not-implemented` → `{{CMD:redevkit-create}}` for the open tasks
     (only blocked `[!]` tasks → name them and what each needs);
   - anything else (a `product-defect`, a build failure, an application that does not start, a
     broken flow, a blocking audit) → `{{CMD:redevkit-debug}}` with the failing evidence
-    (Failing scope `global`); the debug command hands back to this command.
+    (Failing scope `global`); the debug command hands back to this command, also when it
+    judges the test wrong, and that handback counts as a debug round.
 - `--auto`: `gaps` → continue with `{{CMD:redevkit-create}}` `--auto`; its chain runs the test
   command, whose `PASS` comes back here, and the Correction cycle bounds the loop. `failed` →
   continue with `{{CMD:redevkit-debug}}` `--auto`, or with `{{CMD:redevkit-create}}` `--auto`

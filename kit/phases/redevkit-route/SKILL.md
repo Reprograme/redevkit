@@ -36,7 +36,10 @@ Analyze silently: no "I am analyzing your request" commentary, just the announce
 
 3. **Detect domains** with the table below. One domain: its persona and skills. A request
    spanning two or more domains is coordinated per `redevkit-orchestrate`, and each part keeps
-   its own domain persona. In `tasks.md`, `@orchestrator` is never a task owner: a task that
+   its own domain persona. Coordination is never delegated: wherever this skill names
+   `orchestrator`, the main session (the conversation that owns the command) follows
+   `{{SKILL:redevkit-orchestrate}}` in that role; the persona file describes the role and is
+   not started as a subagent. In `tasks.md`, `@orchestrator` is never a task owner: a task that
    spans several domains is split into one task per owner.
 4. **Smallest coherent set.** Pick the fewest personas that cover the work; one owner who can do
    it safely means one persona.
@@ -85,7 +88,7 @@ Triggers are examples in English and Portuguese, not an exhaustive list.
 | Documentation | docs, README, guide, guia | `documentation-writer` | `documentation-templates` |
 | Rust | Rust, cargo | `backend-specialist` | `rust-pro` |
 | MCP | MCP server, MCP tool, servidor MCP | `backend-specialist` | `mcp-builder` |
-| Multi-domain | 2 or more domains in the same request | `orchestrator` (coordinates; never a task owner) | `redevkit-orchestrate`, `context-compression`, `batch-operations` |
+| Multi-domain | 2 or more domains in the same request | `orchestrator` (the main session coordinates per rule 3; never a subagent, never a task owner) | `redevkit-orchestrate`, `context-compression`, `batch-operations` |
 
 Load only the skills the work needs: the table lists candidates, not a mandatory bundle. Pick
 shell skills by the OS in `.redevkit/memory/tech.md` (`bash-linux` or `powershell-windows`).

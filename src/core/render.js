@@ -120,7 +120,7 @@ export const renderCommon = (kitRoot, ctx) => {
     if (rel.endsWith(".pyc")) continue;
     out.set(`.redevkit/audits/${rel}`, fs.readFileSync(path.join(auditRoot, rel)));
   }
-  out.set(".redevkit/.gitignore", "backups/\ntmp/\nconflicts/\n");
+  out.set(".redevkit/.gitignore", "backups/\ntmp/\nconflicts/\nredevkit.lock\n");
   return out;
 };
 

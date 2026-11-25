@@ -6,3 +6,6 @@ __pycache__/
 *.tgz
 coverage/
 e2e/runs/
+# Local build/spike working dirs and outputs (never part of the package)
+.work/
+dist/

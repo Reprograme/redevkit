@@ -17,6 +17,31 @@ after a run and must not make the code look changed. Dependencies, build output 
 reports are left out too (what git ignores, plus the shared defaults in
 `.redevkit/audits/README.md`).
 
+- **Case of the reserved folders.** When the file system of the project folder ignores case
+  (Windows, macOS by default; the script probes the folder instead of assuming it from the
+  OS), the reserved names match in any case: `SPECs/` is the `specs/` folder the kit writes
+  to, so a report written there never changes the code state. On a case-sensitive file
+  system `Specs/` is a different folder from `specs/` and may hold code, so it stays in.
+- **Git submodules.** A checked-out submodule counts with its own files (tracked plus
+  untracked, not ignored), under its path: an uncommitted edit inside it and a checkout of
+  another revision both change the fingerprint. A submodule that is not checked out counts
+  with the commit the index records for it. The recorded commit of a checked-out submodule
+  is not hashed: like any commit made after a run, staging or committing a submodule bump
+  does not change the code state (its content already did).
+- **Nested git repositories.** An untracked folder with its own `.git` that is not a
+  submodule (a clone that was never added) counts like a checked-out submodule: with its own
+  files (tracked plus untracked, not ignored), under its path, so an edit inside it changes
+  the fingerprint. A folder whose files cannot be listed (a nested repository git cannot
+  read, a folder the script cannot open) is never left out in silence: the Tree fingerprint
+  is `n/a (code state unavailable: cannot list <folder>/ …)` and `--expect` prints
+  `Compare: DIFFERENT (code state unavailable: …)` (exit 1). Repair the folder, or add it to
+  `.gitignore` when it is not code, and run the script again.
+- **Executable bit.** A file whose git index mode is `100755` counts as executable (an
+  untracked file, or any file without git: its execute bit, on a POSIX file system only;
+  Windows has none), so `chmod +x` followed by `git add`, or `git update-index --chmod=+x`,
+  changes the fingerprint. A file that is not executable is hashed as before: the
+  fingerprint of a project without executable files is the one older kit versions recorded.
+
 ## Record (test and verify)
 
 Run from the project root, right after the suite (the verify command: when it writes its
@@ -62,10 +87,15 @@ feature:
 2. It must be `converged+verified`, and `active.md` › Last results › `- Unverified:` must be
    `none` (rules in [loops](loops.md)). No active feature, no verify run, another verdict or
    a feature still listed as Unverified → `BLOCKED`: require `redevkit-verify`.
-3. Same code state as the reference → every row of the Preconditions table is `OK`. A
+3. No later red test: every run that the active feature's `test-report.md` has after the test
+   run the reference names in its Test evidence (the file is append-only, so they came later)
+   must be `PASS`. A `FAIL` run there → `BLOCKED`, even on the same code: that verify no longer
+   holds (the test command also marks `- Verify:` in `active.md` as `invalidated by test
+   FAIL`); require a new `redevkit-verify`.
+4. Same code state as the reference → every row of the Preconditions table is `OK`. A
    different code state → `BLOCKED`: the current code was not verified; require
    `redevkit-verify`.
-4. The code state cannot be computed (no Python interpreter): `BLOCKED` with the reason
+5. The code state cannot be computed (no Python interpreter): `BLOCKED` with the reason
    `code state unavailable`. Running the verify again does not change that: ask the user to
    install Python 3.9 or newer, or to override stating that the code did not change since the
    reference run.

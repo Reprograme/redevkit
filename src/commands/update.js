@@ -3,9 +3,11 @@ import path from "node:path";
 import { applySync, computeSync } from "../core/install.js";
 import { setLang, t } from "../core/i18n.js";
 import { writeInside } from "../core/fsutil.js";
+import { withWriteLock } from "../core/lock.js";
 import { createRunId } from "../core/managed-tree.js";
 import { loadManifest } from "../core/manifest.js";
 import { packageVersion } from "../core/render.js";
+import { versionRelation } from "../core/semver.js";
 import { CliError } from "./init.js";
 import { printConfigPreview, printMessages, printMissing, printOutcome, printPlan, writeConflictReport } from "./sync-report.js";
 
@@ -17,8 +19,20 @@ export const requireManifest = (projectDir) => {
   return manifest;
 };
 
+/**
+ * A14: never rewrite an installation made by a newer CLI (that would be a silent downgrade) unless
+ * the user asks for it with --allow-downgrade. Used by init, update and target add/remove.
+ */
+export const assertNoDowngrade = (manifest, opts = {}) => {
+  const cli = packageVersion();
+  if (!opts.allowDowngrade && versionRelation(manifest.version, cli) === "newer") {
+    throw new CliError(t("downgradeRefused", { installed: manifest.version, cli }), 1);
+  }
+};
+
 /** Shared by update and target add/remove. */
 export const runSync = (projectDir, manifest, targets, opts, log) => {
+  assertNoDowngrade(manifest, opts);
   const sync = computeSync({ projectDir, targets, lang: manifest.lang, restore: Boolean(opts.restore), previousManifest: manifest });
   printPlan(sync, { verbose: Boolean(opts.verbose), out: log });
   printConfigPreview(sync, { out: log });
@@ -45,8 +59,12 @@ export const runSync = (projectDir, manifest, targets, opts, log) => {
 };
 
 export const runUpdate = async (opts, { log = console.log, projectDir = process.cwd() } = {}) => {
-  const manifest = requireManifest(projectDir);
-  const r = runSync(projectDir, manifest, manifest.targets, opts, log);
-  if (!r.dryRun) printOutcome(r.sync, { key: r.result.noop ? "upToDate" : "updated", vars: { version: packageVersion() }, out: log });
-  return r;
+  const run = () => {
+    // Read after taking the lock (B14): another operation may have just changed the installation.
+    const manifest = requireManifest(projectDir);
+    const r = runSync(projectDir, manifest, manifest.targets, opts, log);
+    if (!r.dryRun) printOutcome(r.sync, { key: r.result.noop ? "upToDate" : "updated", vars: { version: packageVersion() }, out: log });
+    return r;
+  };
+  return opts.dryRun ? run() : withWriteLock(projectDir, "update", run, { log });
 };

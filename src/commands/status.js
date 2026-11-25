@@ -2,7 +2,7 @@
 import { hashFileIfExists, resolveInside } from "../core/fsutil.js";
 import { getLang } from "../core/i18n.js";
 import { packageVersion } from "../core/render.js";
-import { compare, isValid } from "../core/semver.js";
+import { versionRelation } from "../core/semver.js";
 import { requireManifest } from "./update.js";
 
 const L = (pt, en) => (getLang() === "pt-BR" ? pt : en);
@@ -18,11 +18,7 @@ export const managedDrift = (projectDir, manifest) => {
   return { modified, missing };
 };
 
-export const versionRelation = (installed, current) => {
-  if (!isValid(installed) || !isValid(current)) return "unknown";
-  const c = compare(installed, current);
-  return c === 0 ? "same" : c < 0 ? "older" : "newer";
-};
+export { versionRelation }; // lives in core/semver.js, shared with the downgrade guard (A14)
 
 export const runStatus = async (opts, { log = console.log, projectDir = process.cwd() } = {}) => {
   const manifest = requireManifest(projectDir);

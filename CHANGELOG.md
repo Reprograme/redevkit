@@ -6,6 +6,90 @@ All notable changes to REDEVKIT are documented in this file. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-25
+
+### Fixed
+
+- **`test_runner.py` no longer skips test suites it does not know.** It knew only Node and
+  Python, so a PHP project with PHPUnit ended as `SKIPPED (no test framework detected)`,
+  labelled `Type: node` when the front end's `package.json` had no test script. The runner
+  is now agnostic of the suite: `--cmd "COMMAND"` runs the project's declared test command
+  (`tech.md` › Test, which `redevkit-test` passes) with the same time limit, log and
+  verdict, and a `{paths}` word takes the spec test files. Without `--cmd`, detection also
+  covers PHP (Pest, PHPUnit, `composer test`), Go, Rust, .NET, Ruby (RSpec, `rails test`)
+  and Maven, and a manifest without tests lets the next stack try.
+- Counts of PHPUnit, Pest, RSpec, minitest, cargo (summed over the test binaries, so trailing
+  doc tests with 0 tests no longer read as "no tests"), Maven Surefire and `dotnet test`;
+  `dotnet` runs with English output (it printed the summary in the OS language); PHPUnit's
+  `No tests executed!` (exit 0) is SKIPPED.
+- **Test runner verdicts.** A recognized summary with failed tests is `FAIL` even when the
+  command exits 0 (a wrapper that loses the exit code); a run where every test was skipped is
+  `SKIPPED` (exit 3) for every parser that counts skips; unittest discovery runs the root and
+  every conventional `tests/`/`test/` folder together instead of only the first one found;
+  `--timeout` rejects `nan`, `inf` and overflowing values with a usage error.
+- **Code state fingerprint.** A specs folder spelled `SPECs/` or `Specs/` on a
+  case-insensitive volume is excluded like `specs/` (writing the test report no longer
+  invalidates the run it records); files inside Git submodules count, so a change in a
+  submodule changes the fingerprint.
+- **Pipeline rules.** A test the debug command sends back as wrong from a global failure goes
+  back to the verify and counts as a debug round, so the dispute ends in a fix, a question or
+  G5; the verify never reuses a `FAIL` with the `environment` class or one followed by a debug
+  handback; only a `global` verdict is reused as it stands (a `spec (full suite)` `PASS` with
+  failures outside the spec is judged again); a gap of an Unverified feature covered only by
+  that feature's open task is carried into the active feature as a runnable task; the app the
+  verify starts stays up through the audits and is stopped afterwards; the test verdict no
+  longer contradicts itself about failures outside the spec. The `orchestrator` persona
+  describes the main session's role and is never delegated as a subagent.
+- **CLI.** Rollback of a first `init` keeps preexisting files identical to the kit's; `init`
+  with an unreadable manifest stops instead of reinstalling with default language and
+  targets; `update`, `init` and `target` refuse to downgrade an installation newer than the
+  CLI unless `--allow-downgrade`; an `update` with nothing to apply creates no backup;
+  `uninstall` only touches `.codex/config.toml` when the kit managed entries there; an inline
+  `features = { … }` table in `.codex/config.toml` receives the managed key instead of
+  dropping every entry; `doctor` handles feature numbers with 4+ digits, reports a manifest
+  with `files: null` as invalid (keeping its `--json` output) and requires Python 3.9+ (also
+  in the audit README snippets).
+- **E2E on Windows** starts `.cmd` shims (npm-installed agents) through `cmd.exe` with safe
+  quoting and records spawn errors in the step instead of crashing.
+- **Second audit (B01–B21).**
+  - *Installation integrity:* a manifest whose `targets` is missing, empty, unknown or
+    duplicated, or whose `config`/`context` fields have the wrong shape, is invalid and no
+    command writes; installs prepare and validate every change before the first write;
+    `uninstall` (and its `--dry-run`) stops on a malformed `AGENTS.md` block before removing
+    anything; `rollback` checks every backup it uses before writing, undoes the latest
+    operation by default, undoes older operations as a chain (refusing a broken chain) and
+    checks that every file of the restored manifest exists; the writing commands hold
+    `.redevkit/redevkit.lock` (a concurrent command waits up to 15 s, then fails without
+    changes); backup ids are unique even within one millisecond, and `rollback --backup`
+    takes an unambiguous id prefix (an ambiguous one is refused, listing the matches).
+  - *Test runner:* unittest discovery also starts at the root when a package below it holds
+    tests, and runs each start in its own process; every unittest, pytest and jest/vitest
+    summary in the output counts (a later green run no longer hides an earlier failure);
+    pytest is detected from real declarations only (a comment or `flake8-pytest-style` no
+    longer skips a unittest suite).
+  - *Code state:* files of nested git repositories count, a folder that cannot be listed
+    makes the fingerprint `n/a` instead of being skipped, and the executable bit counts (a
+    project without executable files keeps its fingerprint).
+  - *Pipeline rules:* the verify never reuses a `FAIL` with the `test-defect` class, and the
+    answer to a spec question is recorded so it is not asked again; a test `FAIL` after a
+    verify invalidates that verify for the deploy; a fully green `spec (full suite)` run
+    counts as the first green whole-suite run for the baseline rule; `deploy --rollback`
+    uses the latest report that changed the environment (never an `aborted` one); an
+    automatable scenario still without a test is a `test-defect`; the verify's fix policy and
+    templates match its handoff.
+  - *Audit README:* the PowerShell Python detection works in Windows PowerShell 5.1.
+  - *E2E:* a step timeout is recorded as a failure, kills the process tree and bounds the
+    output drain; every required step must exit 0 (a later successful retry of the same step
+    recovers it; `--check` without the round's `steps.json` is INCONCLUSIVE, exit 3, never
+    PASS); scenario R requires the 18 specialists and checks that `orchestrator` is
+    not delegated; Ctrl+C in the runner kills the running agent's tree.
+
+### Removed
+
+- The Windows 1.0.0 distribution (PowerShell build, overlay, Pester-style suites, its docs)
+  no longer lives in this folder; unused helpers (`readIfExists`, `copyFileInside`, `mkdirp`),
+  the unused `yesNo` message and the targets' `label` export.
+
 ## [1.2.0] - 2026-11-15
 
 The test and verify commands split into a spec scope and a global scope.

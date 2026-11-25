@@ -48,6 +48,17 @@ def iter_build_files(build_root: Path, path_filter: Optional[PathFilter] = None)
     yield from path_filter.walk(build_root)
 
 
+def kib_limit(value: str) -> int:
+    """A size limit in KiB: a whole number, 0 or more."""
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not an integer: {value}") from None
+    if number < 0:
+        raise argparse.ArgumentTypeError(f"a size limit cannot be negative: {value}")
+    return number
+
+
 def human_bytes(value: int) -> str:
     units = ("B", "KiB", "MiB", "GiB")
     size = float(value)
@@ -128,9 +139,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Audit generated JavaScript and CSS bundle sizes")
     parser.add_argument("project", nargs="?", default=".")
     parser.add_argument("--output", choices=["json", "summary"], default="summary")
-    parser.add_argument("--file-warn-kib", type=int, default=250)
-    parser.add_argument("--file-fail-kib", type=int, default=750)
-    parser.add_argument("--total-js-fail-kib", type=int, default=2048)
+    parser.add_argument("--file-warn-kib", type=kib_limit, default=250, metavar="KIB",
+                        help="An asset of at least this size is a medium finding (default 250)")
+    parser.add_argument("--file-fail-kib", type=kib_limit, default=750, metavar="KIB",
+                        help="An asset of at least this size is a high finding (default 750)")
+    parser.add_argument("--total-js-fail-kib", type=kib_limit, default=2048, metavar="KIB",
+                        help="All JavaScript assets together of at least this size are a high finding (default 2048)")
     parser.add_argument("--fail-on", choices=list(SEVERITY), default="high")
     add_exclusion_arguments(parser)  # --no-gitignore is accepted and has no effect here
     args = parser.parse_args(argv)

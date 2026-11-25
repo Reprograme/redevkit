@@ -87,8 +87,41 @@ test("every relative Markdown link in the READMEs and docs/*.md resolves", () =>
   assert.deepEqual(broken, [], `broken links:\n${broken.join("\n")}`);
 });
 
-test("redevkit-* names cited in the docs exist in the kit", () => {
-  const known = new Set(
+/** A redevkit-* name: lowercase words and digits joined by dashes (never cut at a digit). */
+const NAME = "redevkit-[a-z0-9]+(?:-[a-z0-9]+)*";
+const SKILL_CONTEXT = /\b(skills?|comandos?|commands?|fases?|phases?)\b/i;
+const NOT_A_SKILL = /\b(MCP|server|servidor)\b/i;
+
+/**
+ * Skill/command references in a doc, with the line they are on (A22). Only these count:
+ * - invocations: `/redevkit-x` (Claude Code) and `$redevkit-x` (Codex);
+ * - kit or installed skill paths: kit/commands|phases|memory/redevkit-x, .claude|.agents/skills/redevkit-x;
+ * - placeholders: {{SKILL:redevkit-x}}, {{CMD:redevkit-x}}, {{SKILLDIR:redevkit-x}};
+ * - a code span holding only the name, as a table row's first cell or on a line that talks about
+ *   skills, commands or phases, unless the name is called an MCP server there.
+ * Plain mentions (an MCP server called redevkit-memory, a ZIP called redevkit-win-x64-1.0.0.zip) are
+ * not skill references.
+ */
+const citedSkills = (text) => {
+  const out = [];
+  text.split(/\r?\n/).forEach((line, i) => {
+    const add = (name) => out.push({ line: i + 1, name });
+    for (const m of line.matchAll(new RegExp(`(?<![\\w.\\/-])[/$](${NAME})(?![\\w.-]*[\\w/])`, "g"))) add(m[1]);
+    for (const m of line.matchAll(new RegExp(`(?:kit/(?:commands|phases|memory)|\\.(?:claude|agents)/skills)/(${NAME})(?![\\w.-])`, "g"))) add(m[1]);
+    for (const m of line.matchAll(new RegExp(`\\{\\{(?:SKILL|CMD|SKILLDIR):(${NAME})\\}\\}`, "g"))) add(m[1]);
+    for (const m of line.matchAll(new RegExp(`\`(${NAME})\``, "g"))) {
+      const after = line.slice(m.index + m[0].length, m.index + m[0].length + 24);
+      const before = line.slice(Math.max(0, m.index - 24), m.index);
+      if (NOT_A_SKILL.test(after) || NOT_A_SKILL.test(before)) continue;
+      const firstCell = new RegExp(`^\\s*\\|\\s*\`${m[1]}\`\\s*\\|`).test(line);
+      if (firstCell || SKILL_CONTEXT.test(line)) add(m[1]);
+    }
+  });
+  return out;
+};
+
+const knownSkills = () =>
+  new Set(
     ["commands", "phases", "memory"].flatMap((d) =>
       fs
         .readdirSync(path.join(ROOT, "kit", d), { withFileTypes: true })
@@ -96,10 +129,32 @@ test("redevkit-* names cited in the docs exist in the kit", () => {
         .map((e) => e.name),
     ),
   );
+
+test("skill-reference detector: real invocations only, full names (A22)", () => {
+  const names = (text) => citedSkills(text).map((c) => c.name);
+  // Not skills: the MCP server name and a ZIP file name.
+  assert.deepEqual(names("approve the `redevkit-memory` MCP server"), []);
+  assert.deepEqual(names("- [ ] `/mcp` lists `redevkit-memory` with tools."), []);
+  assert.deepEqual(names("- Build: `redevkit-win-x64-1.0.0.zip` (sha256 in `dist/*.sha256`)"), []);
+  assert.deepEqual(names("the skill list names the `redevkit-memory` server"), []);
+  // Skills, with digits kept in the name.
+  assert.deepEqual(names("Claude Code: `/redevkit-new`; Codex: `$redevkit-new`"), ["redevkit-new", "redevkit-new"]);
+  assert.deepEqual(names("| `redevkit-plan` | Spec, roteamento |"), ["redevkit-plan"]);
+  assert.deepEqual(names("see kit/phases/redevkit-assess-intake/SKILL.md"), ["redevkit-assess-intake"]);
+  assert.deepEqual(names("run /redevkit-x64-tool now"), ["redevkit-x64-tool"]);
+  assert.deepEqual(names("o comando `redevkit-test`"), ["redevkit-test"]);
+  // Negative case: an invocation of a skill that does not exist must be caught.
+  const known = knownSkills();
+  const unknown = citedSkills("Rode `/redevkit-nonexistent` depois do plano.").filter((c) => !known.has(c.name));
+  assert.deepEqual(unknown.map((c) => c.name), ["redevkit-nonexistent"]);
+});
+
+test("redevkit-* skills cited in the docs exist in the kit", () => {
+  const known = knownSkills();
   const unknown = [];
   for (const rel of DOCS) {
-    for (const m of read(rel).matchAll(/redevkit-[a-z][a-z-]*[a-z]/g)) {
-      if (!known.has(m[0])) unknown.push(`${rel}: ${m[0]}`);
+    for (const c of citedSkills(read(rel))) {
+      if (!known.has(c.name)) unknown.push(`${rel}:${c.line}: ${c.name}`);
     }
   }
   assert.deepEqual(unknown, [], `unknown skill names:\n${unknown.join("\n")}`);

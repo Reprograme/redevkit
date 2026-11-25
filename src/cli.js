@@ -10,6 +10,7 @@ import { runUpdate } from "./commands/update.js";
 import { runValidateKit } from "./commands/validate-kit.js";
 import { cleanupPendingTemps } from "./core/fsutil.js";
 import { t } from "./core/i18n.js";
+import { releaseAllLocks } from "./core/lock.js";
 import { packageVersion } from "./core/render.js";
 
 let sigintInstalled = false;
@@ -18,6 +19,7 @@ export const installSigint = () => {
   sigintInstalled = true;
   process.on("SIGINT", () => {
     cleanupPendingTemps(); // C2: temp files live next to their targets and are removed here
+    releaseAllLocks(); // B14: an interrupted command never leaves its write lock behind
     process.stderr.write(`\n${t("interrupted")}\n`);
     process.exit(130);
   });
@@ -44,6 +46,7 @@ export const buildProgram = () => {
     .option("-y, --yes", "accept defaults and confirmations (required without a TTY)")
     .option("--force", "overwrite conflicting files and restore missing managed files (after backup)")
     .option("--verbose", "list every file action")
+    .option("--allow-downgrade", "allow rewriting an installation made by a newer CLI version")
     .action((dir, opts) => runInit(dir, opts));
 
   program
@@ -54,6 +57,7 @@ export const buildProgram = () => {
     .option("--restore", "re-add managed files that are missing locally (local changes are kept)")
     .option("--conflict-report <file>", "write a JSON report of actions and conflicts")
     .option("--verbose", "list every file action")
+    .option("--allow-downgrade", "allow rewriting an installation made by a newer CLI version")
     .action((opts) => runUpdate(opts));
 
   program
@@ -86,7 +90,8 @@ export const buildProgram = () => {
       .command(`${action} <target>`)
       .description(`${action} claude or codex`)
       .option("--dry-run", "show what would change, write nothing")
-      .option("--verbose", "list every file action");
+      .option("--verbose", "list every file action")
+      .option("--allow-downgrade", "allow rewriting an installation made by a newer CLI version");
     if (action === "add") sub.option("-y, --yes", "accept the CLAUDE.md migration when adding claude");
     sub.action((name, opts) => runTarget(action, name, opts));
   }

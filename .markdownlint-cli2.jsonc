@@ -10,5 +10,6 @@
     "MD060": false
   },
   "globs": ["**/*.md"],
-  "ignores": ["node_modules/**", "test/fixtures/**", "e2e/fixtures/**", "test/__snapshots__/**", "e2e/runs/**", "CHANGELOG.md", "PLANO.md", "RELATORIO.md"]
+  // Local working copies and build outputs are never package sources (A23).
+  "ignores": ["node_modules/**", ".work/**", "dist/**", "coverage/**","test/fixtures/**", "e2e/fixtures/**", "test/__snapshots__/**", "e2e/runs/**", "CHANGELOG.md", "PLANO.md", "RELATORIO.md"]
 }

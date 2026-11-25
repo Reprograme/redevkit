@@ -1,9 +1,9 @@
 // Shared install/update engine used by init, update and target add/remove.
 import path from "node:path";
 import { appendMigratedNotes, blockInner, isPointer, migratableContent, simpleDiff, upsertAgentsBlock } from "./context-files.js";
-import { exists, readText, removeInside, resolveInside, sha256, writeInside } from "./fsutil.js";
-import { applyPlan, createBackup, createPlan, createRunId, nextManifestFiles, RESTORED } from "./managed-tree.js";
-import { loadManifest, newManifest, writeManifest } from "./manifest.js";
+import { assertRemovable, assertWritable, exists, readText, removeInside, resolveInside, sha256, writeInside } from "./fsutil.js";
+import { applyPlan, CONFLICT_ROOT, createBackup, createPlan, createRunId, nextManifestFiles, RESTORED } from "./managed-tree.js";
+import { loadManifest, MANIFEST_REL, manifestDataError, newManifest, SCHEMA_VERSION, writeManifest } from "./manifest.js";
 import { KIT_ROOT, loadRuntimeEntries, packageVersion, renderAgentsBlock, renderAll, renderClaudePointer } from "./render.js";
 import { mergeClaudeSettings, mergeCodexConfig, unmergeClaudeSettings, unmergeCodexConfig } from "./runtime-config.js";
 
@@ -108,12 +108,16 @@ export const summarize = (plan) => ({
   keep: plan.preserved.length,
 });
 
-/** True when applying would not change any file (idempotent re-runs write nothing). */
-export const isNoop = (sync, previousManifest) => {
+/**
+ * True when applying would not change any file (idempotent re-runs write nothing). Only what this
+ * call applies counts: a CLAUDE.md migration that is not going to run (update never migrates, A15)
+ * is not a change.
+ */
+export const isNoop = (sync, previousManifest, { migrateClaude = false } = {}) => {
   if (!previousManifest) return false;
   if (sync.plan.actions.length || sync.plan.conflicts.length) return false;
   if (sync.agentsAfter !== sync.agentsBefore) return false;
-  if (sync.claude.action !== "none") return false;
+  if (sync.claude.action === "create" || (sync.claude.action === "migrate" && migrateClaude)) return false;
   if (Object.values(sync.config).some((c) => c && c.ok && c.changed)) return false;
   if (Object.keys(sync.unconfig).length) return false;
   if (previousManifest.version !== sync.version || previousManifest.lang !== sync.lang) return false;
@@ -127,20 +131,122 @@ export const isNoop = (sync, previousManifest) => {
  * Apply a computed sync.
  * opts.migrateClaude: boolean decision for the CLAUDE.md migration.
  * Returns a report with backupDir, messages and the new manifest.
+ *
+ * Validate before writing (B19): every content (AGENTS.md, CLAUDE.md, config merges), the next
+ * manifest and every target path are prepared and checked first; only then the backup is taken and
+ * the files are written. An error therefore never leaves a half-applied install.
  */
 export const applySync = (sync, { projectDir, previousManifest = null, migrateClaude = false, backup = true, runId = createRunId() }) => {
   const { plan, incoming } = sync;
   const messages = [];
 
-  if (isNoop(sync, previousManifest)) return { backupDir: null, conflictCopies: [], messages, manifest: previousManifest, noop: true };
+  // A manifest object that did not come through loadManifest is checked too.
+  if (previousManifest) {
+    const error = manifestDataError(previousManifest);
+    if (error) throw new Error(`Invalid manifest: ${error}`);
+  }
+  if (isNoop(sync, previousManifest, { migrateClaude })) return { backupDir: null, conflictCopies: [], messages, manifest: previousManifest, noop: true };
 
-  // 1. Backup everything we may modify or delete.
+  // 1. Prepare. `ops` are the writes and removals after the managed files, in order.
+  const ops = [];
+  const write = (rel, data) => ops.push({ type: "write", rel, data });
+  const remove = (rel) => ops.push({ type: "remove", rel });
+
+  // AGENTS.md block (+ CLAUDE.md migration).
+  let agentsText = sync.agentsAfter;
+  let claudePointer = previousManifest?.context?.claudePointer ?? false;
+  let migratedMessage = null;
+  if (sync.claude.action === "migrate") {
+    if (migrateClaude) {
+      if (sync.claude.migrated) agentsText = appendMigratedNotes(agentsText, sync.claude.migrated, sync.lang, today());
+      write("CLAUDE.md", sync.claude.after);
+      claudePointer = true;
+      migratedMessage = { key: "claudeMigrated", vars: { v: "-" } };
+      messages.push(migratedMessage);
+    } else {
+      messages.push({ key: "claudeMigrateSkipped" });
+    }
+  } else if (sync.claude.action === "create") {
+    write("CLAUDE.md", sync.claude.after);
+    claudePointer = true;
+  } else if (sync.targets.includes("claude")) {
+    claudePointer = true;
+  }
+  if (agentsText !== sync.agentsBefore) write("AGENTS.md", agentsText);
+
+  // Runtime config.
+  const config = { ...(previousManifest?.config ?? {}) };
+  if (sync.config.claude) {
+    const c = sync.config.claude;
+    if (!c.ok) messages.push({ key: "configInvalid", vars: { file: CONFIG_FILES.claude, err: c.error }, level: "warn" });
+    else {
+      if (c.changed) write(CONFIG_FILES.claude, c.text);
+      config.claudeAllow = [...new Set([...(config.claudeAllow ?? []), ...c.added])];
+      if (c.created) config.claudeSettingsCreated = true;
+      if (c.added.length) messages.push({ key: "configAdded", vars: { file: CONFIG_FILES.claude, n: c.added.length } });
+    }
+  }
+  if (sync.config.codex) {
+    const c = sync.config.codex;
+    if (!c.ok) messages.push({ key: "configInvalid", vars: { file: CONFIG_FILES.codex, err: c.error }, level: "warn" });
+    else {
+      if (c.changed) write(CONFIG_FILES.codex, c.text);
+      const keys = new Map((config.codexKeys ?? []).map((k) => [`${k.table}.${k.key}`, k]));
+      for (const k of c.added) keys.set(`${k.table}.${k.key}`, k);
+      config.codexKeys = [...keys.values()];
+      for (const k of c.kept) messages.push({ key: "configKept", vars: { file: CONFIG_FILES.codex, key: `${k.table}.${k.key}`, val: JSON.stringify(k.userValue) } });
+      for (const k of c.skipped ?? []) messages.push({ key: "configSkipped", vars: { file: CONFIG_FILES.codex, key: `${k.table}.${k.key}`, table: k.table, val: k.value }, level: "warn" });
+      if (c.added.length) messages.push({ key: "configAdded", vars: { file: CONFIG_FILES.codex, n: c.added.length } });
+    }
+  }
+  if (sync.unconfig.claude?.ok && sync.unconfig.claude.text !== undefined) {
+    if (sync.unconfig.claude.text === null) remove(CONFIG_FILES.claude);
+    else write(CONFIG_FILES.claude, sync.unconfig.claude.text);
+    delete config.claudeAllow;
+    delete config.claudeSettingsCreated;
+  }
+  if (sync.unconfig.codex?.ok) {
+    // text is undefined when nothing of ours is in the file (or there is no file): leave it alone (A16).
+    if (sync.unconfig.codex.text === null) remove(CONFIG_FILES.codex);
+    else if (sync.unconfig.codex.text !== undefined) write(CONFIG_FILES.codex, sync.unconfig.codex.text);
+    delete config.codexKeys;
+  }
+
+  // Next manifest.
+  const base = previousManifest ?? newManifest({ version: sync.version, targets: sync.targets, lang: sync.lang, runId });
+  const manifest = {
+    ...base,
+    version: sync.version,
+    targets: sync.targets,
+    lang: sync.lang,
+    updatedAt: new Date().toISOString(),
+    lastRunId: runId,
+    files: nextManifestFiles(plan, previousManifest?.files ?? {}),
+    context: { agentsBlockHash: sha256(blockInner(agentsText) ?? ""), claudePointer },
+    config,
+  };
+  const manifestError = manifestDataError({ ...manifest, schemaVersion: SCHEMA_VERSION });
+  if (manifestError) throw new Error(`Refusing to write an invalid manifest: ${manifestError}`);
+
+  // Every path is checked before the first write (links, directories in the way).
+  for (const a of plan.actions) {
+    if (a.type === "delete") assertRemovable(projectDir, a.file);
+    else assertWritable(projectDir, a.file);
+  }
+  for (const c of plan.conflicts) if (c.incomingHash && incoming.has(c.file)) assertWritable(projectDir, `${CONFLICT_ROOT}/${runId}/${c.file}`);
+  for (const op of ops) {
+    if (op.type === "write") assertWritable(projectDir, op.rel);
+    else assertRemovable(projectDir, op.rel);
+  }
+  assertWritable(projectDir, MANIFEST_REL);
+
+  // 2. Backup everything we may modify or delete.
   // A restored file is listed although it does not exist yet: it is recorded as absent, so a
   // rollback of this run removes it again (it was managed before the run, so nothing else would).
   const touched = [
     ...plan.actions.filter((a) => a.type !== "add" || a.reason === RESTORED || exists(resolveInside(projectDir, a.file))).map((a) => a.file),
     "AGENTS.md",
-    ".redevkit/manifest.json",
+    MANIFEST_REL,
   ];
   if (sync.claude.action === "migrate" && migrateClaude) touched.push("CLAUDE.md");
   if (sync.claude.action === "create") touched.push("CLAUDE.md"); // recorded as absent: a rollback removes it
@@ -155,82 +261,32 @@ export const applySync = (sync, { projectDir, previousManifest = null, migrateCl
   const needsBackup =
     touched.some((rel) => exists(resolveInside(projectDir, rel))) &&
     (previousManifest || sync.claude.action === "migrate" || sync.agentsBefore !== null || forcedOverwrite || userConfigChanged);
+  const previousFiles = previousManifest ? Object.keys(previousManifest.files) : [];
   const backupDir = backup && needsBackup
-    ? createBackup({ projectDir, files: touched, runId, reason: previousManifest ? "update" : "init", version: sync.version, manifestFiles: previousManifest ? Object.keys(previousManifest.files) : [], recordAbsent: true })
+    ? createBackup({
+        projectDir,
+        files: touched,
+        runId,
+        reason: previousManifest ? "update" : "init",
+        version: sync.version,
+        manifestFiles: previousFiles,
+        recordAbsent: true,
+        // A12: files that already existed with the managed content and become managed now. The run
+        // did not create them, so a rollback must leave them in place.
+        adopted: plan.unchanged.filter((f) => !previousManifest?.files?.[f]),
+        // B02: the state this backup returns to and the state the run leaves.
+        link: { runId, previousRunId: previousManifest ? previousManifest.lastRunId : null, resultRunId: runId },
+        missingBefore: previousFiles.filter((f) => !exists(resolveInside(projectDir, f))),
+      })
     : null;
+  if (migratedMessage) migratedMessage.vars.v = backupDir ? path.relative(projectDir, backupDir) : "-";
 
-  // 2. Managed files.
+  // 3. Write: managed files, then context and config files, then the manifest.
   const { conflictCopies } = applyPlan({ projectDir, plan, incoming, runId });
-
-  // 3. AGENTS.md block (+ CLAUDE.md migration).
-  let agentsText = sync.agentsAfter;
-  let claudePointer = previousManifest?.context?.claudePointer ?? false;
-  if (sync.claude.action === "migrate") {
-    if (migrateClaude) {
-      if (sync.claude.migrated) agentsText = appendMigratedNotes(agentsText, sync.claude.migrated, sync.lang, today());
-      writeInside(projectDir, "CLAUDE.md", sync.claude.after);
-      claudePointer = true;
-      messages.push({ key: "claudeMigrated", vars: { v: backupDir ? path.relative(projectDir, backupDir) : "-" } });
-    } else {
-      messages.push({ key: "claudeMigrateSkipped" });
-    }
-  } else if (sync.claude.action === "create") {
-    writeInside(projectDir, "CLAUDE.md", sync.claude.after);
-    claudePointer = true;
-  } else if (sync.targets.includes("claude")) {
-    claudePointer = true;
+  for (const op of ops) {
+    if (op.type === "write") writeInside(projectDir, op.rel, op.data);
+    else removeInside(projectDir, op.rel);
   }
-  if (agentsText !== sync.agentsBefore) writeInside(projectDir, "AGENTS.md", agentsText);
-
-  // 4. Runtime config.
-  const config = { ...(previousManifest?.config ?? {}) };
-  if (sync.config.claude) {
-    const c = sync.config.claude;
-    if (!c.ok) messages.push({ key: "configInvalid", vars: { file: CONFIG_FILES.claude, err: c.error }, level: "warn" });
-    else {
-      if (c.changed) writeInside(projectDir, CONFIG_FILES.claude, c.text);
-      config.claudeAllow = [...new Set([...(config.claudeAllow ?? []), ...c.added])];
-      if (c.created) config.claudeSettingsCreated = true;
-      if (c.added.length) messages.push({ key: "configAdded", vars: { file: CONFIG_FILES.claude, n: c.added.length } });
-    }
-  }
-  if (sync.config.codex) {
-    const c = sync.config.codex;
-    if (!c.ok) messages.push({ key: "configInvalid", vars: { file: CONFIG_FILES.codex, err: c.error }, level: "warn" });
-    else {
-      if (c.changed) writeInside(projectDir, CONFIG_FILES.codex, c.text);
-      const keys = new Map((config.codexKeys ?? []).map((k) => [`${k.table}.${k.key}`, k]));
-      for (const k of c.added) keys.set(`${k.table}.${k.key}`, k);
-      config.codexKeys = [...keys.values()];
-      for (const k of c.kept) messages.push({ key: "configKept", vars: { file: CONFIG_FILES.codex, key: `${k.table}.${k.key}`, val: JSON.stringify(k.userValue) } });
-      if (c.added.length) messages.push({ key: "configAdded", vars: { file: CONFIG_FILES.codex, n: c.added.length } });
-    }
-  }
-  if (sync.unconfig.claude?.ok && sync.unconfig.claude.text !== undefined) {
-    if (sync.unconfig.claude.text === null) removeInside(projectDir, CONFIG_FILES.claude);
-    else writeInside(projectDir, CONFIG_FILES.claude, sync.unconfig.claude.text);
-    delete config.claudeAllow;
-    delete config.claudeSettingsCreated;
-  }
-  if (sync.unconfig.codex?.ok && sync.unconfig.codex.text !== undefined) {
-    if (sync.unconfig.codex.text === null) removeInside(projectDir, CONFIG_FILES.codex);
-    else writeInside(projectDir, CONFIG_FILES.codex, sync.unconfig.codex.text);
-    delete config.codexKeys;
-  }
-
-  // 5. Manifest.
-  const base = previousManifest ?? newManifest({ version: sync.version, targets: sync.targets, lang: sync.lang, runId });
-  const manifest = {
-    ...base,
-    version: sync.version,
-    targets: sync.targets,
-    lang: sync.lang,
-    updatedAt: new Date().toISOString(),
-    lastRunId: runId,
-    files: nextManifestFiles(plan, previousManifest?.files ?? {}),
-    context: { agentsBlockHash: sha256(blockInner(agentsText) ?? ""), claudePointer },
-    config,
-  };
   writeManifest(projectDir, manifest);
   return { backupDir, conflictCopies, messages, manifest };
 };

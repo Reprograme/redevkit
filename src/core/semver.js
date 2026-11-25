@@ -29,3 +29,10 @@ export const compare = (a, b) => {
   }
   return 0;
 };
+
+/** How an installed version relates to the running CLI: "same", "older", "newer" or "unknown". */
+export const versionRelation = (installed, current) => {
+  if (!isValid(installed) || !isValid(current)) return "unknown";
+  const c = compare(installed, current);
+  return c === 0 ? "same" : c < 0 ? "older" : "newer";
+};

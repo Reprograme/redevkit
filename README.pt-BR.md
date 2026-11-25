@@ -295,13 +295,13 @@ Confiança no projeto:
 
 | Comando | Opções | O que faz |
 | --- | --- | --- |
-| `redevkit init [dir]` | `--here`, `--target`, `--lang`, `--dry-run`, `--yes`, `--force`, `--verbose` | Instala o kit: renderiza os alvos, grava o bloco do `AGENTS.md`, migra o `CLAUDE.md`, faz merge da config e cria o manifesto |
-| `redevkit update` | `--dry-run`, `--no-backup`, `--restore`, `--conflict-report <arq>`, `--verbose` | Atualização em 3 vias dos arquivos gerenciados (ver [Atualização e recuperação](#atualização-e-recuperação)); `--restore` recria os arquivos gerenciados que estão ausentes. Nunca toca memória, specs ou `DESIGN.md` |
+| `redevkit init [dir]` | `--here`, `--target`, `--lang`, `--dry-run`, `--yes`, `--force`, `--verbose`, `--allow-downgrade` | Instala o kit: renderiza os alvos, grava o bloco do `AGENTS.md`, migra o `CLAUDE.md`, faz merge da config e cria o manifesto |
+| `redevkit update` | `--dry-run`, `--no-backup`, `--restore`, `--conflict-report <arq>`, `--verbose`, `--allow-downgrade` | Atualização em 3 vias dos arquivos gerenciados (ver [Atualização e recuperação](#atualização-e-recuperação)); `--restore` recria os arquivos gerenciados que estão ausentes. Nunca toca memória, specs ou `DESIGN.md`. Recusa uma instalação feita por CLI mais nova, salvo com `--allow-downgrade` |
 | `redevkit rollback` | `--backup <id>`, `--list`, `--dry-run` | Restaura um backup, salvando antes o estado atual |
 | `redevkit status` | `--quiet`, `--json` | Versão instalada, alvos, idioma e arquivos gerenciados alterados ou ausentes; funciona offline |
 | `redevkit doctor` | `--json` | Confere ferramentas, instalação, `AGENTS.md`, `CLAUDE.md`, memória, numeração de `specs/`, config e confiança no Codex; sai com código diferente de zero se houver erro |
-| `redevkit target add <claude\|codex>` | `--dry-run`, `--yes`, `--verbose` | Adiciona um alvo (com `--yes`, aceita a migração do `CLAUDE.md`) |
-| `redevkit target remove <claude\|codex>` | `--dry-run`, `--verbose` | Remove um alvo; `AGENTS.md` e `CLAUDE.md` ficam. Recusa remover o último alvo |
+| `redevkit target add <claude\|codex>` | `--dry-run`, `--yes`, `--verbose`, `--allow-downgrade` | Adiciona um alvo (com `--yes`, aceita a migração do `CLAUDE.md`) |
+| `redevkit target remove <claude\|codex>` | `--dry-run`, `--verbose`, `--allow-downgrade` | Remove um alvo; `AGENTS.md` e `CLAUDE.md` ficam. Recusa remover o último alvo |
 | `redevkit version` | `--check` | Mostra a versão; `--check` consulta a mais recente no npm |
 | `redevkit uninstall` | `--dry-run`, `--yes`, `--force` | Remove os arquivos e as entradas de config gerenciados, depois do backup. Preserva `.redevkit/memory/`, `specs/`, `DESIGN.md`, suas notas do `AGENTS.md` e o `CLAUDE.md`; arquivos gerenciados que você alterou ficam, salvo com `--force`. Sem terminal interativo, exige `--yes` |
 
@@ -342,12 +342,23 @@ ou de uma persona.
 ```bash
 redevkit rollback --list       # lista os backups
 redevkit rollback --dry-run    # mostra o que seria restaurado
-redevkit rollback              # restaura o backup mais recente
+redevkit rollback              # desfaz a última operação
 ```
 
-Antes de restaurar, o `rollback` salva o estado atual como `pre-rollback-<id>`. A restauração
-padrão ignora esses backups de segurança; para desfazer um rollback, rode
+Sem `--backup`, o `rollback` desfaz a última operação (o backup que ela criou). Com
+`--backup <id>` de uma operação mais antiga, desfaz em cadeia, da mais recente até ela; se um
+elo não tiver backup (uma execução com `--no-backup`), nada é alterado. Todos os backups da
+cadeia são conferidos antes de qualquer escrita (um backup incompleto é recusado) e, depois de
+restaurar, todo arquivo do manifesto restaurado precisa existir. Antes de restaurar, o
+`rollback` salva o estado atual como `pre-rollback-<id>`; para desfazer um rollback, rode
 `redevkit rollback --backup pre-rollback-<id>`.
+
+`init`, `update`, `target`, `rollback` e `uninstall` usam a trava `.redevkit/redevkit.lock`:
+um segundo comando no mesmo projeto espera até 15 s (`REDEVKIT_LOCK_WAIT_MS`) e depois falha
+sem alterar nada; uma trava órfã (processo encerrado, ou sem atividade há 5 min) é removida.
+`--dry-run`, `status` e `doctor` não usam a trava. O campo `targets` do manifesto precisa
+listar `claude` e/ou `codex`. Com o bloco REDEVKIT do `AGENTS.md` malformado, o `uninstall`
+(inclusive em `--dry-run`) para antes de remover qualquer arquivo.
 
 ## Solução de problemas
 
