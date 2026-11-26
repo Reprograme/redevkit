@@ -49,8 +49,7 @@ framework conventions, then ask. A port given in the input wins.
 
 #### Port check
 
-If the port already answers and `.redevkit/tmp/preview.pid` (or the background task started
-in this session) points to a live process, the preview is already running: report it (as in `status`) and stop. If another process holds the
+If the port already answers and `.redevkit/tmp/preview.pid` points to a live process, the preview is already running: report it (as in `status`) and stop. If another process holds the
 port, ask: start on the next free port (Recommended), stop the other process (G4, it was not
 started by this command) or give another port.
 
@@ -58,15 +57,13 @@ started by this command) or give another port.
 
 Output always goes to `.redevkit/tmp/preview.log`.
 
+Start the server detached from this session, with the background form of the current OS, and
+write the process id to `.redevkit/tmp/preview.pid`. The preview is for the user to open after
+this command ends, and `status` and `stop` find it by that process id in any later session.
 {{#claude}}
-Run the dev command with the Bash tool and `run_in_background: true`, redirecting the output:
-`<command> > .redevkit/tmp/preview.log 2>&1`. Keep the background task id for `stop` in this
-session.
+Never use a background task of this session (`run_in_background`): it stops when the session
+ends, and a non-interactive run (`claude -p`) does not exit while it runs.
 {{/claude}}
-
-{{#codex}}
-Use the background form of the current OS and write the process id to
-`.redevkit/tmp/preview.pid`.
 
 Windows (PowerShell):
 
@@ -86,7 +83,6 @@ echo $! > .redevkit/tmp/preview.pid
 
 If the sandbox blocks background processes or local network access, ask the user to approve
 the command.
-{{/codex}}
 
 #### Health check and report
 
@@ -103,7 +99,7 @@ Check, without starting or stopping anything:
 
 - Port listening — Windows: `Get-NetTCPConnection -LocalPort <port> -State Listen`;
   macOS and Linux: `lsof -nP -iTCP:<port> -sTCP:LISTEN`.
-- The process in `.redevkit/tmp/preview.pid` (or the background task of this session) alive.
+- The process in `.redevkit/tmp/preview.pid` alive.
 - HTTP health as in start.
 
 Report running/stopped, URL, health, process id. Never claim a server is running without
@@ -111,15 +107,12 @@ these checks.
 
 ### 4. stop
 
-{{#claude}}
-Stop the background task started in this session with the runtime's tool for stopping
-background tasks. If no such task is known, stop by process id or port as below.
-{{/claude}}
-
 Stop the process tree recorded in `.redevkit/tmp/preview.pid` — Windows:
 `taskkill /PID <pid> /T /F`; macOS and Linux: `pkill -TERM -P <pid>; kill <pid>`. Then
 confirm the port is free and delete the pid file. Stopping a process this command did not
-start (found only by port) needs explicit confirmation (G4).
+start (found only by port) needs explicit confirmation (G4). If the sandbox or the OS refuses
+the stop (access denied), keep the pid file, report that the server is still running at its
+URL and give the user the exact stop command to run.
 
 ### 5. restart
 

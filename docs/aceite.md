@@ -305,6 +305,37 @@ antes das repetições: o fingerprint gravado em prosa pelo verify (F no Codex),
 corrompidos ao passar um script por pipe do PowerShell (F no Codex) e a allowlist do harness,
 que negava o `mv` do arquivamento da memória legada (C e F no Claude).
 
+Kit 1.3.1 (`e2e/runs/r13` e `r13b`, 2026-11-26): os cenários G, H, L e M, no Claude Code e
+no Codex, 6 de 8 aprovados ([RESULTS.md](../e2e/RESULTS.md)). L (laço que nunca converge: um
+sabotador desfaz toda correção) e M (pedido contraditório e vago, sem ninguém para responder)
+passaram nos dois runtimes:
+
+- No L, os dois agentes perceberam que a correção foi desfeita por fora, pararam sem
+  reaplicar e deixaram o Test cycle em 0/5, porque não houve handoff.
+- No M, os dois pararam no G2 sem escrever código, com a contradição e os termos sem
+  definição marcados.
+
+A rodada achou e corrigiu, antes das repetições:
+
+- **Preview no Claude Code:** o servidor rodava como tarefa de fundo da sessão e prendia o
+  `claude -p`. Agora sobe desanexado, com pid file.
+- **Pedido contra a constituição:** "sem testes, só o código" parava no G2 sem G3 no Codex,
+  porque o `AGENTS.md` punha o pedido acima da constituição. O H foi repetido nos dois
+  runtimes (`r13b`) e passou.
+
+Os dois FAILs do G não são regras do kit:
+
+- **G no Codex:** o agente errou as aspas do próprio `node -e` no deploy. O kit tratou bem a
+  falha: nada publicado, relatório `failed`, sem rollback desnecessário.
+- **G no Claude Code:** sem interface (`-p`), os subagentes rodam assíncronos. O agente
+  encerrou o turno esperando por eles, a sessão acabou e o subagente de testes de navegador
+  foi interrompido, então a suíte da spec não rodou. O deploy foi recusado corretamente. Isso
+  só acontece no modo sem interface; no uso interativo, a sessão continua e recebe o
+  resultado.
+
+As checagens do harness que davam falso alarme na r12 e na r13 foram corrigidas, e os
+resultados reavaliados com `--check`. Os originais ficam em `result.original.*`.
+
 ## 9. Segunda auditoria das regras do kit (2026-11-25)
 
 Origem: os achados B05, B06, B07, B17, B21, N03 e N04 da segunda auditoria verificada. Cada

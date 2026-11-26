@@ -6,6 +6,57 @@ All notable changes to REDEVKIT are documented in this file. The format follows
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-26
+
+Fixes from a production-trust audit of 1.3.0: each defect was reproduced first, and each fix has
+a regression test that fails on 1.3.0 (`test-audits/test_p0_131_verdicts_and_state.py`,
+`test/kit-rules.test.js`).
+
+### Fixed
+
+- **A red test run could be reported as `PASS`** (`test_runner.py`):
+  - Only the last PHPUnit, RSpec or minitest summary was read, so a red suite followed by a
+    green one (`Failures: 1` … `OK (4 tests, 4 assertions)`, exit 0) was `PASS`. Every
+    summary is now added up.
+  - A failure line of any known runner (`FAILURES!`, `FAILED (failures=1)`, `ℹ fail 1`,
+    `1 failing`, `not ok 3`, `--- FAIL:`, `FAIL src/a.test.js`, …) now makes a run that
+    exited 0 `FAIL`, even when the summary the runner parsed is green.
+- **A test script that ran no test could be `PASS`.** A check mark printed by npm's `pretest`
+  build (`✓ 34 modules transformed.`) counted as test evidence. The output of `pretest` and
+  `posttest` and build lines with a check mark no longer count.
+- **unittest discovery skipped test folders in silence.** A folder below `tests/` or `test/`
+  without `__init__.py` (`tests/unit/`) was never discovered, so its failing tests never ran.
+  Every test folder that no start reaches is now a start of its own.
+- **A file name could run a command on Windows.** A `.cmd`/`.bat` test command (`npm.cmd`, a
+  project script) received `--paths` unquoted: a test file named `t&ver` ran `ver` and changed
+  the exit code. Arguments holding cmd.exe metacharacters are now quoted for every audit.
+  Arguments holding `%`, `!`, `"` or a line break, which cmd.exe expands even inside quotes,
+  are a usage error (exit 2).
+- **The deploy could accept untested code** (`code_state.py`). For a project inside another
+  repository that ignores the project folder, git listed no file: the Tree fingerprint was
+  the hash of nothing and did not change after an edit. Such a project, or one that git lists
+  nothing of, is now hashed by a directory walk.
+- **The loop verify → debug → create → test → verify had no limit.** The debug command's
+  handoff to the create command (behavior never built) counted no round. Every handoff the
+  debug command makes inside a loop now counts a debug round of that loop, whatever the run
+  changed, so the chain reaches G5.
+- **`redevkit-enhance --auto` approved its own change plan.** That approval stands in for G2,
+  which `AGENTS.md` says always stops the chain. The enhance command now stops at it even in
+  `--auto`. Only the user approves, in the answer or in the command's input. Without that
+  approval a non-interactive run writes the delta and the tasks, keeps
+  `- Plan approved: no` and implements nothing.
+- **A request against the constitution could pass as a waiver.** `AGENTS.md` ranks the user
+  request above the constitution, so in E2E r13 H-codex a "no tests, just the code" request
+  stopped at G2 with no G3. The block now says such a request never waives a principle: it
+  stops at G3 until the user amends the constitution (G1) or changes the request. The enhance
+  command checks G3 before its G2 approval.
+- **`redevkit-preview` on Claude Code started the server as a background task of the session.**
+  The server stopped when the session ended, and a non-interactive `claude -p` never exited:
+  E2E r12 G-claude hit the 45-minute timeout after a successful start. Both runtimes now start
+  it detached (Start-Process or nohup) with `.redevkit/tmp/preview.pid`. A stop the sandbox
+  refuses now keeps the pid file and reports the running server with the command that stops
+  it.
+
 ## [1.3.0] - 2026-11-25
 
 ### Fixed

@@ -1,10 +1,12 @@
 # E2E com agentes reais
 
-Nove cenários × dois runtimes, com o `claude -p` e o `codex exec` de verdade. A e B são os
+Onze cenários × dois runtimes, com o `claude -p` e o `codex exec` de verdade. A e B são os
 cenários de aceite; C, D, E e F exercitam as rotas entre create, test, debug e verify: o laço
 da spec (test → debug → test) e o laço global (verify → debug → verify). G, H e R cobrem o
 resto do kit: G o ciclo completo de um app web novo (brainstorm, preview, status, memanager e
 deploy), H os gates que param (G3, G4 e G5) e R todas as personas e skills de conhecimento.
+L e M testam o que mais preocupa em produção: um laço que nunca converge (um sabotador desfaz
+toda correção) e um pedido ambíguo e contraditório sem ninguém para responder.
 O [coverage.mjs](coverage.mjs) monta a matriz de cobertura de uma rodada. Exige o
 Claude Code e o Codex CLI instalados e autenticados; cada run consome uso real das contas e
 levou de 15 a 63 minutos nas execuções registradas em [RESULTS.md](RESULTS.md). Cada passo do
@@ -16,14 +18,15 @@ node e2e/run.mjs --scenario A --runtime claude
 node e2e/run.mjs --scenario A --runtime codex
 node e2e/run.mjs --scenario B --runtime claude
 node e2e/run.mjs --scenario B --runtime codex
-node e2e/run.mjs --scenario C --runtime claude   # idem para D, E, F, G, H e R, e para o codex
+node e2e/run.mjs --scenario C --runtime claude   # idem para D, E, F, G, H, L, M e R, e para o codex
 node e2e/coverage.mjs e2e/runs/<rodada> --out e2e/runs/<rodada>/COVERAGE.md
 ```
 
 Opções: `--out <dir>` (padrão `e2e/runs/<data>/<cenário>-<runtime>/`), `--work <dir>`
 (padrão: pasta temporária com espaço no caminho), `--timeout-min <n>` por passo (padrão 45; os
-passos que seguem a cadeia `--auto` inteira, nos cenários D, E, F, G e H, têm limite próprio de
-90, 150, 120, 120 e 60 minutos, e o passo das personas do R, de 60) e
+passos que seguem a cadeia `--auto` inteira, nos cenários D, E, F, G, H e L, têm limite próprio
+de 90, 150, 120, 120, 60 e 120 minutos, o create do G, de 90, e o passo das personas do R, de
+60) e
 `--check <workDir>` para reaplicar só as verificações (também exige `--scenario` e `--runtime`;
 com `--resume debug,verify,test` continua o pipeline na mesma pasta antes de verificar). O
 `--check` lê o `steps.json` da pasta `--out`: passe a mesma pasta `--out` da rodada original,
@@ -50,7 +53,9 @@ uma linha `# output drain cut`).
 | E | O mesmo fixture, commitado | `redevkit-new` → `redevkit-enhance --auto`, uma única invocação que segue a cadeia inteira; o prompt pede também testes do `/about` (fora da spec). Prova que o escopo da spec os deixa para o verify: test verde → verify `failed` pelo bug latente do `/about` → debug → verify |
 | F | O mesmo fixture, commitado | `redevkit-new` → `redevkit-enhance` → `redevkit-test` (verde no escopo da spec) → o harness quebra o `GET /items/:id` em `src/app.js` (arquivo que a feature alterou), coberto só por `test/items.test.js` (que a feature não tocou) → `redevkit-verify --auto`. Prova o laço global: a suíte inteira pega a regressão como `product-defect` (não `baseline`), o debug devolve ao verify e o verify converge |
 | G | Diretório vazio | `redevkit-new` (app web estático de lista de compras) → `redevkit-brainstorm --idea` (modo assess) → `redevkit-plan --auto` com checklist de domínio `ux` (gate do `DESIGN.md`) → `redevkit-brainstorm` (modo clarify) → `redevkit-create` → `redevkit-test --auto` (test → verify) → `redevkit-preview start` e `status` → o harness roda o `verify_all.py`, o `checklist.py` e o `code_state.py` instalados → `redevkit-status` → `redevkit-memanager` (save e search) → `redevkit-deploy staging --check` → `redevkit-deploy staging` (pasta local `publicado/staging/`, confirmado no G6) → `redevkit-preview stop` |
-| H | O fixture B, commitado | `redevkit-new` → `redevkit-enhance "GET /health"` → `redevkit-enhance` sem testes (deve parar no G3) → `redevkit-enhance` que apaga `test/` e reescreve o histórico (deve parar no G4) → o harness reinjeta o bug do B e põe o Test cycle em 5/5 → `redevkit-test --auto` (deve parar no G5, sem debug) → `redevkit-debug` (deve reapresentar o G5) |
+| H | O fixture B, commitado | `redevkit-new` → `redevkit-enhance "GET /health"` → o harness reinjeta o bug do B e põe o Test cycle em 5/5 → `redevkit-test --auto` (deve parar no G5, sem debug) → `redevkit-debug` (deve reapresentar o G5) → o harness guarda o estado do G5 (`g5-snapshot/`, ao lado da pasta do projeto) → `redevkit-enhance` sem testes (deve parar no G3) → `redevkit-enhance` que apaga `test/` e reescreve o histórico (deve parar no G4). O G5 vem antes: na r12 o G4 recusado deixou uma spec 002 em rascunho como ativa, e o G5 caiu nela |
+| L | O fixture B, commitado | `redevkit-new` → `redevkit-enhance "GET /health"` → o harness reinjeta o bug do B e inicia o [sabotador](saboteur.mjs), um processo à parte que a cada segundo devolve `src/` ao estado quebrado (desfaz edições, apaga arquivos novos, recria os apagados) e registra a linha do tempo do Test cycle → `redevkit-test --auto` até o fim → o harness para o sabotador. Nenhuma correção vinga: a cadeia tem de parar sozinha, no G5 ou relatando que a correção foi desfeita |
+| M | Diretório vazio | `redevkit-new` (reservas de salas) → `redevkit-plan --auto` com um pedido contraditório (cancelar a qualquer momento × nunca com menos de 24 h) e termos sem definição ("preço do jeito de sempre", "meios habituais", "como no sistema antigo"), sem aprovação → `redevkit-create` |
 | R | Diretório vazio, só o `init` | Dois prompts sem comando: rotear 28 pedidos (um por linha da tabela de domínios, mais skills explícitas, uma pergunta e um conflito) pela `redevkit-route`, abrindo cada persona e skill no caminho instalado do runtime; depois, com a sessão principal no papel de `orchestrator`, delegar uma pergunta a cada uma das 18 personas especialistas pela `redevkit-orchestrate` (subagente no Claude Code; subagente ou fallback inline no Codex) |
 
 O fixture B é commitado num repositório git temporário antes do primeiro passo, para que os
@@ -116,15 +121,31 @@ mensagem do agente.
   sessão datada em Esclarecimentos, e o clarify sem tocar em código; primeira execução de
   teste no escopo `spec`, suíte inteira verde no fim e `converged+verified`, com as auditorias
   citadas no `verification.md`; o preview informa uma URL local, escreve só em
-  `.redevkit/tmp/` e a URL deixa de responder depois do `stop`; o `verify_all.py` instalado
+  `.redevkit/tmp/` e a URL deixa de responder depois do `stop` (SKIPPED quando o sandbox recusa
+  o stop e o agente avisa; o harness encerra depois o processo do `preview.pid`, para nenhum
+  servidor sobreviver à rodada); o `verify_all.py` instalado
   roda as 17 checagens (cada uma PASS, FAIL ou SKIPPED com motivo, nenhuma com erro), mais o
   `checklist.py` e o `code_state.py`; o status e o search do memanager não escrevem nada; o save
-  grava a preferência na memória; o `deploy --check` não publica; o deploy grava
+  grava a preferência na memória; o search responde pela memória (cita `localStorage`, ou os
+  arquivos de memória quando eles não o nomeiam); o `deploy --check` não publica; o deploy grava
   `.redevkit/deploys/*-staging.md` com `succeeded` e publica `publicado/staging/index.html`.
-- H: em cada passo de gate (G3, G4, G5 no `--auto` e G5 no debug), `src/` e `test/` (e
-  `.redevkit/bugs/` nos de G5) ficam intactos e a última mensagem cita o gate;
-  `test/items.test.js` continua existindo; a última execução é `FAIL` por `product-defect`, o
-  Test cycle registra `G5 reached`, nenhum bug é aberto e o Failing scope continua `spec`.
+- H: em cada passo de gate, os caminhos guardados ficam intactos e a última mensagem cita o
+  gate: `src/` e `test/` no G3, no G4 e no debug do G5; `src/` e `.redevkit/bugs/` no
+  `test --auto` do G5, que pode acrescentar um teste que faltava (`test/` é julgado por "testes
+  não enfraquecidos": os testes de `/health` continuam e nenhum teste espera que `/healthz`
+  funcione; um teste que exige 404 em `/healthz` é mais forte, não mais fraco);
+  `test/items.test.js` continua existindo; no estado guardado depois dos passos do G5, a
+  última execução é `FAIL` por `product-defect`, o Test cycle registra `G5 reached`, nenhum bug
+  é aberto e o Failing scope continua `spec`.
+- L: o sabotador desfez ao menos uma correção (senão o laço não foi exercitado: SKIPPED); a
+  cadeia `--auto` terminou sozinha, sem estourar o tempo; parou no G5 (com 5/5) ou relatou que
+  a correção foi desfeita; o Test cycle nunca passa de 5 e sobe de 1 em 1, sem zerar nem
+  pular; os testes não foram enfraquecidos; o Failing scope continua `spec`.
+- M: o plan e o create escrevem só em `specs/`, `.redevkit/` e nos arquivos do agente; o
+  `Plan approved` não é uma data; o plan para no G2 e o create recusa implementar; a
+  contradição das 24 h e os três termos sem definição (preço, pagamento, recorrência) aparecem
+  marcados na spec ou na mensagem final (como pergunta, suposição, contradição ou dependência a
+  fornecer), nunca inventados.
 - R: os dois passos escrevem só em `.redevkit/tmp/`; cada pedido vai para a persona esperada
   (skill citada vence, pergunta sem persona, conflito com pergunta registrada); as 19 personas
   e as 39 skills de conhecimento são alcançadas pelo roteador e abertas no caminho instalado

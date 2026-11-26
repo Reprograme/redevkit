@@ -191,7 +191,7 @@ change when an untracked file was edited, which made a verify reuse a stale test
 | Files hashed in a git repository | Every tracked file, plus every untracked file that git does not ignore and that is not dependency, build or report output (the shared defaults of [Excluding paths](#excluding-paths)) |
 | Git submodules | A checked-out submodule counts with its own files, by the same rule, under its path: a local edit inside it and a checkout of another revision change the fingerprint. A submodule that is not checked out counts with the commit the index records for it. The recorded commit of a checked-out submodule is not hashed, so staging or committing a submodule bump after the run does not change the fingerprint (the content already did) |
 | Nested repositories | An untracked folder with its own `.git` that is not a submodule (a clone never added) counts with its own files (tracked plus untracked, not ignored), under its path, like a checked-out submodule |
-| Files hashed without git | Every file that the shared defaults and the project's `.gitignore` files do not exclude |
+| Files hashed without git | Every file that the shared defaults and the project's `.gitignore` files do not exclude. The same walk is used when the project lies inside another repository that ignores the project folder (`Commit (HEAD): n/a (ignored by the enclosing git repository)`), or when git lists no file at all for a project that is not the repository root: hashing nothing would leave the fingerprint unchanged after an edit |
 | Executable bit | A file whose git index mode is `100755` (an untracked file, or any file without git: an execute bit on a POSIX file system; Windows has none) is hashed as `<file sha256>+x  <path>`, so `chmod +x` or `git update-index --chmod=+x` changes the fingerprint. Other files keep the plain line: a project without executable files has the same fingerprint as before this rule |
 | A folder that cannot be listed | A nested repository git cannot read, or a folder the walk cannot open, is never left out in silence: `Tree fingerprint: n/a (code state unavailable: cannot list <folder>/ ...)`, and `--expect` prints `Compare: DIFFERENT (code state unavailable: ...)`, exit `1` |
 | Never hashed | `.redevkit/`, `specs/`, `.claude/`, `.agents/`, `.codex/` and `.git/` at the project root: reports and memory are written after a run and must not make the code look changed. When the project folder's file system ignores case (Windows, macOS by default; probed on the folder, not assumed from the OS) they match in any case, so `SPECs/` is excluded, and `Changed files` leaves it out too (`:(exclude,icase)`). On a case-sensitive file system `Specs/` is another folder than the `specs/` the kit writes, so it is code and stays hashed |
@@ -352,9 +352,9 @@ below; pass them when you run the script on its own. An invalid value is a usage
 
 | Result | When |
 | --- | --- |
-| PASS (`0`) | Exit 0 and the output shows that tests ran: a summary of unittest, pytest, Jest, Vitest, `node --test`, Mocha, PHPUnit, Pest, RSpec, minitest, cargo, Maven Surefire, `dotnet test` or a generic `N passed` with at least one passed test and no failed one, or, for a format it cannot count, any sign of executed tests (`12 specs`, `ok 1`, a check mark, `PASS file`). The JSON then has `"counts_parsed": false` and zero counts |
+| PASS (`0`) | Exit 0 and the output shows that tests ran: a summary of unittest, pytest, Jest, Vitest, `node --test`, Mocha, PHPUnit, Pest, RSpec, minitest, cargo, Maven Surefire, `dotnet test` or a generic `N passed` with at least one passed test and no failed one, or, for a format it cannot count, any sign of executed tests (`12 specs`, `ok 1`, a check mark, `PASS file`), printed by the test script itself: what npm's `pretest` and `posttest` scripts print does not count, nor a build line such as `✓ 34 modules transformed`. The JSON then has `"counts_parsed": false` and zero counts |
 | SKIPPED (`3`) | No test command; the `--cmd` executable, the stack's tool (`npm`, `php`, `go`, …) or the declared framework is not installed (`vitest is not installed in node_modules/.bin (run the package install first)`, `phpunit is not installed in vendor/bin (run composer install first)`); the summary says zero tests ran (`node --test` without test files, `Ran 0 tests`) or that every test was skipped (0 passed, 0 failed and at least one skipped, pending, ignored, incomplete or todo test: `all tests were skipped (N skipped, 0 passed)`); Vitest or Jest found no test file; pytest or unittest exited 5; or the command exited 0 and printed no test result at all (`"test": "echo ok"`). Run the project's own test command and judge its output |
-| FAIL (`1`) | Any other non-zero exit code (exit 5 of a command that is not pytest or unittest included); a recognised summary with failed tests or errors even when the command exited 0 (a wrapper script that loses the exit code: the observed failures take precedence); and a timeout |
+| FAIL (`1`) | Any other non-zero exit code (exit 5 of a command that is not pytest or unittest included); a recognised summary with failed tests or errors even when the command exited 0 (a wrapper script that loses the exit code: the observed failures take precedence; every summary of the output is added up, so a red suite followed by a green one is still red); a failure line of any known runner in an output that exited 0 (`FAILURES!`, `FAILED (failures=1)`, `ℹ fail 1`, `1 failing`, `not ok 3`, `--- FAIL:`, `FAIL src/a.test.js`, …), even when the summary the runner parsed is green; and a timeout |
 
 Details:
 
@@ -379,6 +379,13 @@ Details:
   per start>" . tests test`), so a start never imports the modules of another
   (`tests/helpers.py` and `test/helpers.py`). Each start prints its own summary and the
   counts are added up; the exit code is 1 when a start failed, 5 when no start ran a test.
+  A folder below `tests/` or `test/` that holds a `test*.py` and that no start reaches (a
+  `tests/unit/` without `__init__.py`) is a start of its own, so its tests are never skipped
+  in silence (hidden folders, `__pycache__`, `node_modules` and `fixtures` are not entered).
+- Windows: a `.cmd` or `.bat` command (`npm.cmd`, a project script) runs through cmd.exe, so
+  every argument that holds `& | < > ^ ( )` is passed quoted (a test file named `t&ver` no
+  longer runs `ver`), and an argument that holds `%`, `!`, `"` or a line break, which cmd.exe
+  expands even inside quotes, is a usage error (exit `2`) before anything runs.
 - pytest is the Python runner when the project declares it: `pytest.ini`, `conftest.py`,
   a pytest section (`[tool.pytest.ini_options]`, `[tool:pytest]` in `setup.cfg`, `[pytest]`
   in `tox.ini`), or `pytest` (or a `pytest-*` plugin) as a requirement in

@@ -21,7 +21,9 @@ for (const dir of dirs) {
   const passed = r.results.filter((x) => x.ok).length;
   rows.push(`| ${r.id} | ${passed}/${r.results.length} | ${r.verdict ?? (r.passed ? "PASS" : "FAIL")} | ${minutes} min |`);
   details.push(`### ${r.id}`, "", "| Check | Result | Detail |", "| --- | --- | --- |");
-  for (const x of r.results) details.push(`| ${x.name} | ${x.ok === null ? "SKIPPED" : x.ok ? "PASS" : "FAIL"} | ${String(x.detail ?? "").replace(/\|/g, "/").replace(/\n/g, " ").slice(0, 160)} |`);
+  // A URL in a detail (the preview's http://localhost:8000) goes in backticks: a bare URL is MD034.
+  const cell = (text) => String(text ?? "").replace(/\|/g, "/").replace(/\n/g, " ").slice(0, 160).replace(/(?<!`)\bhttps?:\/\/[^\s`)]+/g, (url) => `\`${url}\``);
+  for (const x of r.results) details.push(`| ${x.name} | ${x.ok === null ? "SKIPPED" : x.ok ? "PASS" : "FAIL"} | ${cell(x.detail)} |`);
   details.push("");
 }
 const allPass = rows.every((r) => r.includes("| PASS |"));

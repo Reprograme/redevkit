@@ -9,7 +9,8 @@ argument-hint: "[--auto] <change description>"
 
 **Input:** {{ARGS}}
 
-Flags: `--auto` adopts recommendations and continues to the test command. The rest of the
+Flags: `--auto` adopts recommendations and, after the approval at step 4 (G2), continues to
+the test command. The rest of the
 input describes the change. Write artifacts in {{LANG}}; answer the user in the user's
 language.
 
@@ -92,12 +93,17 @@ continuing as an enhancement.
 
 ### 4. Approve the change plan
 
-Check the delta against the constitution (violation → G3). Present: affected and new files,
+Check the delta against the constitution first: a delta that breaks a principle stops at G3,
+also when the user asked for it (skipping the Test-First tests, for example: only an amendment,
+G1, waives a principle), and the G3 stop is reported apart from the approval below. Present: affected and new files,
 the tasks to append, risks and scope. Ask for approval (approve (Recommended) or request
-changes). In `--auto`, the approval is adopted and recorded as an assumption. Then write the
-delta and the tasks to the files, and set `active.md` › `- Plan approved: YYYY-MM-DD` (this
-approval of the change plan stands in for G2, for an existing feature and for a lightweight
-spec).
+changes). This approval stands in for G2 (for an existing feature and for a lightweight spec),
+so it is never adopted as an assumption: the run stops here even in `--auto`. Only the user
+approves: in the answer, or in this command's input when the user wrote it there ("I approve
+the change plan"). In a non-interactive run without that approval, write the delta and the
+tasks, keep `- Plan approved: no`, implement nothing and end the run reporting that approval
+is pending. On approval, write the delta and the tasks to the files and set `active.md` ›
+`- Plan approved: YYYY-MM-DD`.
 
 ### 5. Implement
 
@@ -142,6 +148,8 @@ result. Conflicts and risks cite the file where they were found.
 - Blocked tasks (`[!]`) → as in `{{CMD:redevkit-create}}`: resolve what they need, revise
   with `{{CMD:redevkit-plan}}` or go on to the test; never repeat this command unchanged.
 - Redirected at step 3 → `{{CMD:redevkit-plan}}` with the drafted delta.
-- `--auto`: continue with `{{CMD:redevkit-test}}` `--auto` (a blocked task stops the chain
+- Approval pending (step 4) → no handoff until the user approves; then this command again
+  (or `{{CMD:redevkit-create}}`, which implements the approved tasks).
+- `--auto`: after the approval, continue with `{{CMD:redevkit-test}}` `--auto` (a blocked task stops the chain
   with the blocked list); at step 3 the recommendation
   (plan) is adopted and the chain continues with `{{CMD:redevkit-plan}}` `--auto`.

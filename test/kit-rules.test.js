@@ -93,8 +93,46 @@ test("A01: a wrong test of a global failure goes back to the verify and counts a
   assert.doesNotMatch(handoff, /`\{\{CMD:redevkit-test\}\}` for a wrong test/);
   assert.match(handoff, /for a wrong test, the command of the Failing scope as below \(`spec` → `\{\{CMD:redevkit-test\}\}`, `global` → `\{\{CMD:redevkit-verify\}\}`/);
   const memory = section(DEBUG, "## Memory phase 3", "## Evidence rule");
-  assert.match(memory, /or sent the failure back as a wrong test/);
-  assert.match(memory, /Correction cycle for the verify command/);
+  assert.match(memory, /\+1 debug round of the loop of the Failing scope on every handoff this run makes inside it, to the test, verify or create command, whatever it changed/);
+  assert.match(memory, /Correction cycle for `global`/);
+});
+
+test("1.3.1 F1: debug → create (behavior never built) counts a debug round, so verify → debug → create → test → verify is bounded", () => {
+  const never = section(DEBUG, "- **The behavior was never built**", "- **The suite cannot run**");
+  assert.match(never, /hand off to `\{\{CMD:redevkit-create\}\}`\. With Failing scope `spec` or `global` this handoff counts as a debug round of that loop too/);
+  const testCycle = section(LOOPS, "### Test cycle", "### Correction cycle");
+  assert.match(testCycle, /adds 1 on every handoff it makes in this loop \(Failing scope `spec`\), whatever the run changed/);
+  assert.match(testCycle, /to `redevkit-create` for behavior never built \(so test → debug → create → test is bounded too\)/);
+  const correction = section(LOOPS, "### Correction cycle", "### Unverified");
+  assert.match(correction, /adds 1 on every handoff it makes in this loop \(Failing scope `global`\), whatever the run changed/);
+  assert.match(correction, /so verify → debug → create → test → verify is bounded too\. A test `PASS` never resets this counter/);
+});
+
+test("1.3.1 (E2E r12 G-claude): the preview starts detached with a pid file on both runtimes", () => {
+  const PREVIEW = "commands/redevkit-preview/SKILL.md";
+  const start = section(PREVIEW, "#### Start in the background", "#### Health check and report");
+  assert.match(start, /Start the server detached from this session, with the background form of the current OS, and write the process id to `\.redevkit\/tmp\/preview\.pid`/);
+  assert.doesNotMatch(start, /\{\{#codex\}\}/); // the detached form is not Codex-only any more
+  assert.match(start, /Never use a background task of this session \(`run_in_background`\)/);
+  const stop = section(PREVIEW, "### 4. stop", "### 5. restart");
+  assert.match(stop, /If the sandbox or the OS refuses the stop \(access denied\), keep the pid file, report that the server is still running/);
+});
+
+test("1.3.1 A3: enhance never adopts the G2 approval of its change plan, even in --auto", () => {
+  const ENHANCE = "commands/redevkit-enhance/SKILL.md";
+  const step4 = section(ENHANCE, "### 4. Approve the change plan", "### 5. Implement");
+  assert.doesNotMatch(step4, /the approval is adopted/);
+  assert.match(step4, /so it is never adopted as an assumption: the run stops here even in `--auto`/);
+  assert.match(step4, /In a non-interactive run without that approval, write the delta and the tasks, keep `- Plan approved: no`, implement nothing/);
+  assert.match(read(ENHANCE), /`--auto`: after the approval, continue with `\{\{CMD:redevkit-test\}\}` `--auto`/);
+  assert.match(read("context/AGENTS.block.md"), /It always stops at the gates: G1 constitution creation or amendment, G2 plan approval/);
+});
+
+test("1.3.1 (E2E r13 H-codex): a request against the constitution is never a waiver, and enhance checks G3 before G2", () => {
+  assert.match(read("context/AGENTS.block.md"), /A request that breaks a constitution principle \(code without its Test-First tests, for example\) never waives it: it stops at G3 until the user amends the constitution \(G1\) or changes the request/);
+  const step4 = section("commands/redevkit-enhance/SKILL.md", "### 4. Approve the change plan", "### 5. Implement");
+  assert.match(step4, /Check the delta against the constitution first: a delta that breaks a principle stops at G3, also when the user asked for it/);
+  assert.match(step4, /the G3 stop is reported apart from the approval below/);
 });
 
 test("A01: loops count the wrong-test handback and the verify never reuses a FAIL after a debug handback", () => {

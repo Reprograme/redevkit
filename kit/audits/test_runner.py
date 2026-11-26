@@ -43,15 +43,18 @@ Verdict (the exit code follows the 0/1/2/3 contract of the audits):
   Pest, RSpec, minitest, cargo, Maven Surefire, dotnet, or a generic "N passed")
   with at least one test and no failed one, or, for a format the runner does
   not parse, any evidence of executed tests ("12 specs", "ok 1", a check mark,
-  "PASS file"); see ``has_test_evidence``.
+  "PASS file") printed by the test script itself (npm's pretest and posttest output
+  and build lines such as "✓ 34 modules transformed" do not count); see
+  ``has_test_evidence``.
 * SKIPPED (3): no test command, runner or declared framework not installed,
   the summary says zero tests ran or that every test was skipped (0 passed,
   0 failed, skipped/pending/ignored > 0), the runner reported that it found no
   test file, or the command exited 0 without any test result in its output (for
   example ``"test": "echo ok"``). Nothing was verified: never PASS.
 * FAIL (1): any other non-zero exit code, a recognised summary with failed tests
-  even when the command exited 0 (observed failures take precedence), and a
-  timeout. A timeout prints a ``[TIMEOUT]`` line and the JSON carries
+  even when the command exited 0 (observed failures take precedence; every summary
+  of the output is added up), a failure line of any known runner in an output that
+  exited 0 (``failure_signal``), and a timeout. A timeout prints a ``[TIMEOUT]`` line and the JSON carries
   ``"status": "timeout"`` and ``"timed_out": true``.
 """
 from __future__ import annotations
@@ -73,7 +76,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 sys.dont_write_bytecode = True  # importing the shared helper must not leave __pycache__ behind
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-from audit_common import run_external, strip_ansi  # noqa: E402
+from audit_common import run_external, strip_ansi, unsafe_batch_argument  # noqa: E402
 
 tomllib: Any
 try:
@@ -397,7 +400,48 @@ def _unittest_start_dirs(project_path: Path) -> List[str]:
         folder = project_path / name
         if folder.is_dir() and not (folder / "__init__.py").exists() and any(folder.glob("test*.py")):
             starts.append(name)
+    # A folder below tests/ or test/ that no start reaches (tests/unit/ without __init__.py):
+    # discovery would skip its tests in silence, even failing ones. It becomes a start of its own.
+    for name in ("tests", "test"):
+        for folder in _test_folders(project_path / name):
+            rel = folder.relative_to(project_path).as_posix()
+            if not any(_discovery_reaches(project_path, start, rel) for start in starts):
+                starts.append(rel)
     return starts
+
+
+_SKIPPED_TEST_DIRS = {"__pycache__", "node_modules", "fixtures", "site-packages"}
+
+
+def _test_folders(top: Path) -> List[Path]:
+    """Folders below ``top`` (not ``top`` itself) that hold a ``test*.py``, in sorted order.
+    Hidden folders, ``__pycache__``, ``node_modules``, ``fixtures`` and symlinked folders are not entered."""
+    found: List[Path] = []
+    if not top.is_dir():
+        return found
+    for current, dirs, files in os.walk(str(top)):
+        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d not in _SKIPPED_TEST_DIRS
+                         and not os.path.islink(os.path.join(current, d)))
+        path = Path(current)
+        if path != top and any(f.startswith("test") and f.endswith(".py") for f in files):
+            found.append(path)
+    return found
+
+
+def _discovery_reaches(project_path: Path, start: str, rel: str) -> bool:
+    """True when ``unittest discover -s start`` finds the tests of folder ``rel``: it is the
+    start, or every folder from below the start down to ``rel`` is a package."""
+    if rel == start:
+        return True
+    prefix = "" if start == "." else start + "/"
+    if not rel.startswith(prefix):
+        return False
+    parts = rel[len(prefix):].split("/")
+    base = project_path if start == "." else project_path / start
+    for index in range(len(parts)):
+        if not (base.joinpath(*parts[: index + 1]) / "__init__.py").is_file():
+            return False
+    return True
 
 
 # ``unittest discover`` takes one start directory. Several starts run one after the other,
@@ -868,8 +912,31 @@ _TEST_EVIDENCE = (
     re.compile(r"^ok\s+\d+\b", re.MULTILINE),                    # TAP: "ok 1 - adds"
     re.compile(r"^ok\s+\S+\s+\(?\d[\d.]*m?s\)?", re.MULTILINE),  # go test: "ok  pkg  0.012s"
     re.compile(r"^[ \t]*(?:---[ \t]+)?PASS\b", re.MULTILINE),    # jest "PASS src/a.test.js", go "--- PASS:"
-    re.compile(r"^[ \t]*[✓✔√][ \t]+\S", re.MULTILINE),  # check marks of spec reporters
+    # Check marks of spec reporters; a build tool's "✓ 34 modules transformed" or "✓ built in 1s" is not a test.
+    re.compile(r"^[ \t]*[✓✔√][ \t]+(?!(?i:\d+\s+modules?\b|built\b|compiled\b|done\b))\S", re.MULTILINE),
 )
+# Failures reported in the output, whatever the summary the parser picked. A command that exits 0
+# while one of these lines is present (a wrapper that loses an exit code, two suites where the last
+# one is green) is FAIL: an observed failure always wins.
+_FAILURE_SIGNALS = (
+    re.compile(r"^FAILED \((?:[a-z ]+=\d+(?:, )?)+\)[ \t]*$", re.MULTILINE),                 # unittest
+    re.compile(r"^(?:=+ )?(?:\d+ [a-z]+, )*[1-9]\d* (?:failed|errors?)\b[^\n]* in \d", re.MULTILINE),  # pytest
+    re.compile(r"^[ \t]*Tests:?[ \t]+[^\n]*\b[1-9]\d* failed\b", re.MULTILINE),               # jest, vitest
+    re.compile(r"^[ \t]*[^\sA-Za-z0-9]{1,2}[ \t]+(?:fail|cancelled)[ \t]+[1-9]\d*[ \t]*$", re.MULTILINE),  # node --test
+    re.compile(r"^[ \t]*[1-9]\d* failing\b", re.MULTILINE),                                     # mocha
+    re.compile(r"^(?:FAILURES|ERRORS)!$", re.MULTILINE),                                         # PHPUnit
+    re.compile(r"^Tests: \d+, Assertions: \d+, [^\n]*\b(?:Failures|Errors): [1-9]", re.MULTILINE),  # PHPUnit
+    re.compile(r"^\d+ examples?, [1-9]\d* failures?", re.MULTILINE),                             # RSpec
+    re.compile(r"^\d+ runs, \d+ assertions, (?:[1-9]\d* failures|\d+ failures, [1-9]\d* errors)", re.MULTILINE),  # minitest
+    re.compile(r"^test result: FAILED\.", re.MULTILINE),                                         # cargo
+    re.compile(r"^(?:\[\w+\] )?Tests run: \d+, (?:Failures: [1-9]|Failures: \d+, Errors: [1-9])", re.MULTILINE),  # Surefire
+    re.compile(r"Test summary: total: \d+[,;] failed: [1-9]", re.IGNORECASE),                    # dotnet
+    re.compile(r"\bFailed!\s+[-–]\s+Failed:\s+[1-9]"),                                           # dotnet (per project)
+    re.compile(r"^not ok \d+\b(?![^\n]*#\s*(?i:todo|skip))", re.MULTILINE),                     # TAP
+    re.compile(r"^(?:--- FAIL:|FAIL\s+\S)", re.MULTILINE),                                       # go test, jest file
+)
+# npm announces each lifecycle script it runs ("> app@1.0.0 pretest", then "> node build.js").
+_NPM_LIFECYCLE = re.compile(r"^> \S+ ((?:pre|post)?test)(?:\s.*)?$")
 
 
 def _last(pattern: "re.Pattern[str]", text: str) -> Optional["re.Match[str]"]:
@@ -940,27 +1007,28 @@ def _parse_counts(output: str, result: Dict[str, Any]) -> bool:
         elif "passing" in mocha:
             passed, failed, skipped = mocha["passing"], mocha.get("failing", 0), mocha.get("pending", 0)
             run = passed + failed
-        elif _last(_PHPUNIT_OK, output) or _last(_PHPUNIT_TOTALS, output):
-            ok, totals = _last(_PHPUNIT_OK, output), _last(_PHPUNIT_TOTALS, output)
-            if totals and (not ok or totals.start() > ok.start()):
-                run = int(totals.group(1))
+        elif _PHPUNIT_OK.search(output) or _PHPUNIT_TOTALS.search(output):
+            # One summary per run ("OK (...)" or the totals line), added up: a red run followed
+            # by a green one (composer test running two suites) is still red.
+            for ok in _PHPUNIT_OK.finditer(output):
+                run, passed = run + int(ok.group(1)), passed + int(ok.group(1))
+            for totals in _PHPUNIT_TOTALS.finditer(output):
                 numbers = {key.strip().lower(): int(value) for key, value in re.findall(r"([A-Za-z ]+): (\d+)", totals.group(2))}
-                failed = numbers.get("failures", 0) + numbers.get("errors", 0)
-                skipped = numbers.get("skipped", 0) + numbers.get("incomplete", 0)
-                passed = max(run - failed - skipped, 0)
-            else:
-                run = passed = int(ok.group(1))  # type: ignore[union-attr]
-        elif _last(_RSPEC, output):
-            rspec = _last(_RSPEC, output)
-            run, failed = int(rspec.group(1)), int(rspec.group(2))  # type: ignore[union-attr]
-            skipped = int(rspec.group(3) or 0)  # type: ignore[union-attr]
-            passed = max(run - failed - skipped, 0)
-        elif _last(_MINITEST, output):
-            minitest = _last(_MINITEST, output)
-            run = int(minitest.group(1))  # type: ignore[union-attr]
-            failed = int(minitest.group(2)) + int(minitest.group(3))  # type: ignore[union-attr]
-            skipped = int(minitest.group(4))  # type: ignore[union-attr]
-            passed = max(run - failed - skipped, 0)
+                line_failed = numbers.get("failures", 0) + numbers.get("errors", 0)
+                line_skipped = numbers.get("skipped", 0) + numbers.get("incomplete", 0)
+                run, failed, skipped = run + int(totals.group(1)), failed + line_failed, skipped + line_skipped
+                passed += max(int(totals.group(1)) - line_failed - line_skipped, 0)
+        elif _RSPEC.search(output):  # one summary per run, added up
+            for rspec in _RSPEC.finditer(output):
+                line_run, line_failed, line_skipped = int(rspec.group(1)), int(rspec.group(2)), int(rspec.group(3) or 0)
+                run, failed, skipped = run + line_run, failed + line_failed, skipped + line_skipped
+                passed += max(line_run - line_failed - line_skipped, 0)
+        elif _MINITEST.search(output):  # one summary per run, added up
+            for minitest in _MINITEST.finditer(output):
+                line_run = int(minitest.group(1))
+                line_failed, line_skipped = int(minitest.group(2)) + int(minitest.group(3)), int(minitest.group(4))
+                run, failed, skipped = run + line_run, failed + line_failed, skipped + line_skipped
+                passed += max(line_run - line_failed - line_skipped, 0)
         elif _CARGO.search(output):  # unit, integration and doc tests: one summary each
             for match in _CARGO.finditer(output):
                 passed, failed = passed + int(match.group(1)), failed + int(match.group(2))
@@ -992,10 +1060,37 @@ def _parse_counts(output: str, result: Dict[str, Any]) -> bool:
     return True
 
 
+def _without_npm_hooks(output: str) -> str:
+    """``output`` without what npm's ``pretest`` and ``posttest`` scripts printed: a build or a
+    lint run there is not a test, and its "✓ 34 modules transformed" is no test evidence."""
+    kept: List[str] = []
+    in_hook = False
+    for line in output.split("\n"):
+        stage = _NPM_LIFECYCLE.match(line)
+        if stage:
+            in_hook = stage.group(1) != "test"
+        if not in_hook:
+            kept.append(line)
+    return "\n".join(kept)
+
+
 def has_test_evidence(output: str) -> bool:
-    """True when the output of an unrecognised runner still shows that tests were executed."""
-    text = _NPM_ECHO.sub("", strip_ansi(output))
+    """True when the output of an unrecognised runner still shows that tests were executed
+    (by the test script itself: npm's pretest and posttest output does not count)."""
+    text = _NPM_ECHO.sub("", _without_npm_hooks(strip_ansi(output)))
     return any(pattern.search(text) for pattern in _TEST_EVIDENCE)
+
+
+def failure_signal(output: str) -> Optional[str]:
+    """The first line of the output that reports a failed test (any known runner), or None."""
+    text = strip_ansi(output)
+    found = [match for pattern in _FAILURE_SIGNALS for match in [pattern.search(text)] if match]
+    if not found:
+        return None
+    first = min(found, key=lambda match: match.start())
+    start = text.rfind("\n", 0, first.start()) + 1
+    end = text.find("\n", first.start())
+    return text[start:end if end != -1 else len(text)].strip()
 
 
 def run_tests(cmd: List[str], cwd: Path, timeout: Optional[float] = None,
@@ -1046,11 +1141,17 @@ def run_tests(cmd: List[str], cwd: Path, timeout: Optional[float] = None,
             "(watch mode, a prompt, or a suite slower than the limit: see --timeout)"
         )
     elif proc.returncode == 0:
+        signal = failure_signal(combined)
         if result["counts_parsed"] and result["tests_failed"] > 0:
             # The summary shows failed tests although the command exited 0 (a wrapper script that
             # loses the exit code): the observed failures decide.
             result["status"] = "failed"
             result["error"] = f"{result['tests_failed']} failed test(s) in the summary although the command exited 0"
+        elif signal:
+            # A failure the parsed summary does not count (another runner's summary, a red suite
+            # before a green one): the observed failure decides.
+            result["status"] = "failed"
+            result["error"] = f"the output reports a failure although the command exited 0: {signal[:200]}"
         elif result["counts_parsed"] and result["tests_passed"] == 0 and result["tests_skipped"] > 0:
             # Every test that ran was skipped (pending, ignored, todo): nothing was verified.
             result["status"] = "skipped"
@@ -1192,6 +1293,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         else:
             paths_ignored = f"{info['framework'] or 'this test command'} cannot run selected test files"
             scope = f"full suite ({paths_ignored})"
+    unsafe = unsafe_batch_argument(cmd) if os.name == "nt" else None
+    if unsafe is not None:
+        # cmd.exe would expand it even inside quotes: a file name could change the command or its exit code.
+        print(json.dumps({"error": f"cannot pass {unsafe!r} to {Path(cmd[0]).name}: cmd.exe expands % ! \" "
+                                   "and line breaks even inside quotes; rename the file or declare a command "
+                                   "that is not a .cmd/.bat"}))
+        return EXIT_USAGE
     print(f"Scope: {scope}")
     env_words = [f"{name}={value}" for name, value in (info.get("env") or {}).items()]
     shown = [UNITTEST_MULTI_LABEL if word == UNITTEST_MULTI else word for word in cmd]

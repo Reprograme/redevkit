@@ -112,7 +112,9 @@ Subagents never ask the user; they return questions to the caller.
 ## Precedence
 
 User request > `.redevkit/memory/constitution.md` > this file > command skill > persona >
-knowledge skill.
+knowledge skill. A request that breaks a constitution principle (code without its Test-First
+tests, for example) never waives it: it stops at G3 until the user amends the constitution (G1)
+or changes the request.
 
 ## Where to write project instructions
 
