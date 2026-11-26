@@ -128,6 +128,13 @@ test("1.3.1 A3: enhance never adopts the G2 approval of its change plan, even in
   assert.match(read("context/AGENTS.block.md"), /It always stops at the gates: G1 constitution creation or amendment, G2 plan approval/);
 });
 
+test("1.3.1 (E2E r13 H-codex): a request against the constitution is never a waiver, and enhance checks G3 before G2", () => {
+  assert.match(read("context/AGENTS.block.md"), /A request that breaks a constitution principle \(code without its Test-First tests, for example\) never waives it: it stops at G3 until the user amends the constitution \(G1\) or changes the request/);
+  const step4 = section("commands/redevkit-enhance/SKILL.md", "### 4. Approve the change plan", "### 5. Implement");
+  assert.match(step4, /Check the delta against the constitution first: a delta that breaks a principle stops at G3, also when the user asked for it/);
+  assert.match(step4, /the G3 stop is reported apart from the approval below/);
+});
+
 test("A01: loops count the wrong-test handback and the verify never reuses a FAIL after a debug handback", () => {
   const correction = section(LOOPS, "### Correction cycle", "### Unverified");
   assert.match(correction, /a wrong test of a `global` failure always goes back to `redevkit-verify`, never to `redevkit-test`/);

@@ -45,6 +45,11 @@ a regression test that fails on 1.3.0 (`test-audits/test_p0_131_verdicts_and_sta
   `--auto`. Only the user approves, in the answer or in the command's input. Without that
   approval a non-interactive run writes the delta and the tasks, keeps
   `- Plan approved: no` and implements nothing.
+- **A request against the constitution could pass as a waiver.** `AGENTS.md` ranks the user
+  request above the constitution, so in E2E r13 H-codex a "no tests, just the code" request
+  stopped at G2 with no G3. The block now says such a request never waives a principle: it
+  stops at G3 until the user amends the constitution (G1) or changes the request. The enhance
+  command checks G3 before its G2 approval.
 - **`redevkit-preview` on Claude Code started the server as a background task of the session.**
   The server stopped when the session ended, and a non-interactive `claude -p` never exited:
   E2E r12 G-claude hit the 45-minute timeout after a successful start. Both runtimes now start

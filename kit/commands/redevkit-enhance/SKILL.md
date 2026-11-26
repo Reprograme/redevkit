@@ -93,7 +93,9 @@ continuing as an enhancement.
 
 ### 4. Approve the change plan
 
-Check the delta against the constitution (violation → G3). Present: affected and new files,
+Check the delta against the constitution first: a delta that breaks a principle stops at G3,
+also when the user asked for it (skipping the Test-First tests, for example: only an amendment,
+G1, waives a principle), and the G3 stop is reported apart from the approval below. Present: affected and new files,
 the tasks to append, risks and scope. Ask for approval (approve (Recommended) or request
 changes). This approval stands in for G2 (for an existing feature and for a lightweight spec),
 so it is never adopted as an assumption: the run stops here even in `--auto`. Only the user
