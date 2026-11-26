@@ -507,6 +507,25 @@ PIPE_GRACE_SECONDS = 5   # bounded wait for the output pipes once the process en
 TREE_KILL_SECONDS = 20   # bounded wait for the tool that kills the process tree
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
 _CMD_METACHARACTERS = frozenset("&|<>^()")
+# Expanded by cmd.exe inside double quotes too (%VAR%, !VAR! with delayed expansion), or able to
+# close the quotes ("): an argument of a .cmd/.bat that holds one cannot be passed safely.
+_CMD_UNQUOTABLE = frozenset('%!"\r\n')
+
+
+class UnsafeCommandLine(OSError):
+    """An argument that cmd.exe would interpret, given to a .cmd/.bat: the command is not started."""
+
+
+def batch_file(cmd: Sequence[str]) -> bool:
+    """True when the executable of ``cmd`` is a Windows batch file (``npm.cmd``, ``runtests.bat``)."""
+    return bool(cmd) and Path(str(cmd[0])).suffix.lower() in (".cmd", ".bat")
+
+
+def unsafe_batch_argument(cmd: Sequence[str]) -> Optional[str]:
+    """The first argument of a batch-file command that cmd.exe would expand even quoted, or None."""
+    if not batch_file(cmd):
+        return None
+    return next((str(arg) for arg in cmd[1:] if _CMD_UNQUOTABLE.intersection(str(arg))), None)
 
 
 class CommandResult(NamedTuple):
@@ -647,6 +666,17 @@ def run_external(
     the command cannot start.
     """
     options: Dict[str, object] = {}
+    if os.name == "nt" and not isinstance(cmd, str) and batch_file(cmd):
+        # A .cmd/.bat runs through cmd.exe, which reads its arguments as a command line:
+        # an unquoted "&" in a file name ran a second command. Quote what can be quoted, refuse the rest.
+        unsafe = unsafe_batch_argument(cmd)
+        if unsafe is not None:
+            raise UnsafeCommandLine(
+                f"argument {unsafe!r} holds a character cmd.exe expands even inside quotes "
+                f"({''.join(sorted(_CMD_UNQUOTABLE - {chr(13), chr(10)}))} or a line break); "
+                f"{Path(str(cmd[0])).name} cannot receive it safely"
+            )
+        cmd = windows_command_line([str(part) for part in cmd])
     if os.name == "nt":
         options["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     else:

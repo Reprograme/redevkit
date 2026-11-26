@@ -25,7 +25,11 @@ on git being present:
   the files git lists in it (tracked plus untracked, not ignored), under its
   path;
 * no git: every file the shared defaults and the project's ``.gitignore``
-  files do not exclude.
+  files do not exclude. The same walk is used when the project lies inside
+  another repository that ignores the project folder (a project kept under an
+  ignored ``temp/`` of some other checkout), or when git lists no file at all
+  for a project that is not the repository root: git would hash nothing, and
+  an edit would leave the fingerprint unchanged.
 
 The executable bit counts too. A file whose git index mode is ``100755`` (for
 an untracked file or without git: a file with an execute bit, on a POSIX file
@@ -315,9 +319,28 @@ def _changed(project: Path, ignore_case: bool = False) -> Optional[List[str]]:
     return [line for line in status.decode("utf-8", errors="replace").splitlines() if line.strip()]
 
 
+def _repository_root(project: Path) -> bool:
+    """True when ``project`` is the top folder of its git working tree."""
+    top = _text(_git(project, "rev-parse", "--show-toplevel"))
+    try:
+        return bool(top) and os.path.samefile(top, str(project))
+    except OSError:
+        return False
+
+
+def ignored_by_enclosing_repo(project: Path) -> bool:
+    """True when ``project`` sits inside another repository's working tree that ignores it."""
+    if _repository_root(project):
+        return False
+    return _git(project, "check-ignore", "-q", "--", ".") is not None  # exit 0: ignored
+
+
 def compute(project: Path) -> Dict[str, Any]:
     """The code state of ``project`` as a dictionary (see the module docstring)."""
     in_git = _text(_git(project, "rev-parse", "--is-inside-work-tree")) == "true"
+    enclosing_ignores = in_git and ignored_by_enclosing_repo(project)
+    if enclosing_ignores:
+        in_git = False  # the enclosing repository lists none of the project's files
     ignore_case = ignores_case(project)
     gitlinks: Dict[str, str] = {}
     executables: Set[str] = set()
@@ -325,6 +348,8 @@ def compute(project: Path) -> Dict[str, Any]:
     unlisted: Optional[str] = None
     try:
         files = git_files(project, ignore_case, gitlinks, executables=executables) if in_git else None
+        if files == [] and not _repository_root(project):
+            files = None  # a project inside a repository that lists nothing of it: walk instead
         if files is None:
             in_git = False
             basis = "walk"
@@ -357,7 +382,7 @@ def compute(project: Path) -> Dict[str, Any]:
         })
     else:
         state.update({
-            "head": "n/a (not a git repository)",
+            "head": "n/a (ignored by the enclosing git repository)" if enclosing_ignores else "n/a (not a git repository)",
             "branch": "n/a",
             "working_tree": "n/a",
             "changed_files": [],

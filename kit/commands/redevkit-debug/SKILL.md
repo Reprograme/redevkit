@@ -100,7 +100,9 @@ line):
   counts as a debug round of that loop (Test cycle or Correction cycle, `loops.md`), so a
   repeated disagreement reaches the question or G5.
 - **The behavior was never built** (it belongs to an open `[ ]` or blocked `[!]` task of
-  `tasks.md`): stop and hand off to `{{CMD:redevkit-create}}`.
+  `tasks.md`): stop and hand off to `{{CMD:redevkit-create}}`. With Failing scope `spec` or
+  `global` this handoff counts as a debug round of that loop too, so a failure that keeps
+  coming back through the create command still reaches G5.
 - **The suite cannot run** (missing dependency or tool, timeout, port in use): stop and name
   what must be fixed in the environment.
 
@@ -145,9 +147,9 @@ whole suite and the full verification).
 
 Save per `{{SKILL:redevkit-memanager}}`: `active.md` › Last results › Debug (active feature, bug
 slug, date and time read from the system clock, `test.md` result, link to the bug folder),
-the debug rounds of the loop it hands back to whenever this run changed code or tests, or sent
-the failure back as a wrong test (Test
-cycle for the test command, Correction cycle for the verify command; rules in `loops.md`; delete
++1 debug round of the loop of the Failing scope on every handoff this run makes inside it, to
+the test, verify or create command, whatever it changed (Test cycle for `spec`, Correction
+cycle for `global`; rules in `loops.md`; delete
 an obsolete `- Verify pending:` line) and Known issues (`- Bug <slug>: open — .redevkit/bugs/<slug>/`; only a `converged+verified`
 verify of that feature closes it; a bug debugged with no active feature is closed by the user
 through `{{SKILL:redevkit-memanager}}`), `changelog.md`

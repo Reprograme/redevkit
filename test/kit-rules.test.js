@@ -93,8 +93,29 @@ test("A01: a wrong test of a global failure goes back to the verify and counts a
   assert.doesNotMatch(handoff, /`\{\{CMD:redevkit-test\}\}` for a wrong test/);
   assert.match(handoff, /for a wrong test, the command of the Failing scope as below \(`spec` → `\{\{CMD:redevkit-test\}\}`, `global` → `\{\{CMD:redevkit-verify\}\}`/);
   const memory = section(DEBUG, "## Memory phase 3", "## Evidence rule");
-  assert.match(memory, /or sent the failure back as a wrong test/);
-  assert.match(memory, /Correction cycle for the verify command/);
+  assert.match(memory, /\+1 debug round of the loop of the Failing scope on every handoff this run makes inside it, to the test, verify or create command, whatever it changed/);
+  assert.match(memory, /Correction cycle for `global`/);
+});
+
+test("1.3.1 F1: debug → create (behavior never built) counts a debug round, so verify → debug → create → test → verify is bounded", () => {
+  const never = section(DEBUG, "- **The behavior was never built**", "- **The suite cannot run**");
+  assert.match(never, /hand off to `\{\{CMD:redevkit-create\}\}`\. With Failing scope `spec` or `global` this handoff counts as a debug round of that loop too/);
+  const testCycle = section(LOOPS, "### Test cycle", "### Correction cycle");
+  assert.match(testCycle, /adds 1 on every handoff it makes in this loop \(Failing scope `spec`\), whatever the run changed/);
+  assert.match(testCycle, /to `redevkit-create` for behavior never built \(so test → debug → create → test is bounded too\)/);
+  const correction = section(LOOPS, "### Correction cycle", "### Unverified");
+  assert.match(correction, /adds 1 on every handoff it makes in this loop \(Failing scope `global`\), whatever the run changed/);
+  assert.match(correction, /so verify → debug → create → test → verify is bounded too\. A test `PASS` never resets this counter/);
+});
+
+test("1.3.1 A3: enhance never adopts the G2 approval of its change plan, even in --auto", () => {
+  const ENHANCE = "commands/redevkit-enhance/SKILL.md";
+  const step4 = section(ENHANCE, "### 4. Approve the change plan", "### 5. Implement");
+  assert.doesNotMatch(step4, /the approval is adopted/);
+  assert.match(step4, /so it is never adopted as an assumption: the run stops here even in `--auto`/);
+  assert.match(step4, /In a non-interactive run without that approval, write the delta and the tasks, keep `- Plan approved: no`, implement nothing/);
+  assert.match(read(ENHANCE), /`--auto`: after the approval, continue with `\{\{CMD:redevkit-test\}\}` `--auto`/);
+  assert.match(read("context/AGENTS.block.md"), /It always stops at the gates: G1 constitution creation or amendment, G2 plan approval/);
 });
 
 test("A01: loops count the wrong-test handback and the verify never reuses a FAIL after a debug handback", () => {

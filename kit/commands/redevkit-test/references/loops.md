@@ -50,19 +50,22 @@ Tells the debug command where to hand back.
 
 ### Test cycle (spec scope)
 
-- **Debug rounds:** the debug command adds 1 whenever it hands back to `redevkit-test`: after
-  changing code or tests, and also when it sends the failure back as a wrong test (so a test ↔
-  debug disagreement is bounded too). Reset to 0 by a test `PASS` and when the user chooses
-  continue at G5.
+- **Debug rounds:** the debug command adds 1 on every handoff it makes in this loop (Failing
+  scope `spec`), whatever the run changed: back to `redevkit-test` after a fix or with a wrong
+  test (so a test ↔ debug disagreement is bounded too), and to `redevkit-create` for behavior
+  never built (so test → debug → create → test is bounded too). Reset to 0 by a test `PASS` and
+  when the user chooses continue at G5.
 - **G5:** a test run that would hand off to the debug command while debug rounds is 5 or more
   (five fixes did not make the spec tests pass) reaches G5 instead.
 
 ### Correction cycle (global scope)
 
-- **Debug rounds:** the debug command adds 1 whenever it hands back to `redevkit-verify`
-  (after changing code or tests, or sending the failure back as a wrong test: a wrong test of
-  a `global` failure always goes back to `redevkit-verify`, never to `redevkit-test`, so the
-  whole suite judges it again). Reset to 0 by a verify that ends in `converged+verified` or
+- **Debug rounds:** the debug command adds 1 on every handoff it makes in this loop (Failing
+  scope `global`), whatever the run changed: back to `redevkit-verify` after a fix or with a
+  wrong test (a wrong test of a `global` failure always goes back to `redevkit-verify`, never
+  to `redevkit-test`, so the whole suite judges it again), and to `redevkit-create` for
+  behavior never built, so verify → debug → create → test → verify is bounded too. A test
+  `PASS` never resets this counter. Reset to 0 by a verify that ends in `converged+verified` or
   `gaps`. A verify that follows a debug handback never reuses the old `FAIL` test run
   (`redevkit-verify` step 1), so every round is judged on a new run.
 - **Rounds without convergence:** the verify command adds 1 for a `gaps` verdict and for a
