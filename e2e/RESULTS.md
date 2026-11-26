@@ -43,11 +43,11 @@ Gerado por `e2e/summarize.mjs` em 2026-11-26 13:57 UTC. Roteiro e checagens em [
 | verification.md converged+verified (last run) | FAIL | missing |
 | verify ran the audits (verify_all.py or checklist.py in verification.md) | FAIL |  |
 | every test run records a Tree fingerprint | FAIL | 0 run(s) |
-| preview start reports a local URL | PASS | http://127.0.0.1:8080** |
+| preview start reports a local URL | PASS | `http://127.0.0.1:8080**` |
 | preview-start wrote only .redevkit/tmp/ | PASS |  |
 | preview-status wrote only .redevkit/tmp/ | PASS |  |
 | preview-stop wrote only .redevkit/tmp/ | PASS |  |
-| preview stop: the URL no longer answers | PASS | http://127.0.0.1:8080: closed |
+| preview stop: the URL no longer answers | PASS | `http://127.0.0.1:8080:` closed |
 | verify_all.py ran all 17 checks (each PASS, FAIL or SKIPPED with a reason, none errored) | PASS | 17 checks: Security Scan=passed; Dependency Analysis=skipped; Lint Check=skipped; Type Coverage=skipped; Schema Validation=skipped; Test Suite=skipped; UX Audit |
 | audit scripts executed (not skipped before running) | PASS | ran 17: all not run |
 | checklist.py and code_state.py ran | PASS |  |
@@ -165,11 +165,11 @@ Gerado por `e2e/summarize.mjs` em 2026-11-26 13:57 UTC. Roteiro e checagens em [
 | verification.md converged+verified (last run) | PASS | gaps → converged+verified |
 | verify ran the audits (verify_all.py or checklist.py in verification.md) | PASS |  |
 | every test run records a Tree fingerprint | PASS | 3 run(s) |
-| preview start reports a local URL | PASS | http://localhost:8000**, |
+| preview start reports a local URL | PASS | `http://localhost:8000**,` |
 | preview-start wrote only .redevkit/tmp/ | PASS |  |
 | preview-status wrote only .redevkit/tmp/ | PASS |  |
 | preview-stop wrote only .redevkit/tmp/ | PASS |  |
-| preview stop: the URL no longer answers | PASS | http://localhost:8000: closed |
+| preview stop: the URL no longer answers | PASS | `http://localhost:8000:` closed |
 | verify_all.py ran all 17 checks (each PASS, FAIL or SKIPPED with a reason, none errored) | PASS | 17 checks: Security Scan=passed; Dependency Analysis=passed; Lint Check=skipped; Type Coverage=skipped; Schema Validation=skipped; Test Suite=skipped; UX Audit= |
 | audit scripts executed (not skipped before running) | PASS | ran 17: all not run |
 | checklist.py and code_state.py ran | PASS |  |
