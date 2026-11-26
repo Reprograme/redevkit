@@ -108,6 +108,16 @@ test("1.3.1 F1: debug → create (behavior never built) counts a debug round, so
   assert.match(correction, /so verify → debug → create → test → verify is bounded too\. A test `PASS` never resets this counter/);
 });
 
+test("1.3.1 (E2E r12 G-claude): the preview starts detached with a pid file on both runtimes", () => {
+  const PREVIEW = "commands/redevkit-preview/SKILL.md";
+  const start = section(PREVIEW, "#### Start in the background", "#### Health check and report");
+  assert.match(start, /Start the server detached from this session, with the background form of the current OS, and write the process id to `\.redevkit\/tmp\/preview\.pid`/);
+  assert.doesNotMatch(start, /\{\{#codex\}\}/); // the detached form is not Codex-only any more
+  assert.match(start, /Never use a background task of this session \(`run_in_background`\)/);
+  const stop = section(PREVIEW, "### 4. stop", "### 5. restart");
+  assert.match(stop, /If the sandbox or the OS refuses the stop \(access denied\), keep the pid file, report that the server is still running/);
+});
+
 test("1.3.1 A3: enhance never adopts the G2 approval of its change plan, even in --auto", () => {
   const ENHANCE = "commands/redevkit-enhance/SKILL.md";
   const step4 = section(ENHANCE, "### 4. Approve the change plan", "### 5. Implement");

@@ -45,6 +45,12 @@ a regression test that fails on 1.3.0 (`test-audits/test_p0_131_verdicts_and_sta
   `--auto`. Only the user approves, in the answer or in the command's input. Without that
   approval a non-interactive run writes the delta and the tasks, keeps
   `- Plan approved: no` and implements nothing.
+- **`redevkit-preview` on Claude Code started the server as a background task of the session.**
+  The server stopped when the session ended, and a non-interactive `claude -p` never exited:
+  E2E r12 G-claude hit the 45-minute timeout after a successful start. Both runtimes now start
+  it detached (Start-Process or nohup) with `.redevkit/tmp/preview.pid`. A stop the sandbox
+  refuses now keeps the pid file and reports the running server with the command that stops
+  it.
 
 ## [1.3.0] - 2026-11-25
 
